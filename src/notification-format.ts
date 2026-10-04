@@ -9,13 +9,13 @@ export const appearanceSchema = z
     layout: z.enum(["card", "minimal"]).default("card"),
     accent: z.enum(["lime", "cyan", "violet"]).default("lime"),
     language: z.enum(["th", "en"]).default("th"),
-    heading: z.string().trim().max(60).default(""),
+    heading: z.string().trim().max(35).default(""),
     showPrice: z.boolean().default(true),
     showSetup: z.boolean().default(true),
     showTime: z.boolean().default(true),
     showId: z.boolean().default(false),
     showCreator: z.boolean().default(false),
-    creatorName: z.string().trim().max(60).default(""),
+    creatorName: z.string().trim().max(13).default(""),
     showChart: z.boolean().default(true),
   })
   .strict();
@@ -45,9 +45,18 @@ export function signalBanner(accent: Appearance["accent"]) {
   return `snaap-signal-banner${accent === "lime" ? "" : "-" + accent}.png`;
 }
 export function channelAppearance(kind: string, input: unknown = {}) {
+  const saved =
+    input && typeof input === "object"
+      ? ({ ...input } as Record<string, unknown>)
+      : {};
+  // Older saved appearances allowed longer labels; preserve their other settings.
+  if (typeof saved.heading === "string")
+    saved.heading = saved.heading.trim().slice(0, 35);
+  if (typeof saved.creatorName === "string")
+    saved.creatorName = saved.creatorName.trim().slice(0, 13);
   return appearanceSchema.parse({
     layout: kind === "TELEGRAM" ? "minimal" : "card",
-    ...(input && typeof input === "object" ? input : {}),
+    ...saved,
   });
 }
 export function publicBrandOrigin(origin: string) {
@@ -196,7 +205,7 @@ export function renderSignal(
     fields.push({ label: en ? "Time" : "เวลา", value: time });
   if (appearance.showId) fields.push({ label: "ID", value: signal.signal_id });
   const signature = appearance.showCreator
-    ? clean(appearance.creatorName, 60)
+    ? clean(appearance.creatorName, 13)
     : "";
   const brand = publicBrandOrigin(origin);
   const url = brand ? brand + "/#notifications" : undefined;
@@ -225,7 +234,7 @@ export function renderSignal(
             ? "🟢"
             : "⚪";
   const text = [
-    `${testLabel}Snaap · ${clean(heading, 60)}`,
+    `${testLabel}Snaap · ${clean(heading, 35)}`,
     `${appearance.layout === "minimal" ? marker + " " : ""}${title} · ${event}`,
     ...fields.map((x) => `${x.label}: ${x.value}`),
     ...(url && appearance.layout === "card" ? [url] : []),
@@ -296,7 +305,7 @@ export function renderSignal(
                     ? [
                         {
                           type: "text",
-                          text: clean(appearance.heading, 60),
+                          text: clean(appearance.heading, 35),
                           size: "sm",
                           weight: "bold",
                           color: "#F4F4F5",
