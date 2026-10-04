@@ -48,7 +48,7 @@ export async function sourceIds(
 ) {
   const rows = (
     await db.query(
-      `SELECT id FROM rules WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2)
+      `SELECT id FROM rules WHERE deleted_at IS NULL AND owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2)
        UNION ALL SELECT id FROM imports WHERE owner_id=$1 AND ($2::uuid IS NULL OR NOT EXISTS(SELECT 1 FROM data_scopes s WHERE s.resource_id=imports.id AND s.owner_id=$1 AND s.kind='import' AND s.workspace_ids IS NOT NULL AND NOT ($2=ANY(s.workspace_ids))))
        UNION ALL SELECT id FROM signals WHERE owner_id=$1 AND ($2::uuid IS NULL OR rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$2))
        UNION ALL SELECT id FROM assets WHERE owner_id=$1 AND ($2::uuid IS NULL OR NOT EXISTS(SELECT 1 FROM data_scopes s WHERE s.resource_id=assets.id AND s.owner_id=$1 AND s.kind='image' AND s.workspace_ids IS NOT NULL AND NOT ($2=ANY(s.workspace_ids))))`,
@@ -70,7 +70,7 @@ export async function contextBundle(
 ) {
   const rules = (
     await db.query(
-      "SELECT id,revision,spec,updated_at FROM rules WHERE owner_id=$1 AND ($3::uuid IS NULL OR workspace_id=$3) AND ($2::uuid[] IS NULL OR id=ANY($2)) ORDER BY updated_at DESC LIMIT 12",
+      "SELECT id,revision,spec,updated_at FROM rules WHERE deleted_at IS NULL AND owner_id=$1 AND ($3::uuid IS NULL OR workspace_id=$3) AND ($2::uuid[] IS NULL OR id=ANY($2)) ORDER BY updated_at DESC LIMIT 12",
       [owner, selection.ruleIds ?? null, workspaceId ?? null],
     )
   ).rows;

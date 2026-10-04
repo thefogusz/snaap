@@ -1055,7 +1055,7 @@ function renderWatch() {
     ? list
         .map(
           (r) =>
-            `<article class="watch-row"><div class="watch-row-heading"><div><h2>${esc(r.spec.name)}</h2><small>${esc(r.spec.exchange.join(" · "))} · ${esc(r.spec.pairs.join(", "))} · ${esc(directionLabel(r.spec.side,r.spec.market))}</small></div><span class="status paused">${r.quota_blocked ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ" : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน"}</span></div><p class="watch-rule-summary">${esc(setupEntrySummary(r.spec))}</p>${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}<div class="watch-row-footer"><button class="secondary" data-export-setup-code="${r.id}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="secondary" data-activate-rule="${r.id}">${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button><button class="secondary" data-open-rule="${r.id}">เปิดออกแบบ</button></div></article>`,
+            `<article class="watch-row"><div class="watch-row-heading"><div><h2>${esc(r.spec.name)}</h2><small>${esc(r.spec.exchange.join(" · "))} · ${esc(r.spec.pairs.join(", "))} · ${esc(directionLabel(r.spec.side,r.spec.market))}</small></div><span class="status paused">${r.quota_blocked ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ" : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน"}</span></div><p class="watch-rule-summary">${esc(setupEntrySummary(r.spec))}</p>${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}<div class="watch-row-footer"><button class="text-button" data-delete-rule="${r.id}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">ลบ</button><button class="secondary" data-export-setup-code="${r.id}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="secondary" data-activate-rule="${r.id}">${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button><button class="secondary" data-open-rule="${r.id}">เปิดออกแบบ</button></div></article>`,
         )
         .join("")
     : uiEmpty(
@@ -1084,6 +1084,7 @@ async function refresh({ reuseMe = false } = {}) {
     api("/destinations"),
   ]);
   state.rules = rules;
+  if(state.saved)state.saved=rules.find(rule=>rule.id===state.saved.id)??null;
   state.me = me;
   window.dispatchEvent(new Event('snaap-account-ready'));
   paintWorkspacePicker();
@@ -1607,7 +1608,7 @@ conversations.addEventListener("change", async () => {
     state.images = [];
     state.crop = null;
     renderImages();
-    state.saved = null;
+    state.saved = state.rules.find(rule=>rule.id===stored?.saved_rule_id)??null;
     state.editorNotice = null;
     setWorkbenchTab("chat");
     state.draftRevision = stored?.draft_revision ?? 0;
@@ -1703,6 +1704,19 @@ document.addEventListener("click", async (e) => {
       state.filter = t.dataset.filter;
       $$("[data-filter]").forEach((x) => x.classList.toggle("active", x === t));
       renderWatch();
+      return;
+    }
+    if (t.dataset.deleteRule) {
+      if(state.busy){toast('รอรายการปัจจุบันเสร็จก่อนลบ');return;}
+      const rule=state.rules.find(row=>row.id===t.dataset.deleteRule);
+      if(!rule)return;
+      if(!window.confirm(`ลบ “${rule.spec.name}” และหยุดแจ้งเตือน?\nบทสนทนาและร่างยังอยู่ คุณบันทึกกลับมาได้`))return;
+      t.disabled=true;
+      try{
+        await api(`/rules/${rule.id}`,'DELETE',{expectedRevision:rule.revision});
+        await refresh();renderDesigner();persistRecovery();
+        toast('ลบเซตอัปแล้ว · บันทึกกลับมาได้จากบทสนทนาเดิม');
+      }finally{t.disabled=false;}
       return;
     }
     if (t.dataset.activateRule) {

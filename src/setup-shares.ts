@@ -22,7 +22,7 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
       .parse(req.body);
     const row = (
       await db.query(
-        "SELECT spec FROM rules WHERE id=$1 AND owner_id=$2 AND ($3::uuid IS NULL OR workspace_id=$3)",
+        "SELECT spec FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND ($3::uuid IS NULL OR workspace_id=$3)",
         [ruleId, req.userId, req.workspaceId ?? null],
       )
     ).rows[0];

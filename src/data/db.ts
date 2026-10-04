@@ -37,6 +37,9 @@ export async function migrate(db: pg.Pool) {
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS draft_revision integer NOT NULL DEFAULT 0;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS setup_saved_at timestamptz;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS setup_status_known boolean NOT NULL DEFAULT false;
+    ALTER TABLE rules ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS saved_rule_id uuid REFERENCES rules(id);
+    CREATE INDEX IF NOT EXISTS conversations_saved_rule ON conversations(saved_rule_id);
     ALTER TABLE conversations ALTER COLUMN setup_status_known SET DEFAULT true;
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS ui_card jsonb;
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS setup_changes jsonb NOT NULL DEFAULT '[]';
@@ -63,6 +66,8 @@ export async function migrate(db: pg.Pool) {
     CREATE UNIQUE INDEX IF NOT EXISTS workspaces_default_owner ON workspaces(owner_id) WHERE is_default;
     ALTER TABLE rules ADD COLUMN IF NOT EXISTS workspace_id uuid REFERENCES workspaces;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS workspace_id uuid REFERENCES workspaces;
+    UPDATE conversations c SET saved_rule_id=(SELECT r.id FROM messages m JOIN rules r ON r.id=(m.ui_card->>'ruleId')::uuid AND r.owner_id=c.owner_id AND r.deleted_at IS NULL WHERE m.conversation_id=c.id AND m.ui_card->>'type'='preset' AND m.ui_card->>'ruleId' IS NOT NULL ORDER BY m.created_at DESC,m.id DESC LIMIT 1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;
+    UPDATE conversations c SET saved_rule_id=(SELECT min(r.id::text)::uuid FROM rules r WHERE r.owner_id=c.owner_id AND r.workspace_id IS NOT DISTINCT FROM c.workspace_id AND r.deleted_at IS NULL AND r.spec=c.draft HAVING count(*)=1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;
     CREATE TABLE IF NOT EXISTS data_scopes(owner_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('image','import','connection')),resource_id uuid NOT NULL,workspace_ids uuid[],PRIMARY KEY(owner_id,kind,resource_id));
   `);
 }

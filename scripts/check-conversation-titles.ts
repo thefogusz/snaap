@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
+import pg from "pg";
 import { localDatabase } from "./postgres.js";
 import { database, migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
@@ -9,6 +10,11 @@ import { buildPreset } from "../dist/preset-catalog.js";
 import { strategySchema } from "../src/domain/engine.js";
 
 const postgres = await localDatabase(), db = database(postgres.url);
+const schema = "setup_removal_" + randomUUID().replaceAll("-", "");
+await db.query(`CREATE SCHEMA ${schema}`);
+const fresh = new pg.Pool({ connectionString: postgres.url, options: `-c search_path=${schema}` });
+try { await migrate(fresh); }
+finally { await fresh.end(); await db.query(`DROP SCHEMA ${schema} CASCADE`); }
 await migrate(db);
 const owner = randomUUID(), other = randomUUID(), token = randomUUID();
 const { app } = await buildApp(db, { local: true, validateMarket: async () => {} });
@@ -19,7 +25,7 @@ registerPresets(presetApp, db, { instruments: async () => ({
 }) as any });
 const headers = { host: "127.0.0.1:4173", "x-snaap-client": "web", cookie: `snaap_session=${token}` };
 const spec = strategySchema.parse(buildPreset("trend", { exchange: "Binance", market: "Spot", side: "SPOT", pair: "BTC/USDT", timeframe: "15m" }));
-async function call(method: "GET" | "POST" | "PUT", url: string, payload?: Record<string, unknown>) {
+async function call(method: "GET" | "POST" | "PUT" | "DELETE", url: string, payload?: Record<string, unknown>) {
   const response = await app.inject({ method, url, headers, payload });
   assert.ok(response.statusCode < 300, response.body);
   return response.json();
@@ -54,7 +60,25 @@ try {
   const otherConversation = randomUUID();
   await db.query("INSERT INTO conversations(id,owner_id,title,draft,setup_saved_at) VALUES($1,$2,'เซตอัพใหม่',$3,now())", [otherConversation, other, spec]);
   assert.ok(!(await call("GET", "/api/v1/conversations")).some((row: any) => row.id === otherConversation));
-  console.log("Passed: editor save, rename, failed save rollback, preset save, legacy names, unsaved chats, owner isolation");
+  const staleDelete = await app.inject({method:"DELETE",url:`/api/v1/rules/${rule.id}`,headers,payload:{expectedRevision:1}});
+  assert.equal(staleDelete.statusCode,409);
+  await call("DELETE", `/api/v1/rules/${rule.id}`, {expectedRevision:2});
+  assert.ok(!(await call("GET","/api/v1/rules")).some((row:any)=>row.id===rule.id));
+  const deletedChat=(await call("GET","/api/v1/conversations")).find((row:any)=>row.id===conversation.id);
+  assert.equal(deletedChat.setup_saved_at,null);assert.equal(deletedChat.saved_rule_id,null);
+  assert.equal(deletedChat.draft.name,spec.name);
+  const recreated=await call("POST","/api/v1/rules",{spec:deletedChat.draft,conversationId:conversation.id});
+  assert.notEqual(recreated.id,rule.id);
+  assert.equal(recreated.active,false);
+  assert.equal((await call("GET","/api/v1/conversations")).find((row:any)=>row.id===conversation.id).saved_rule_id,recreated.id);
+  const presetRule=saved.json().rule;
+  await call("DELETE",`/api/v1/rules/${presetRule.id}`,{expectedRevision:presetRule.revision});
+  assert.equal((await db.query("SELECT ui_card FROM messages WHERE id=$1",[message])).rows[0].ui_card.ruleId,null);
+  const restoredPreset=await presetApp.inject({method:"POST",url:`/api/v1/conversations/${presetConversation}/preset/${message}/save`,payload:{expectedRevision:saved.json().draft_revision,destinations:[]}});
+  assert.equal(restoredPreset.statusCode,200,restoredPreset.body);
+  assert.notEqual(restoredPreset.json().rule.id,presetRule.id);
+  assert.equal((await call("GET","/api/v1/conversations")).find((row:any)=>row.id===presetConversation).saved_rule_id,restoredPreset.json().rule.id);
+  console.log("Passed: editor save, rename, failed save rollback, preset save, legacy names, unsaved chats, owner isolation, stale deletion, editor restore, preset restore");
 } finally {
   await presetApp.close(); await app.close();
   await db.query("DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE owner_id=ANY($1::uuid[]))", [[owner, other]]);

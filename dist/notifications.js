@@ -33,6 +33,7 @@ const deliveryLabels = {
   PENDING: "รอส่ง",
   RETRY: "รอส่งใหม่",
   FAILED: "ส่งไม่สำเร็จ",
+  CANCELLED: "ยกเลิก · เซตอัปถูกลบ",
   UNKNOWN: "ยังยืนยันผลไม่ได้",
   QUOTA_OR_RATE_LIMIT: "ถึงขีดจำกัดการส่ง",
 };

@@ -20,6 +20,7 @@ import { registerWorkspaces } from "./workspaces.js";
 import { registerSetupFiles } from "./setup-files.js";
 import { registerSetupShares } from "./setup-shares.js";
 import { registerPresets } from "./presets.js";
+import { registerRuleRemoval } from "./rule-removal.js";
 import { ApiError } from "./errors.js";
 import { hash } from "./crypto.js";
 export { ApiError } from "./errors.js";
@@ -254,7 +255,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT r.*, (r.active AND (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 3 END) AS quota_blocked FROM rules r WHERE owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY created_at DESC",
+          "SELECT r.*, (r.active AND (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 3 END) AS quota_blocked FROM rules r WHERE r.deleted_at IS NULL AND owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY created_at DESC",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,
@@ -293,8 +294,8 @@ export async function buildApp(
       );
       if (conversationId)
         await c.query(
-          "UPDATE conversations SET title=$3,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
-          [conversationId, req.userId, spec.name],
+          "UPDATE conversations SET title=$3,saved_rule_id=$4,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
+          [conversationId, req.userId, spec.name, id],
         );
     });
     if (conversationId)
@@ -323,7 +324,7 @@ export async function buildApp(
       throw new ApiError(404, "NOT_FOUND", "ไม่พบบทสนทนา");
     const saved = await transaction(db, async (c) => {
       const result = await c.query(
-        "UPDATE rules SET spec=$1,revision=revision+1,active=false,updated_at=now() WHERE id=$2 AND owner_id=$3 AND revision=$4 RETURNING *",
+        "UPDATE rules SET spec=$1,revision=revision+1,active=false,updated_at=now() WHERE id=$2 AND owner_id=$3 AND revision=$4 AND deleted_at IS NULL RETURNING *",
         [input.spec, id, req.userId, input.expectedRevision],
       );
       if (!result.rowCount)
@@ -339,8 +340,8 @@ export async function buildApp(
       );
       if (input.conversationId)
         await c.query(
-          "UPDATE conversations SET title=$3,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
-          [input.conversationId, req.userId, input.spec.name],
+          "UPDATE conversations SET title=$3,saved_rule_id=$4,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
+          [input.conversationId, req.userId, input.spec.name, id],
         );
       return row;
     });
@@ -375,7 +376,7 @@ export async function buildApp(
     if (input.active) {
       const owned = (
         await db.query(
-          "SELECT spec FROM rules WHERE id=$1 AND owner_id=$2 AND revision=$3",
+          "SELECT spec FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND revision=$3",
           [id, req.userId, input.expectedRevision],
         )
       ).rows[0];
@@ -418,7 +419,7 @@ export async function buildApp(
       ]);
       const rule = (
         await c.query(
-          "SELECT * FROM rules WHERE id=$1 AND owner_id=$2 AND revision=$3 FOR UPDATE",
+          "SELECT * FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND revision=$3 FOR UPDATE",
           [id, req.userId, input.expectedRevision],
         )
       ).rows[0];
@@ -480,7 +481,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,CASE WHEN NOT r.active THEN 'PAUSED' WHEN (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 3 END THEN 'QUOTA_BLOCKED' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id WHERE r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2)",
+          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,CASE WHEN NOT r.active THEN 'PAUSED' WHEN (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 3 END THEN 'QUOTA_BLOCKED' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id WHERE r.deleted_at IS NULL AND r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2)",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,
@@ -574,7 +575,7 @@ export async function buildApp(
   app.get("/api/v1/export", async (req) => ({
     rules: (
       await db.query(
-        "SELECT spec,revision,active FROM rules WHERE owner_id=$1",
+        "SELECT spec,revision,active FROM rules WHERE deleted_at IS NULL AND owner_id=$1",
         [req.userId],
       )
     ).rows,
@@ -594,6 +595,7 @@ export async function buildApp(
   registerSetupFiles(app, db);
   registerSetupShares(app, db);
   registerPresets(app, db);
+  registerRuleRemoval(app, db);
   await app.register(staticFiles, {
     root: path.resolve("dist"),
     index: "index.html",

@@ -178,7 +178,7 @@ export function registerPresets(
       if (m.ui_card.ruleId) {
         rule = (
           await c.query(
-            "SELECT * FROM rules WHERE id=$1 AND owner_id=$2 AND workspace_id IS NOT DISTINCT FROM $3::uuid FOR UPDATE",
+            "SELECT * FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND workspace_id IS NOT DISTINCT FROM $3::uuid FOR UPDATE",
             [m.ui_card.ruleId, req.userId, conv.workspace_id],
           )
         ).rows[0];
@@ -220,8 +220,8 @@ export function registerPresets(
       }
       const draft = (
         await c.query(
-          "UPDATE conversations SET draft=$1,title=$3,draft_revision=draft_revision+1,setup_saved_at=now(),setup_status_known=true WHERE id=$2 RETURNING draft_revision",
-          [spec, id, spec.name],
+          "UPDATE conversations SET draft=$1,title=$3,saved_rule_id=$4,draft_revision=draft_revision+1,setup_saved_at=now(),setup_status_known=true WHERE id=$2 RETURNING draft_revision",
+          [spec, id, spec.name, rule.id],
         )
       ).rows[0];
       const card = { ...m.ui_card, ruleId: rule.id };
