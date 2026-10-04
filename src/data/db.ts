@@ -28,6 +28,8 @@ export async function migrate(db: pg.Pool) {
     CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id,created_at);
     CREATE INDEX IF NOT EXISTS usage_owner_time ON usage_ledger(owner_id,created_at);
     CREATE INDEX IF NOT EXISTS signals_owner ON signals(owner_id,created_at);
+    CREATE INDEX IF NOT EXISTS rules_active_owner ON rules(owner_id) WHERE active;
+    CREATE INDEX IF NOT EXISTS deliveries_recovery ON deliveries(attempts,id) WHERE status IN ('PENDING','RETRY');
     ALTER TABLE rules ADD COLUMN IF NOT EXISTS activated_at timestamptz;
     CREATE TABLE IF NOT EXISTS monitor_checkpoints (rule_id uuid REFERENCES rules,revision integer,exchange text,pair text,state jsonb NOT NULL,checked_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(rule_id,revision,exchange,pair));
     CREATE TABLE IF NOT EXISTS monitor_status (rule_id uuid REFERENCES rules,exchange text,pair text,status text NOT NULL,checked_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(rule_id,exchange,pair));

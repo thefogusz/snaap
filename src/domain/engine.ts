@@ -586,6 +586,22 @@ export function indicator(
   }
 }
 export type Truth = "TRUE" | "FALSE" | "UNKNOWN";
+// Market history arrays are replaced when a new candle arrives. A WeakMap lets
+// rules share the same closed prefix without retaining discarded history.
+const closedPrefixes = new WeakMap<Candle[], Map<number, Candle[]>>();
+function closedThrough(rows: Candle[], time: number) {
+  let cached = closedPrefixes.get(rows);
+  if (!cached) {
+    cached = new Map();
+    closedPrefixes.set(rows, cached);
+  }
+  const hit = cached.get(time);
+  if (hit) return hit;
+  const prefix = rows.filter((row) => row.time <= time);
+  cached.set(time, prefix);
+  if (cached.size > 16) cached.delete(cached.keys().next().value!);
+  return prefix;
+}
 export type Evidence = {
   result: Truth;
   left?: number;
@@ -604,12 +620,12 @@ export function value(
   if (o.kind === "CONSTANT") return o.value;
   if (o.kind === "ENTRY_RETURN") {
     if (side === "UNSPECIFIED") return undefined;
-    const c = (series[base] ?? []).filter((c) => c.time <= time).at(-1);
+    const c = closedThrough(series[base] ?? [], time).at(-1);
     return c && time - c.time < frames[base] && entryPrice
       ? (c.close / entryPrice - 1) * 100 * (side === "SHORT" ? -1 : 1)
       : undefined;
   }
-  const c = (series[o.timeframe] ?? []).filter((c) => c.time <= time);
+  const c = closedThrough(series[o.timeframe] ?? [], time);
   if (!c.length || time - c.at(-1)!.time >= frames[o.timeframe]) return;
   if (o.kind === "INDICATOR" && indicatorByName[o.name]) {
     return extendedValue(

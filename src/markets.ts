@@ -175,11 +175,11 @@ export async function candles(
   const key = [exchange, market, pair, frame, requiredBars].join(":");
   const hit = cache.get(key);
   const expectedClose = Math.floor(Date.now() / frames[frame]) * frames[frame];
-  if (
-    hit &&
-    Date.now() - hit.at < 30000 &&
-    hit.data.at(-1)!.time >= expectedClose
-  )
+  const completeHistory = hit?.data.every(
+    (bar, index, bars) =>
+      index === 0 || bar.time - bars[index - 1].time === frames[frame],
+  );
+  if (hit && completeHistory && hit.data.at(-1)!.time >= expectedClose)
     return hit.data;
   if (pending.has(key)) return pending.get(key)!;
   const work = (async () => {
@@ -202,9 +202,15 @@ export async function candles(
       if (!client.has.fetchOHLCV) throw new Error("OHLCV_UNSUPPORTED");
       const now = Date.now();
       const raw: number[][] = [];
-      let since =
-        Math.floor(now / frames[frame]) * frames[frame] -
-        requiredBars * frames[frame];
+      // Reuse confirmed history; overlap one closed bar to pick up corrections.
+      const reusable =
+        completeHistory &&
+        hit &&
+        expectedClose - hit.data.at(-1)!.time < requiredBars * frames[frame];
+      let since = reusable
+        ? hit.data.at(-1)!.time - frames[frame]
+        : Math.floor(now / frames[frame]) * frames[frame] -
+          requiredBars * frames[frame];
       for (let page = 0; page < 8; page++) {
         const batch: number[][] = await client.fetchOHLCV(
           symbol,
@@ -233,7 +239,7 @@ export async function candles(
         );
       data.sort((a, b) => a.time - b.time);
       const dedup = mergeCandles(
-        data,
+        mergeCandles(hit?.data ?? [], data, requiredBars),
         streamCandles.get(candleKey(exchange, market, pair, frame)) ?? [],
         requiredBars,
       );
