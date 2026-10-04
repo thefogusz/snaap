@@ -349,17 +349,17 @@
 .channel-card-preview {
   overflow: hidden;
   border-radius: 15px;
-  background: #181d24;
+  background: #151515;
   color: #f4f7fb;
-  border: 1px solid #343e4b;
-  box-shadow: 0 8px 25px #00000024;
+  border: 1px solid #303030;
+  box-shadow: none;
   animation: channel-step-in 0.25s ease-out;
 }
 .channel-card-preview header {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  background: #181d24;
+  background: #151515;
   border-top: 3px solid var(--signal-accent);
   padding: 20px 22px;
 }
@@ -469,7 +469,7 @@
 }
 .channel-card-link {
   padding: 13px;
-  border-top: 1px solid #343e4b;
+  border-top: 1px solid #303030;
   color: var(--signal-accent);
   text-align: center;
   font-size: 12px;
@@ -478,7 +478,7 @@
   border-left: 4px solid var(--signal-accent);
 }
 .channel-card-preview.line {
-  width: 300px;
+  width: 280px;
   max-width: 100%;
   border-radius: 12px;
 }
@@ -564,7 +564,7 @@
   padding: 0;
 }
 .channel-card-preview.discord header {
-  background: #181d24;
+  background: #151515;
 }
 .channel-card-preview.discord header strong {
   font-size: 16px;
@@ -594,16 +594,16 @@
   height: auto;
   aspect-ratio: 5 / 3;
   object-fit: contain;
-  background: #181d24;
+  background: #151515;
 }
 .channel-studio [hidden] {
   display: none !important;
 }
 .channel-photo-preview .channel-text-preview {
   border-radius: 0 0 14px 14px;
-  background: #181d24;
+  background: #151515;
   color: #f4f7fb;
-  border-color: #343e4b;
+  border-color: #303030;
 }
 .channel-photo-preview .channel-signature {
   color: #b9c3d0;

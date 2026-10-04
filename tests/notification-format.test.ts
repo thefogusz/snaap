@@ -52,8 +52,8 @@ test("LINE card is a Flex bubble and falls back to text when minimal is selected
     card.payload.contents.hero.action.uri,
     card.payload.contents.hero.url,
   );
-  assert.equal(card.payload.contents.header.backgroundColor, "#181D24");
-  assert.equal(card.payload.contents.body.backgroundColor, "#181D24");
+  assert.equal(card.payload.contents.header.backgroundColor, "#151515");
+  assert.equal(card.payload.contents.body.backgroundColor, "#151515");
   assert.equal(card.payload.contents.footer, undefined);
   assert.equal(
     card.payload.contents.hero.url,

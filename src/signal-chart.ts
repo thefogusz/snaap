@@ -95,7 +95,7 @@ export async function chartPng(
     )[accent] ?? "#d0f64c";
   const ticks = Array.from({ length: 5 }, (_, i) => {
     const value = low + ((high - low) * i) / 4;
-    return `<path d="M${left} ${y(value)}H${right}" stroke="#353c44"/><text x="1000" y="${y(value) + 6}" fill="#c3ccd6" font-size="30">${value.toLocaleString("en-US", { maximumSignificantDigits: 7 })}</text>`;
+    return `<path d="M${left} ${y(value)}H${right}" stroke="#292929"/><text x="1000" y="${y(value) + 6}" fill="#c3ccd6" font-size="30">${value.toLocaleString("en-US", { maximumSignificantDigits: 7 })}</text>`;
   }).join("");
   const candleWidth = Math.max(
     5,
@@ -107,7 +107,7 @@ export async function chartPng(
       return `<path d="M${x(b.time)} ${y(b.high)}V${y(b.low)}" stroke="${fill}" stroke-width="2"/><rect x="${x(b.time) - candleWidth / 2}" y="${Math.min(y(b.open), y(b.close))}" width="${candleWidth}" height="${Math.max(3, Math.abs(y(b.open) - y(b.close)))}" rx="1" fill="${fill}"/>`;
     })
     .join("");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="1200" height="720" rx="22" fill="#181d24"/><g font-family="Arial,sans-serif">${ticks}${candles}<path d="M${left} ${y(signal.event.referencePrice)}H${right}" stroke="${color}" stroke-width="2" stroke-dasharray="8 6"/><circle cx="${x(end)}" cy="${y(signal.event.referencePrice)}" r="7" fill="${color}"/></g></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="1200" height="720" rx="22" fill="#151515"/><g font-family="Arial,sans-serif">${ticks}${candles}<path d="M${left} ${y(signal.event.referencePrice)}H${right}" stroke="${color}" stroke-width="2" stroke-dasharray="8 6"/><circle cx="${x(end)}" cy="${y(signal.event.referencePrice)}" r="7" fill="${color}"/></g></svg>`;
   return sharp(Buffer.from(svg))
     .resize({ width: 1024, withoutEnlargement: true })
     .png()

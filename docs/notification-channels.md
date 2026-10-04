@@ -64,10 +64,12 @@ Minimal layout is always plain text, even if a previously saved appearance has s
 
 Snaap cards default to a chart-enabled dark presentation with bright text and an accent color, while explicit showChart=false is respected. LINE Flex sets dark header/body/footer colors. The chart PNG itself is dark on every platform; Discord embed and Telegram caption backgrounds follow the recipient app theme. Minimal text appearance is unchanged.
 
-LINE cards use a compact kilo bubble: one header row, a full chart with tap-to-open image action, baseline label/value rows, and one footer row for the return link and creator signature. The studio preview is capped at 300 CSS pixels and keeps readable 14px values. Long text wraps without truncation. Reference: https://developers.line.biz/en/reference/messaging-api/#bubble
+LINE cards use a compact kilo bubble: one header row, a full chart with tap-to-open image action, baseline label/value rows, and one footer row for the return link and creator signature. The studio preview is capped at 280 CSS pixels and keeps readable 14px values. Long text wraps without truncation. Reference: https://developers.line.biz/en/reference/messaging-api/#bubble
 
 The compact card header uses the shared green/white symbol with a white Snaap wordmark, exported as a transparent PNG for LINE. HTTPS origins serve /assets/snaap-card-wordmark.png; local delivery falls back to the text name while the studio previews the local asset. Chart output is capped at 1024 pixels to comply with LINE Flex image limits.
 
 Cards emphasize direction with a green Long/Buy or red Short badge, separate from the pair title. LINE renders the pill as a colored box; Discord uses the direction color on the embed. Minimal test text is unchanged.
 
 Chart annotations for timestamps, candle counts, pair/exchange, event labels and repeated branding are omitted for a clean compact card. The card body retains the readable signal details. LINE/Discord card footers show only the optional creator signature; redundant Snaap footer text and return links are omitted.
+
+Cards and chart backgrounds use matte neutral black #151515. Accent selections remain independent of the background. LINE uses the native kilo bubble with flexible label/value proportions and font scaling for data rows, following https://developers.line.biz/en/docs/messaging-api/flex-message-layout/ rather than a fixed pixel width in the outgoing JSON. The browser preview width is illustrative; actual LINE rendering varies with device and text settings.

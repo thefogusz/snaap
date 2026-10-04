@@ -245,7 +245,7 @@ export function renderSignal(
               header: {
                 type: "box",
                 layout: "horizontal",
-                backgroundColor: "#181D24",
+                backgroundColor: "#151515",
                 paddingAll: "10px",
                 spacing: "sm",
                 contents: [
@@ -294,7 +294,7 @@ export function renderSignal(
                 layout: "vertical",
                 spacing: "sm",
                 paddingAll: "12px",
-                backgroundColor: "#181D24",
+                backgroundColor: "#151515",
                 contents: [
                   {
                     type: "box",
@@ -346,6 +346,7 @@ export function renderSignal(
                         type: "text",
                         text: x.label,
                         size: "sm",
+                        scaling: true,
                         flex: 2,
                         wrap: true,
                         color: "#B9C3D0",
@@ -354,6 +355,7 @@ export function renderSignal(
                         type: "text",
                         text: x.value,
                         size: "sm",
+                        scaling: true,
                         flex: 5,
                         align: "end",
                         color:
@@ -372,7 +374,7 @@ export function renderSignal(
                       layout: "horizontal",
                       paddingAll: "12px",
                       paddingTop: "0px",
-                      backgroundColor: "#181D24",
+                      backgroundColor: "#151515",
                       spacing: "sm",
                       contents: [
                         ...(signature
