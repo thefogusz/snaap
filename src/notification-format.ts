@@ -16,7 +16,7 @@ export const appearanceSchema = z
     showId: z.boolean().default(false),
     showCreator: z.boolean().default(false),
     creatorName: z.string().trim().max(60).default(""),
-    showChart: z.boolean().default(false),
+    showChart: z.boolean().default(true),
   })
   .strict();
 export type Appearance = z.infer<typeof appearanceSchema>;
@@ -213,7 +213,7 @@ export function renderSignal(
               header: {
                 type: "box",
                 layout: "vertical",
-                backgroundColor: accents[appearance.accent],
+                backgroundColor: "#181D24",
                 paddingAll: "20px",
                 contents: [
                   {
@@ -221,13 +221,13 @@ export function renderSignal(
                     text: `${testLabel}Snaap`,
                     weight: "bold",
                     size: "xl",
-                    color: "#171A16",
+                    color: accents[appearance.accent],
                   },
                   {
                     type: "text",
                     text: clean(heading, 60),
                     size: "sm",
-                    color: "#171A16",
+                    color: "#B9C3D0",
                     wrap: true,
                   },
                 ],
@@ -248,17 +248,22 @@ export function renderSignal(
                 type: "box",
                 layout: "vertical",
                 spacing: "md",
-                backgroundColor: "#FFFFFF",
+                backgroundColor: "#181D24",
                 contents: [
                   {
                     type: "text",
                     text: title,
                     weight: "bold",
                     size: "xl",
-                    color: "#171A16",
+                    color: "#F4F7FB",
                     wrap: true,
                   },
-                  { type: "text", text: event, size: "md", color: "#384035" },
+                  {
+                    type: "text",
+                    text: event,
+                    size: "md",
+                    color: accents[appearance.accent],
+                  },
                   ...fields.map((x) => ({
                     type: "box",
                     layout: "vertical",
@@ -268,13 +273,13 @@ export function renderSignal(
                         type: "text",
                         text: x.label,
                         size: "sm",
-                        color: "#555D50",
+                        color: "#B9C3D0",
                       },
                       {
                         type: "text",
                         text: x.value,
                         size: "md",
-                        color: "#171A16",
+                        color: "#F4F7FB",
                         wrap: true,
                       },
                     ],
@@ -286,13 +291,15 @@ export function renderSignal(
                     footer: {
                       type: "box",
                       layout: "vertical",
+                      backgroundColor: "#181D24",
                       spacing: "sm",
                       contents: [
                         ...(url
                           ? [
                               {
                                 type: "button",
-                                style: "secondary",
+                                style: "link",
+                                color: accents[appearance.accent],
                                 height: "sm",
                                 action: {
                                   type: "uri",
@@ -308,7 +315,7 @@ export function renderSignal(
                                 type: "text",
                                 text: signature,
                                 size: "sm",
-                                color: "#555D50",
+                                color: "#B9C3D0",
                                 align: "end",
                                 wrap: true,
                               },

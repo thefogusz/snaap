@@ -101,7 +101,7 @@
     showId: false,
     showCreator: false,
     creatorName: "",
-    showChart: false,
+    showChart: true,
   });
   function status(message, error = false) {
     const slot = dialog.querySelector("[data-channel-status]");
@@ -398,8 +398,15 @@
         if (button.hasAttribute("data-studio-test"))
           await testChannel(session.id, button);
       });
-      dialog.addEventListener("input", () => {
+      dialog.addEventListener("input", (event) => {
         readAppearance();
+        if (
+          event.target.name === "layout" &&
+          session.appearance.layout === "card"
+        ) {
+          session.appearance.showChart = true;
+          dialog.querySelector('input[name="showChart"]').checked = true;
+        }
         syncAppearanceOptions();
         const creator = dialog.querySelector("[data-creator-name]");
         if (creator) {

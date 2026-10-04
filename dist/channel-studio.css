@@ -349,23 +349,27 @@
 .channel-card-preview {
   overflow: hidden;
   border-radius: 15px;
-  background: #fff;
-  color: #171a16;
-  box-shadow: 0 8px 25px #00000008;
+  background: #181d24;
+  color: #f4f7fb;
+  border: 1px solid #343e4b;
+  box-shadow: 0 8px 25px #00000024;
   animation: channel-step-in 0.25s ease-out;
 }
 .channel-card-preview header {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  background: var(--signal-accent);
+  background: #181d24;
+  border-top: 3px solid var(--signal-accent);
   padding: 20px 22px;
 }
 .channel-card-preview header strong {
+  color: var(--signal-accent);
   font-size: 26px;
   letter-spacing: -0.05em;
 }
 .channel-card-preview header span {
+  color: #b9c3d0;
   font-size: 14px;
 }
 .channel-card-preview > img,
@@ -380,7 +384,7 @@
 }
 .channel-signal-event {
   font-size: 14px;
-  color: #46513f;
+  color: var(--signal-accent);
 }
 .channel-card-body h3 {
   font-size: 21px;
@@ -393,7 +397,7 @@
 }
 .channel-card-body dt {
   font-size: 14px;
-  color: #46513f;
+  color: #b9c3d0;
 }
 .channel-card-body dd {
   font-size: 16px;
@@ -417,6 +421,7 @@
   overflow-wrap: anywhere;
 }
 .channel-card-preview > .channel-signature {
+  color: #b9c3d0;
   padding: 0 22px 20px;
 }
 .channel-text-preview .channel-signature {
@@ -425,7 +430,8 @@
 }
 .channel-card-link {
   padding: 13px;
-  border-top: 1px solid #e8ecdf;
+  border-top: 1px solid #343e4b;
+  color: var(--signal-accent);
   text-align: center;
   font-size: 12px;
 }
@@ -433,7 +439,7 @@
   border-left: 4px solid var(--signal-accent);
 }
 .channel-card-preview.discord header {
-  background: #f5f7f1;
+  background: #181d24;
 }
 .channel-card-preview.discord header strong {
   font-size: 16px;
@@ -470,6 +476,12 @@
 }
 .channel-photo-preview .channel-text-preview {
   border-radius: 0 0 14px 14px;
+  background: #181d24;
+  color: #f4f7fb;
+  border-color: #343e4b;
+}
+.channel-photo-preview .channel-signature {
+  color: #b9c3d0;
 }
 .channel-preview-note {
   margin-top: 18px;

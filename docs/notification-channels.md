@@ -61,3 +61,5 @@ Creator names appear as a plain signature with no Created by label. LINE Flex an
 Protocol references: [LINE image/Flex API](https://developers.line.biz/en/reference/messaging-api/) and [Discord uploads](https://github.com/discord/discord-api-docs/blob/main/developers/reference.mdx).
 
 Minimal layout is always plain text, even if a previously saved appearance has showChart enabled. It never renders or attaches an image, a Flex card, a Discord embed, or Telegram buttons. Discord suppresses automatic URL embeds and Telegram disables link previews. Direction/status uses one symbol: green Long/Spot buy, red Short, yellow exit, gray cancellation/expiry/unspecified direction.
+
+Snaap cards default to a chart-enabled dark presentation with bright text and an accent color, while explicit showChart=false is respected. LINE Flex sets dark header/body/footer colors. The chart PNG itself is dark on every platform; Discord embed and Telegram caption backgrounds follow the recipient app theme. Minimal text appearance is unchanged.
