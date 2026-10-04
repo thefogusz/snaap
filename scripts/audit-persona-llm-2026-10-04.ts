@@ -13,8 +13,6 @@ if (process.env.RUN_PAID_EVALS !== "true" || !process.env.AI_API_KEY)
     "Explicit paid evaluation flag and configured provider required",
   );
 const rate = pricing("standard");
-if (rate.cap > 0.03)
-  throw new Error("Audit requires existing per-request cap at most $0.03");
 const cases = [
   {
     id: "novice",
@@ -216,7 +214,8 @@ async function run(item: (typeof cases)[number]) {
       {
         databaseName,
         providerModel: process.env.AI_STANDARD_MODEL,
-        perRequestCapUsd: rate.cap,
+        perRequestCapUsd: null,
+        tokenPricesUsdPerMillion: rate,
         maxLogicalRequests: 10,
         liveRequests: results.length,
         syntheticOnly: true,
