@@ -412,21 +412,35 @@ try {
     let proposalRequests = 0;
     reply = async () => {
       proposalRequests++;
+      if (proposalRequests === 2) return response('สร้างร่างแล้ว ยังไม่ได้เปิดใช้งาน');
       return {...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'validated-fixture',arguments:JSON.stringify({spec})}], usage:{input_tokens:100000,output_tokens:100}};
     };
     const proposal = await turn('สร้างร่างตามเงื่อนไขที่ระบุ');
     assert.equal(proposal.statusCode, 200, proposal.body);
     assert.deepEqual(proposal.json().draft, spec);
-    assert.equal(proposalRequests, 1, 'no over-budget summary request');
+    assert.equal(proposalRequests, 2, 'normal summary still runs after high-cost proposal');
     assert.ok(proposal.json().text.includes('ยังไม่ได้เปิดใช้งาน'));
     reply = async () => ({...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'invalid-fixture',arguments:JSON.stringify({spec:{...spec,pairs:['UNSUPPORTED/USDT']}})}], usage:{input_tokens:100000,output_tokens:100}});
     const invalid = await turn('สร้างร่างคู่ที่ไม่รองรับ');
     assert.equal(invalid.statusCode, 502);
-    assert.equal(invalid.json().error.code, 'AI_DRAFT_INVALID');
+    assert.equal(invalid.json().error.code, 'AI_UNAVAILABLE');
     assert.equal(invalid.json().draft, undefined);
-    reply = async () => ({...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'over-cap-fixture',arguments:JSON.stringify({spec})}], usage:{input_tokens:200000,output_tokens:100}});
-    assert.equal((await turn('สร้างร่างที่ใช้ค่าใช้จ่ายเกินเพดาน')).statusCode, 422);
-    console.log('PASS validated draft survives exhausted summary budget without another provider request');
+    proposalRequests = 0;
+    reply = async body => {
+      assert.equal(body.max_output_tokens,6000);
+      return ++proposalRequests === 1
+        ? ({...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'over-cap-fixture',arguments:JSON.stringify({spec})}], usage:{input_tokens:200000,output_tokens:100}})
+        : response('สร้างร่างแล้ว ยังไม่ได้เปิดใช้งาน');
+    };
+    const highCost = await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'สร้างร่างจากภาพ 4 ใบ แม้ค่าใช้จ่ายเกินเพดานเดิม',mode:'standard',imageIds:imageIds.slice(0,4)}});
+    assert.equal(highCost.statusCode,200,highCost.body);
+    assert.deepEqual(highCost.json().draft,spec);
+    assert.equal(proposalRequests,2);
+    const highCostLedger = (await db.query('SELECT status,input_tokens,estimated_usd FROM usage_ledger WHERE id=$1',[highCost.json().runId])).rows[0];
+    assert.equal(highCostLedger.status,'COMPLETED');
+    assert.ok(Number(highCostLedger.input_tokens)>=200000);
+    assert.ok(Number(highCostLedger.estimated_usd)>0.03);
+    console.log('PASS high-cost requests complete with full output allowance and cost accounting; invalid proposals still fail');
 
     const mtf = strategySchema.parse({...spec,name:'Harness MTF chart contract',entry:{kind:'GROUP',op:'AND',children:
       (['4h','1h','15m','5m'] as const).flatMap(timeframe => [

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { claimsDraftChange, requestsDraftChange, toolSpec, instrumentSearch } from '../src/ai/completion.js';
-import { boundCost, outputLimit } from '../src/ai/budget.js';
+import { outputLimit } from '../src/ai/budget.js';
 test('draft success prose is distinguished from questions and advice',()=>{
   assert.equal(claimsDraftChange('ส่งร่างเข้า editor แล้วครับ (valid: true)'),true);
   assert.equal(claimsDraftChange('ลบเงื่อนไขออกแล้ว'),true);
@@ -21,8 +21,6 @@ test('compatible provider spec wrapper is normalized without inventing fields',(
   assert.equal(instrumentSearch('BTCUSDT'),'BTCUSDT');
   assert.equal(instrumentSearch('BTC/USDT:USDT'),'BTCUSDT');
 });
-test('output reservation includes the configured reasoning/output limit',()=>{
-  const rate={input:0.25,output:2,cap:0.03};
-  assert.equal(Number((boundCost('',[],rate,6000)-boundCost('',[],rate,2000)).toFixed(6)),0.008);
+test('configured reasoning/output limit remains independent of request cost',()=>{
   assert.equal(outputLimit('standard'),6000);
 });

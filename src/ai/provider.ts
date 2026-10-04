@@ -32,7 +32,7 @@ export async function createProviderResponse(client: OpenAI, body: ResponseCreat
           server_error: 503, internal_error: 503 } as Record<string, number>)[code ?? data.error.type] ?? null;
         const inputTokens = data.usage?.input_tokens ?? 0, outputTokens = data.usage?.output_tokens ?? 0;
         if (inputTokens || outputTokens) trace.push({ inputTokens, outputTokens });
-        // A charged/partially generated response cannot be retried under the original cost reservation.
+        // Do not duplicate a charged or partially generated response with another request.
         throw new ProviderFailure(status, safeCode(String(code ?? data.error.type ?? 'PROVIDER_ERROR')), requestId,
           safeCode(data.error.param), !(inputTokens || outputTokens || data.output?.length));
       }

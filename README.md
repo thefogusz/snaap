@@ -31,7 +31,7 @@ See [Google setup](docs/google-auth-setup.md) and [repository review](docs/repos
 
 Production requires persistent PostgreSQL and image storage mounted at `.local/assets`, the encryption key stored separately, HTTPS, provider configuration, and a continuously running monitor. The current production entry point runs the API and monitor together; a separately deployed worker has not been implemented. On a container host set `BIND_HOST=0.0.0.0` and use the platform's `PORT`. Do not start multiple monitor replicas without addressing shared scheduling and process-local market caches.
 
-AI needs the API key **and current per-model prices** for admission budgeting. External tools do not consume additional message quota. No model has an activation/payment/account-permission tool. Stripe defaults to test mode; no live payments have been performed.
+AI needs the API key **and current per-model prices** for usage accounting. There is no per-request dollar cap; output token limits, run deadlines and daily message quotas remain enforced. External tools do not consume additional message quota. No model has an activation/payment/account-permission tool. Stripe defaults to test mode; no live payments have been performed.
 
 ## Enable Snaap chat locally
 

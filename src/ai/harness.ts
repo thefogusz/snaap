@@ -18,7 +18,7 @@ import {
 } from "../domain/engine.js";
 import { extendedIndicators } from "../../dist/indicator-catalog.js";
 import { strategySeries, instruments } from "../markets.js";
-import { pricing, boundCost, outputLimit } from "./budget.js";
+import { pricing, outputLimit } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
 import {
   claimsDraftChange,
@@ -384,35 +384,6 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       let requireProposal = false;
       for (let round = 0; round < 7; round++) {
         if (deadline.aborted) throw new Error("REQUEST_DEADLINE");
-        const inputBound = boundCost(
-          instructions + JSON.stringify(toolParameters).repeat(2),
-          messages,
-          rate,
-          0,
-        );
-        const roundOutputLimit = Math.min(
-          maxOutputTokens,
-          Math.floor(((rate.cap - cost - inputBound) * 1e6) / rate.output),
-        );
-        const lastStep = trace.at(-1) as { tool?: string; result?: { valid?: boolean } } | undefined;
-        if (roundOutputLimit < 2000 && draft && cost <= rate.cap &&
-          lastStep?.tool === 'propose_strategy' && lastStep.result?.valid === true) {
-          // A validated draft is already a real result. Do not discard it merely
-          // because another image-heavy model round cannot fit a prose summary.
-          const validated = strategySchema.parse(draft);
-          text = `สร้างร่าง ${validated.name} แล้ว (${validated.exchange[0]} · ${validated.pairs.join(', ')} · ${validated.timeframe}) รายละเอียดเงื่อนไขอยู่ในเซตอัป กรุณาตรวจร่างก่อนบันทึก ยังไม่ได้เปิดใช้งาน และยังไม่ได้สรุปวิเคราะห์เพิ่มเติม`;
-          trace.push({ completion: 'VALIDATED_DRAFT_WITHOUT_MODEL_SUMMARY' });
-          completed = true;
-          break;
-        }
-        if (roundOutputLimit < 2000 && cost <= rate.cap && lastStep?.tool === 'propose_strategy' && lastStep.result?.valid === false)
-          throw new ApiError(502, 'AI_DRAFT_INVALID', 'AI สร้างร่างไม่ผ่านการตรวจ ภาพและร่างเดิมยังอยู่ กรุณาลองใหม่ คืนโควตาแล้ว');
-        if (roundOutputLimit < 2000)
-          throw new ApiError(
-            422,
-            "COST_BOUND",
-            "ข้อมูลเกินขอบเขตงานนี้ กรุณาเลือกบริบทหรือภาพให้น้อยลง คืนโควตาแล้ว",
-          );
         const response = await createProviderResponse(client,
           {
             ...(process.env.AI_BASE_URL && new URL(process.env.AI_BASE_URL).hostname === 'openrouter.ai'
@@ -422,7 +393,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                 ? (process.env.AI_DEEP_MODEL ?? "gpt-5.4")
                 : (process.env.AI_STANDARD_MODEL ?? "gpt-5-mini"),
             store: false,
-            max_output_tokens: roundOutputLimit,
+            max_output_tokens: maxOutputTokens,
             reasoning: { effort: input.mode === "standard" ? "low" : "medium" },
             instructions,
             input: messages,
