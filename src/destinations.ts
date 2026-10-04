@@ -76,7 +76,7 @@ export async function registerDestinations(
   app.get("/api/v1/destinations", async (req) => {
     const items = (
       await db.query(
-        "SELECT id,kind,name,verified,appearance FROM destinations WHERE owner_id=$1 ORDER BY created_at",
+        "SELECT id,kind,name,verified,appearance FROM destinations WHERE owner_id=$1 AND (verified OR config ? 'challengeHash') ORDER BY created_at",
         [req.userId],
       )
     ).rows.map((row) => ({
@@ -189,7 +189,7 @@ export async function registerDestinations(
           "ผู้ดูแลยังไม่ได้ตั้งค่าช่องทางนี้",
         );
       const count = await db.query(
-        "SELECT count(*)::integer AS n FROM destinations WHERE owner_id=$1",
+        "SELECT count(*)::integer AS n FROM destinations WHERE owner_id=$1 AND (verified OR config ? 'challengeHash')",
         [req.userId],
       );
       if ((count.rows[0]?.n ?? 0) >= 50)
