@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isIP } from "node:net";
 import { signalDirection } from "../dist/trade-direction.js";
+import { demoChart, type ChartSnapshot } from "./signal-chart.js";
 
 export const channelKind = z.enum(["TELEGRAM", "LINE", "DISCORD", "WEBHOOK"]);
 export const appearanceSchema = z
@@ -13,6 +14,9 @@ export const appearanceSchema = z
     showSetup: z.boolean().default(true),
     showTime: z.boolean().default(true),
     showId: z.boolean().default(false),
+    showCreator: z.boolean().default(false),
+    creatorName: z.string().trim().max(60).default(""),
+    showChart: z.boolean().default(false),
   })
   .strict();
 export type Appearance = z.infer<typeof appearanceSchema>;
@@ -34,6 +38,7 @@ export type Signal = {
   setup_side?: string;
   timeframe?: string;
   test?: boolean;
+  chart?: ChartSnapshot;
 };
 export const accents = { lime: "#D0F64C", cyan: "#65DCEB", violet: "#C8B5FF" };
 export function signalBanner(accent: Appearance["accent"]) {
@@ -77,6 +82,7 @@ export function demoSignal(): Signal {
     setup_side: "LONG",
     timeframe: "1h",
     test: true,
+    chart: demoChart(Date.UTC(2026, 9, 4, 5, 30)),
     event: {
       kind: "ENTRY",
       time: Date.UTC(2026, 9, 4, 5, 30),
@@ -95,6 +101,7 @@ export function renderSignal(
   signal: Signal,
   appearance: Appearance,
   origin: string,
+  graphUrl?: string,
 ) {
   const en = appearance.language === "en";
   const labels = en
@@ -159,21 +166,24 @@ export function renderSignal(
   if (appearance.showTime)
     fields.push({ label: en ? "Time" : "เวลา", value: time });
   if (appearance.showId) fields.push({ label: "ID", value: signal.signal_id });
+  const signature = appearance.showCreator
+    ? clean(appearance.creatorName, 60)
+    : "";
   const brand = publicBrandOrigin(origin);
   const url = brand ? brand + "/#notifications" : undefined;
-  const image = brand
-    ? brand + "/assets/" + signalBanner(appearance.accent)
-    : undefined;
-  const note = en
-    ? "Signal only · No trade executed"
-    : "สัญญาณเท่านั้น · ไม่ได้ส่งออเดอร์";
+  const image =
+    appearance.showChart && graphUrl
+      ? graphUrl
+      : brand
+        ? brand + "/assets/" + signalBanner(appearance.accent)
+        : undefined;
   const testLabel = signal.test ? (en ? "[TEST] " : "[ทดสอบ] ") : "";
   const text = [
     `${testLabel}Snaap · ${clean(heading, 60)}`,
     `${title} · ${event}`,
     ...fields.map((x) => `${x.label}: ${x.value}`),
-    note,
     ...(url ? [url] : []),
+    ...(signature ? [signature] : []),
   ].join("\n");
   let payload: any;
   if (kind === "LINE") {
@@ -202,7 +212,7 @@ export function renderSignal(
                   {
                     type: "text",
                     text: clean(heading, 60),
-                    size: "xs",
+                    size: "sm",
                     color: "#171A16",
                     wrap: true,
                   },
@@ -214,7 +224,8 @@ export function renderSignal(
                       type: "image",
                       url: image,
                       size: "full",
-                      aspectRatio: "3:1",
+                      aspectRatio:
+                        appearance.showChart && graphUrl ? "5:3" : "3:1",
                       aspectMode: "cover",
                     },
                   }
@@ -229,11 +240,11 @@ export function renderSignal(
                     type: "text",
                     text: title,
                     weight: "bold",
-                    size: "lg",
+                    size: "xl",
                     color: "#171A16",
                     wrap: true,
                   },
-                  { type: "text", text: event, size: "sm", color: "#555C52" },
+                  { type: "text", text: event, size: "md", color: "#384035" },
                   ...fields.map((x) => ({
                     type: "box",
                     layout: "vertical",
@@ -242,13 +253,13 @@ export function renderSignal(
                       {
                         type: "text",
                         text: x.label,
-                        size: "xs",
-                        color: "#777D73",
+                        size: "sm",
+                        color: "#555D50",
                       },
                       {
                         type: "text",
                         text: x.value,
-                        size: "sm",
+                        size: "md",
                         color: "#171A16",
                         wrap: true,
                       },
@@ -256,34 +267,43 @@ export function renderSignal(
                   })),
                 ],
               },
-              footer: {
-                type: "box",
-                layout: "vertical",
-                spacing: "sm",
-                contents: [
-                  {
-                    type: "text",
-                    text: note,
-                    size: "xxs",
-                    color: "#777D73",
-                    wrap: true,
-                  },
-                  ...(url
-                    ? [
-                        {
-                          type: "button",
-                          style: "secondary",
-                          height: "sm",
-                          action: {
-                            type: "uri",
-                            label: en ? "Open Snaap" : "เปิด Snaap",
-                            uri: url,
-                          },
-                        },
-                      ]
-                    : []),
-                ],
-              },
+              ...(url || signature
+                ? {
+                    footer: {
+                      type: "box",
+                      layout: "vertical",
+                      spacing: "sm",
+                      contents: [
+                        ...(url
+                          ? [
+                              {
+                                type: "button",
+                                style: "secondary",
+                                height: "sm",
+                                action: {
+                                  type: "uri",
+                                  label: en ? "Open Snaap" : "เปิด Snaap",
+                                  uri: url,
+                                },
+                              },
+                            ]
+                          : []),
+                        ...(signature
+                          ? [
+                              {
+                                type: "text",
+                                text: signature,
+                                size: "sm",
+                                color: "#555D50",
+                                align: "end",
+                                wrap: true,
+                              },
+                            ]
+                          : []),
+                      ],
+                    },
+                  }
+                : {}),
             },
           };
   } else if (kind === "DISCORD") {
@@ -291,7 +311,12 @@ export function renderSignal(
       username: "Snaap",
       allowed_mentions: { parse: [] },
       ...(appearance.layout === "minimal"
-        ? { content: discordText(text).slice(0, 2000) }
+        ? {
+            content: discordText(text).slice(0, 2000),
+            ...(appearance.showChart && graphUrl
+              ? { embeds: [{ image: { url: graphUrl } }] }
+              : {}),
+          }
         : {
             embeds: [
               {
@@ -303,7 +328,11 @@ export function renderSignal(
                   value: discordText(x.value) || "—",
                   inline: true,
                 })),
-                footer: { text: "Snaap · " + note },
+                footer: {
+                  text: signature
+                    ? `Snaap · ${discordText(signature)}`
+                    : "Snaap",
+                },
                 timestamp: new Date(signal.event.time).toISOString(),
                 ...(url ? { url } : {}),
                 ...(image ? { image: { url: image } } : {}),
@@ -323,10 +352,16 @@ export function renderSignal(
       test: !!signal.test,
       presentation: {
         text,
-        appearance,
+        appearance: {
+          ...appearance,
+          creatorName: appearance.showCreator ? appearance.creatorName : "",
+        },
         brand: "Snaap",
         ...(url ? { url } : {}),
         ...(image ? { image } : {}),
+        ...(appearance.showChart && signal.chart
+          ? { chart: signal.chart }
+          : {}),
       },
     };
   } else
@@ -348,12 +383,12 @@ export function renderSignal(
     title,
     event,
     fields,
-    note,
     test: !!signal.test,
     accent: accents[appearance.accent],
     layout: appearance.layout,
     language: appearance.language,
     heading,
+    signature,
     brand: "Snaap",
     url,
     image,

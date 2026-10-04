@@ -6,7 +6,7 @@ Open **การแจ้งเตือน → ช่องทาง → เช
 
 1. Follow the channel-specific guide. Discord connection sends one clearly disclosed TEST message. Telegram and LINE require a one-time `/start` challenge in the recipient's private chat. Webhook connection POSTs a verification challenge and requires its exact text back.
 2. Check the binding status for Telegram/LINE; challenges expire after ten minutes. A disconnected or expired challenge cannot reconnect the destination. Add a new destination to reconnect.
-3. Customize card/minimal layout, accent, Thai/English, heading, reference price, setup, time and ID. Pair, direction, event, Snaap attribution and the no-order-executed note remain visible. Save then send a test. Tests use the saved appearance; drafts only affect the preview.
+3. Customize card/minimal layout, accent, Thai/English, heading, reference price, setup, time and ID. Optional creator attribution supports a custom name (60 characters) and is off by default. Pair, direction, event and Snaap attribution remain visible. Save then send a test. Tests use the saved appearance; drafts only affect the preview.
 4. Select the verified destination in each setup and save the setup's channels before activation. Connecting a destination alone does not subscribe every setup.
 
 Saved appearance belongs to the destination, so two destinations on the same provider can look different. Existing Telegram destinations default to minimal text. LINE defaults to a Flex bubble, Discord to an embed. Telegram's card option sends a small Snaap PNG with a caption using multipart upload, so it works without public image hosting. Its three brand accents have matching PNG variants. Minimal messages use no bot HTML/Markdown markup; Discord escapes formatting and disables mentions.
@@ -49,3 +49,13 @@ Check `x-snaap-signature-v1` as lowercase hex HMAC-SHA256(secret, `x-snaap-times
 Run `npm run typecheck`, `npm test`, `npm run test:notifications`, and `npm run test:integration`. The notification integration check creates and cleans up only isolated local test accounts and makes no external provider calls. Unit transport fixtures verify LINE Flex/retry headers, Telegram text/multipart image requests and absence of paid-broadcast parameters. Browser checks cover guides, live preview controls, unavailable-channel UX and responsive layout. Real provider credentials, Telegram polling delivery, LINE webhook delivery and actual Discord/Webhook destinations still require explicit end-to-end verification with configured test accounts.
 
 Official format and delivery references: [Telegram Bot API](https://core.telegram.org/bots/api), [LINE Flex Messages](https://developers.line.biz/en/docs/messaging-api/using-flex-messages/), [LINE retry semantics](https://developers.line.biz/en/docs/messaging-api/retrying-api-request/), [Discord incoming webhooks](https://docs.discord.com/developers/resources/webhook).
+
+## Optional signal charts
+
+Enable the candlestick-chart option in appearance settings. New signals preserve up to 60 closed candles from their exchange, pair and timeframe at evaluation; delivery never fetches newer prices to replace this snapshot. Old signals without snapshots fall back to their normal message. The generated PNG includes Snaap branding and the event reference price. Preview and test charts are labeled DEMO.
+
+Telegram and Discord upload the PNG directly. LINE uses the image in its Flex hero (or an image followed by text in minimal mode), which requires a public HTTPS APP_ORIGIN. Generic webhooks receive presentation.chart and a signed image URL when a public origin exists. Image URLs require a per-signal/accent HMAC and become invalid after encryption-key rotation. They include market data only. No external chart service or paid image hosting is used.
+
+Creator names appear as a plain signature with no Created by label. LINE Flex and the studio align the signature at the bottom right. Discord uses its native embed footer; Telegram/minimal messages place the name last because provider apps control text alignment. Creator names are custom presentation labels, not verified identities; disabling attribution omits the name from recipient payloads. Provider apps control fonts for text messages. The studio uses larger, higher-contrast type and LINE Flex cards specify larger text sizes.
+
+Protocol references: [LINE image/Flex API](https://developers.line.biz/en/reference/messaging-api/) and [Discord uploads](https://github.com/discord/discord-api-docs/blob/main/developers/reference.mdx).

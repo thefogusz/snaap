@@ -23,6 +23,7 @@ import {
 } from "./notification-format.js";
 import { sendNotification, type Destination } from "./notification-send.js";
 import { lineLimits, lineMonth, reserveLine } from "./line-quota.js";
+import { chartPng, registerSignalCharts, demoChart } from "./signal-chart.js";
 import {
   bindRecipient,
   registerTelegramPolling,
@@ -57,6 +58,7 @@ export async function registerDestinations(
   const origin =
     options.origin ?? process.env.APP_ORIGIN ?? "http://127.0.0.1:4173";
   registerTelegramPolling(app, db, options.local);
+  registerSignalCharts(app, db);
   const owned = async (id: string, owner: string): Promise<Destination> => {
     const row = (
       await db.query("SELECT * FROM destinations WHERE id=$1 AND owner_id=$2", [
@@ -106,7 +108,16 @@ export async function registerDestinations(
       .object({ kind: channelKind, appearance: appearanceSchema })
       .strict()
       .parse(req.body);
-    return renderSignal(input.kind, demoSignal(), input.appearance, origin);
+    const demo = demoSignal();
+    const chart = input.appearance.showChart
+      ? await chartPng(demo, input.appearance.accent)
+      : undefined;
+    return {
+      ...renderSignal(input.kind, demo, input.appearance, origin),
+      chartPreview: chart
+        ? "data:image/png;base64," + chart.toString("base64")
+        : undefined,
+    };
   });
   app.patch("/api/v1/destinations/:id", async (req) => {
     const id = parseId(req.params);
@@ -141,10 +152,12 @@ export async function registerDestinations(
           "LINE_QUOTA",
           "ถึงโควตา LINE เดือนนี้แล้ว สัญญาณยังอยู่ในเว็บ",
         );
+      const testTime = Date.now();
       const signal = {
         ...demoSignal(),
         signal_id: id,
-        event: { ...demoSignal().event, time: Date.now() },
+        event: { ...demoSignal().event, time: testTime },
+        chart: demoChart(testTime),
       };
       const result = await sendNotification(row, signal, id, origin);
       return { id, ...result };
@@ -263,24 +276,22 @@ export async function registerDestinations(
         [id, req.userId, input.kind, input.name, config, verified, appearance],
       );
       const command = "/start " + code;
-      return reply
-        .code(201)
-        .send({
-          id,
-          verified,
-          signingSecret,
-          command: verified ? undefined : command,
-          expiresAt: verified ? undefined : Date.now() + 600000,
-          connectUrl:
-            input.kind === "TELEGRAM"
-              ? `https://t.me/${process.env.TELEGRAM_BOT_USERNAME}?start=${code}`
-              : input.kind === "LINE"
-                ? process.env.LINE_OA_URL
-                : undefined,
-          instruction: verified
-            ? "ยืนยันปลายทางแล้ว"
-            : `ส่ง ${command} ไปยัง ${input.kind === "TELEGRAM" ? "@" + process.env.TELEGRAM_BOT_USERNAME : "LINE OA ของ Snaap"} ภายใน 10 นาที`,
-        });
+      return reply.code(201).send({
+        id,
+        verified,
+        signingSecret,
+        command: verified ? undefined : command,
+        expiresAt: verified ? undefined : Date.now() + 600000,
+        connectUrl:
+          input.kind === "TELEGRAM"
+            ? `https://t.me/${process.env.TELEGRAM_BOT_USERNAME}?start=${code}`
+            : input.kind === "LINE"
+              ? process.env.LINE_OA_URL
+              : undefined,
+        instruction: verified
+          ? "ยืนยันปลายทางแล้ว"
+          : `ส่ง ${command} ไปยัง ${input.kind === "TELEGRAM" ? "@" + process.env.TELEGRAM_BOT_USERNAME : "LINE OA ของ Snaap"} ภายใน 10 นาที`,
+      });
     },
   );
   app.delete("/api/v1/destinations/:id", async (req) => {
@@ -360,7 +371,7 @@ export async function deliver(db: pg.Pool, id: string) {
   return transaction(db, async (c) => {
     const row = (
       await c.query(
-        "SELECT d.*,t.kind,t.config,t.appearance,t.verified,t.owner_id,s.event,s.pair,s.exchange,s.revision,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side,rv.spec->>'name' AS setup_name,rv.spec->>'timeframe' AS timeframe FROM deliveries d JOIN destinations t ON t.id=d.destination_id JOIN signals s ON s.id=d.signal_id LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE d.id=$1 FOR UPDATE OF d",
+        "SELECT d.*,t.kind,t.config,t.appearance,t.verified,t.owner_id,s.event,s.pair,s.exchange,s.revision,s.chart_snapshot AS chart,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side,rv.spec->>'name' AS setup_name,rv.spec->>'timeframe' AS timeframe FROM deliveries d JOIN destinations t ON t.id=d.destination_id JOIN signals s ON s.id=d.signal_id LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE d.id=$1 FOR UPDATE OF d",
         [id],
       )
     ).rows[0];

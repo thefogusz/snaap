@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { postWebhook } from "./network.js";
 import { discordWebhookUrl } from "./discord.js";
 import { unseal } from "./vault.js";
@@ -8,7 +8,9 @@ import {
   renderSignal,
   signalBanner,
   type Signal,
+  publicBrandOrigin,
 } from "./notification-format.js";
+import { chartPng, chartUrl } from "./signal-chart.js";
 
 export type Destination = {
   id: string;
@@ -56,24 +58,61 @@ export async function sendNotification(
     destination.kind,
     destination.appearance,
   );
-  const rendered = renderSignal(destination.kind, signal, appearance, origin);
   try {
+    const graph = appearance.showChart
+      ? await chartPng(signal, appearance.accent)
+      : undefined;
+    const graphUrl = graph
+      ? chartUrl(
+          signal.test ? `demo-${signal.event.time}` : signal.signal_id,
+          appearance.accent,
+          publicBrandOrigin(origin),
+        )
+      : undefined;
+    const rendered = renderSignal(
+      destination.kind,
+      signal,
+      appearance,
+      origin,
+      graphUrl ??
+        (graph && destination.kind === "DISCORD"
+          ? "attachment://snaap-chart.png"
+          : undefined),
+    );
     if (destination.kind === "DISCORD") {
       const config = unseal(
         destination.config.encryptedUrl,
         `discord:${destination.owner_id}:${destination.id}`,
       );
+      let body: string | Buffer = JSON.stringify(rendered.payload);
+      const headers: Record<string, string> = {};
+      if (graph) {
+        const boundary = "snaap-" + randomBytes(16).toString("hex");
+        rendered.payload.attachments = [{ id: 0, filename: "snaap-chart.png" }];
+        if (rendered.payload.embeds?.[0])
+          rendered.payload.embeds[0].image = {
+            url: "attachment://snaap-chart.png",
+          };
+        body = Buffer.concat([
+          Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(rendered.payload)}\r\n--${boundary}\r\nContent-Disposition: form-data; name="files[0]"; filename="snaap-chart.png"\r\nContent-Type: image/png\r\n\r\n`,
+          ),
+          graph,
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ]);
+        headers["Content-Type"] = "multipart/form-data; boundary=" + boundary;
+      }
       const response = await postWebhook(
         discordWebhookUrl(config.url),
-        JSON.stringify(rendered.payload),
-        {},
+        body,
+        headers,
         ["discord.com"],
       );
-      let body;
+      let responseData;
       try {
-        body = JSON.parse(response.body);
+        responseData = JSON.parse(response.body);
       } catch {}
-      return providerResult("DISCORD", response.status, body);
+      return providerResult("DISCORD", response.status, responseData);
     }
     if (destination.kind === "WEBHOOK") {
       const config = destination.config.encryptedWebhook
@@ -116,9 +155,20 @@ export async function sendNotification(
       headers["Content-Type"] = "application/json";
       body = JSON.stringify({
         to: destination.config.recipient,
-        messages: [rendered.payload],
+        messages: [
+          ...(graphUrl && appearance.layout === "minimal"
+            ? [
+                {
+                  type: "image",
+                  originalContentUrl: graphUrl,
+                  previewImageUrl: graphUrl,
+                },
+              ]
+            : []),
+          rendered.payload,
+        ],
       });
-    } else if (rendered.layout === "card") {
+    } else if (rendered.layout === "card" || graph) {
       url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`;
       const form = new FormData();
       form.set("chat_id", destination.config.recipient);
@@ -129,11 +179,14 @@ export async function sendNotification(
         "photo",
         new Blob(
           [
-            await readFile(
-              new URL(
-                "../dist/assets/" + signalBanner(appearance.accent),
-                import.meta.url,
-              ),
+            new Uint8Array(
+              graph ??
+                (await readFile(
+                  new URL(
+                    "../dist/assets/" + signalBanner(appearance.accent),
+                    import.meta.url,
+                  ),
+                )),
             ),
           ],
           { type: "image/png" },

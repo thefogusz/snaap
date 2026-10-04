@@ -7,9 +7,11 @@ import { demoSignal } from "../src/notification-format.js";
 test("LINE sends Flex with stable retry key; Telegram sends minimal text or branded photo without paid broadcasts", async () => {
   const original = globalThis.fetch,
     beforeLine = process.env.LINE_ACCESS_TOKEN,
-    beforeTelegram = process.env.TELEGRAM_BOT_TOKEN;
+    beforeTelegram = process.env.TELEGRAM_BOT_TOKEN,
+    beforeKey = process.env.DATA_ENCRYPTION_KEY;
   process.env.LINE_ACCESS_TOKEN = "fixture-token";
   process.env.TELEGRAM_BOT_TOKEN = "fixture-token";
+  process.env.DATA_ENCRYPTION_KEY = "a".repeat(64);
   const requests: { url: string; init: RequestInit }[] = [];
   globalThis.fetch = async (input, init) => {
     requests.push({ url: String(input), init: init! });
@@ -67,11 +69,78 @@ test("LINE sends Flex with stable retry key; Telegram sends minimal text or bran
       "fixture-recipient",
     );
     assert.ok(((photo.init.body as FormData).get("photo") as Blob).size > 1000);
+    await sendNotification(
+      {
+        ...base,
+        kind: "TELEGRAM",
+        appearance: {
+          layout: "minimal",
+          showChart: true,
+          showCreator: true,
+          creatorName: "Gus Signals",
+        },
+      },
+      demoSignal(),
+      id,
+    );
+    const chartPhoto = requests.at(-1)!;
+    assert.ok(chartPhoto.url.endsWith("/sendPhoto"));
+    const chartBody = chartPhoto.init.body as FormData;
+    assert.match(String(chartBody.get("caption")), /Gus Signals/);
+    const png = Buffer.from(
+      await (chartBody.get("photo") as Blob).arrayBuffer(),
+    );
+    assert.deepEqual(
+      [...png.subarray(0, 8)],
+      [137, 80, 78, 71, 13, 10, 26, 10],
+    );
+    await sendNotification(
+      {
+        ...base,
+        kind: "LINE",
+        appearance: { layout: "card", showChart: true },
+      },
+      demoSignal(),
+      id,
+      "https://snaap.example",
+    );
+    const hero = JSON.parse(requests.at(-1)!.init.body as string).messages[0]
+      .contents.hero;
+    assert.match(hero.url, /\/signal-charts\/demo-/);
+    assert.equal(hero.aspectRatio, "5:3");
+    await sendNotification(
+      {
+        ...base,
+        kind: "LINE",
+        appearance: { layout: "minimal", showChart: true },
+      },
+      demoSignal(),
+      id,
+      "https://snaap.example",
+    );
+    assert.deepEqual(
+      JSON.parse(requests.at(-1)!.init.body as string).messages.map(
+        (m: any) => m.type,
+      ),
+      ["image", "text"],
+    );
+    await sendNotification(
+      {
+        ...base,
+        kind: "TELEGRAM",
+        appearance: { layout: "minimal", showChart: true },
+      },
+      { ...demoSignal(), chart: undefined },
+      id,
+    );
+    assert.ok(requests.at(-1)!.url.endsWith("/sendMessage"));
   } finally {
     globalThis.fetch = original;
     if (beforeLine === undefined) delete process.env.LINE_ACCESS_TOKEN;
     else process.env.LINE_ACCESS_TOKEN = beforeLine;
     if (beforeTelegram === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
     else process.env.TELEGRAM_BOT_TOKEN = beforeTelegram;
+    if (beforeKey === undefined) delete process.env.DATA_ENCRYPTION_KEY;
+    else process.env.DATA_ENCRYPTION_KEY = beforeKey;
   }
 });

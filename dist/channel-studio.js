@@ -99,6 +99,9 @@
     showSetup: true,
     showTime: true,
     showId: false,
+    showCreator: false,
+    creatorName: "",
+    showChart: false,
   });
   function status(message, error = false) {
     const slot = dialog.querySelector("[data-channel-status]");
@@ -165,6 +168,8 @@
         ["showSetup", "ชื่อเซตอัป"],
         ["showTime", "เวลา (UTC+7)"],
         ["showId", "Signal ID"],
+        ["showCreator", "ชื่อผู้สร้าง"],
+        ["showChart", "แนบกราฟแท่งเทียน"],
       ]
         .map(
           ([key, label]) =>
@@ -172,8 +177,8 @@
         )
         .join(
           "",
-        )}</fieldset><p class="channel-help">คู่เทรด ฝั่ง ประเภทสัญญาณ และชื่อ Snaap แสดงเสมอ${kind === "WEBHOOK" ? " · ข้อมูล event ใน JSON ยังคงครบ" : ""}</p><button class="primary" type="submit">${session.id ? "บันทึกหน้าตาสัญญาณ" : "ใช้รูปแบบนี้และเชื่อมต่อ"}</button>${session.id && session.row?.verified ? '<button class="secondary" type="button" data-studio-test>ส่งตัวอย่างที่บันทึกแล้ว</button>' : ""}</form>`;
-    dialog.innerHTML = `<header class="channel-studio-header"><div><span class="channel-studio-overline">SNAAP / CHANNEL STUDIO</span><h2 id="channel-studio-title">${guide.name}</h2></div><button type="button" class="icon-button" data-studio-close aria-label="ปิดคู่มือ">${uiIcon("close")}</button></header><div class="channel-studio-grid"><section class="channel-studio-work"><nav class="channel-step-nav" aria-label="ขั้นตอนเชื่อมต่อ">${["คู่มือ", "เชื่อมต่อ", "หน้าตาสัญญาณ"].map((label, i) => `<button type="button" data-studio-step="${i}" aria-current="${step === i ? "step" : "false"}"><span>${i + 1}</span>${label}</button>`).join("")}</nav><button class="channel-preview-jump text-button" type="button" data-preview-jump>ดูตัวอย่างสัญญาณ ↓</button><div class="channel-step-body">${content}</div><p data-channel-status role="status" aria-live="polite"></p><footer class="channel-step-footer">${step > 0 ? '<button type="button" class="text-button" data-studio-prev>← ย้อนกลับ</button>' : "<span>เชื่อมครั้งเดียว ใช้กับหลายเซตอัปได้</span>"}${step < 2 ? `<button type="button" class="secondary" data-studio-next>${step === 0 ? "เริ่มเชื่อมต่อ" : "ปรับหน้าตา"} →</button>` : ""}</footer></section><aside class="channel-preview-area"><button class="channel-preview-jump text-button" type="button" data-controls-jump>กลับไปปรับหน้าตา ↑</button><div class="channel-preview-label"><span>ตัวอย่างสัญญาณ</span><small>${guide.name}</small></div><div data-channel-preview aria-live="polite"><p>กำลังเตรียมตัวอย่าง…</p></div><p class="channel-preview-note">ข้อมูลตัวอย่าง · รูปแบบจริงอาจต่างตามอุปกรณ์${kind === "LINE" || kind === "DISCORD" ? " · ภาพและลิงก์จะเพิ่มเมื่อ Snaap มีโดเมน HTTPS สาธารณะ" : ""}</p></aside></div>`;
+        )}</fieldset><label data-creator-name ${appearance.showCreator ? "" : "hidden"}>ชื่อผู้สร้างที่แสดง<input name="creatorName" maxlength="60" value="${esc(appearance.creatorName)}" placeholder="เช่น Gus Signals" ${appearance.showCreator ? "required" : ""}></label><p class="channel-help">กราฟใช้คู่เหรียญ กระดาน และกรอบเวลาของสัญญาณ · สัญญาณเก่าที่ไม่มีข้อมูลกราฟจะแสดงเฉพาะข้อความ</p><p class="channel-help">คู่เทรด ฝั่ง ประเภทสัญญาณ และชื่อ Snaap แสดงเสมอ${kind === "WEBHOOK" ? " · ข้อมูล event ใน JSON ยังคงครบ" : ""}</p><button class="primary" type="submit">${session.id ? "บันทึกหน้าตาสัญญาณ" : "ใช้รูปแบบนี้และเชื่อมต่อ"}</button>${session.id && session.row?.verified ? '<button class="secondary" type="button" data-studio-test>ส่งตัวอย่างที่บันทึกแล้ว</button>' : ""}</form>`;
+    dialog.innerHTML = `<header class="channel-studio-header"><div><span class="channel-studio-overline">SNAAP / CHANNEL STUDIO</span><h2 id="channel-studio-title">${guide.name}</h2></div><button type="button" class="icon-button" data-studio-close aria-label="ปิดคู่มือ">${uiIcon("close")}</button></header><div class="channel-studio-grid"><section class="channel-studio-work"><nav class="channel-step-nav" aria-label="ขั้นตอนเชื่อมต่อ">${["คู่มือ", "เชื่อมต่อ", "หน้าตาสัญญาณ"].map((label, i) => `<button type="button" data-studio-step="${i}" aria-current="${step === i ? "step" : "false"}"><span>${i + 1}</span>${label}</button>`).join("")}</nav><button class="channel-preview-jump text-button" type="button" data-preview-jump>ดูตัวอย่างสัญญาณ ↓</button><div class="channel-step-body">${content}</div><p data-channel-status role="status" aria-live="polite"></p><footer class="channel-step-footer">${step > 0 ? '<button type="button" class="text-button" data-studio-prev>← ย้อนกลับ</button>' : "<span>เชื่อมครั้งเดียว ใช้กับหลายเซตอัปได้</span>"}${step < 2 ? `<button type="button" class="secondary" data-studio-next>${step === 0 ? "เริ่มเชื่อมต่อ" : "ปรับหน้าตา"} →</button>` : ""}</footer></section><aside class="channel-preview-area"><button class="channel-preview-jump text-button" type="button" data-controls-jump>กลับไปปรับหน้าตา ↑</button><div class="channel-preview-label"><span>ตัวอย่างสัญญาณ</span><small>${guide.name}</small></div><div data-channel-preview aria-live="polite"><p>กำลังเตรียมตัวอย่าง…</p></div><p class="channel-preview-note">ข้อมูลตัวอย่าง · รูปแบบจริงอาจต่างตามอุปกรณ์${kind === "LINE" ? " · LINE รับภาพจริงเมื่อ Snaap มีโดเมน HTTPS สาธารณะ" : ""}</p></aside></div>`;
     updatePreview();
   }
   function readAppearance() {
@@ -181,9 +186,22 @@
     if (!form) return;
     const data = new FormData(form);
     session.name = String(data.get("name"));
-    for (const key of ["layout", "accent", "language", "heading"])
+    for (const key of [
+      "layout",
+      "accent",
+      "language",
+      "heading",
+      "creatorName",
+    ])
       session.appearance[key] = String(data.get(key));
-    for (const key of ["showPrice", "showSetup", "showTime", "showId"])
+    for (const key of [
+      "showPrice",
+      "showSetup",
+      "showTime",
+      "showId",
+      "showCreator",
+      "showChart",
+    ])
       session.appearance[key] = data.has(key);
   }
   async function updatePreview() {
@@ -198,14 +216,29 @@
         return;
       const en = result.language === "en",
         slot = dialog.querySelector("[data-channel-preview]");
+      const banner = `/assets/snaap-signal-banner${session.appearance.accent === "lime" ? "" : "-" + session.appearance.accent}.png`;
+      const signature = result.signature
+        ? `<div class="channel-signature">${esc(result.signature)}</div>`
+        : "";
+      const message = result.text
+        .split("\n")
+        .map((line) =>
+          line === result.signature
+            ? `<span class="channel-signature">${esc(line)}</span>`
+            : esc(line),
+        )
+        .join("\n");
+      const chart = result.chartPreview
+        ? `<img class="channel-chart-preview" src="${esc(result.chartPreview)}" alt="กราฟแท่งเทียนตัวอย่างของสัญญาณ">`
+        : "";
       if (session.kind === "WEBHOOK")
-        slot.innerHTML = `<div class="channel-json-head"><span class="channel-snaap-mini">s*</span><strong>snaap.signal</strong><small>POST · JSON</small></div><pre class="channel-json-preview"><code>${esc(JSON.stringify(result.payload, null, 2))}</code></pre>`;
+        slot.innerHTML = `<div class="channel-json-head"><span class="channel-snaap-mini">s*</span><strong>snaap.signal</strong><small>POST · JSON</small></div>${chart}<pre class="channel-json-preview"><code>${esc(JSON.stringify(result.payload, null, 2))}</code></pre>`;
       else if (result.layout === "minimal")
-        slot.innerHTML = `<div class="channel-preview-sender"><span class="channel-snaap-mini">s*</span><strong>Snaap <small>BOT</small></strong></div><div class="channel-text-preview">${esc(result.text)}</div>`;
+        slot.innerHTML = `<div class="channel-preview-sender"><span class="channel-snaap-mini">s*</span><strong>Snaap <small>BOT</small></strong></div>${chart}<div class="channel-text-preview">${message}</div>`;
       else if (session.kind === "TELEGRAM")
-        slot.innerHTML = `<div class="channel-preview-sender"><span class="channel-snaap-mini">s*</span><strong>Snaap <small>BOT</small></strong></div><div class="channel-photo-preview"><img src="/assets/snaap-signal-banner${session.appearance.accent === "lime" ? "" : "-" + session.appearance.accent}.png" alt="ภาพแบรนด์ Snaap"><div class="channel-text-preview">${esc(result.text)}</div></div>`;
+        slot.innerHTML = `<div class="channel-preview-sender"><span class="channel-snaap-mini">s*</span><strong>Snaap <small>BOT</small></strong></div><div class="channel-photo-preview">${chart || `<img src="${banner}" alt="ภาพแบรนด์ Snaap">`}<div class="channel-text-preview">${message}</div></div>`;
       else
-        slot.innerHTML = `<div class="channel-preview-sender"><span class="channel-snaap-mini">s*</span><strong>Snaap <small>${session.kind === "DISCORD" ? "APP" : "OA"}</small></strong></div><article class="channel-card-preview ${session.kind.toLowerCase()}" style="--signal-accent:${result.accent}"><header><strong>Snaap*</strong><span>${esc(result.heading)}</span></header>${result.image ? `<img src="/assets/snaap-signal-banner${session.appearance.accent === "lime" ? "" : "-" + session.appearance.accent}.png" alt="ภาพแบรนด์ Snaap">` : ""}<div class="channel-card-body"><span class="channel-signal-event">${esc(result.event)} · ${en ? "TEST" : "ทดสอบ"}</span><h3>${esc(result.title)}</h3><dl>${result.fields.map((x) => `<div><dt>${esc(x.label)}</dt><dd>${esc(x.value)}</dd></div>`).join("")}</dl><p>${esc(result.note)}</p></div>${result.url ? `<div class="channel-card-link">${en ? "Open Snaap" : "เปิด Snaap"} ↗</div>` : ""}</article>`;
+        slot.innerHTML = `<div class="channel-preview-sender"><span class="channel-snaap-mini">s*</span><strong>Snaap <small>${session.kind === "DISCORD" ? "APP" : "OA"}</small></strong></div><article class="channel-card-preview ${session.kind.toLowerCase()}" style="--signal-accent:${result.accent}"><header><strong>Snaap*</strong><span>${esc(result.heading)}</span></header>${chart || (result.image ? `<img src="${banner}" alt="ภาพแบรนด์ Snaap">` : "")}<div class="channel-card-body"><span class="channel-signal-event">${esc(result.event)} · ${en ? "TEST" : "ทดสอบ"}</span><h3>${esc(result.title)}</h3><dl>${result.fields.map((x) => `<div><dt>${esc(x.label)}</dt><dd>${esc(x.value)}</dd></div>`).join("")}</dl></div>${result.url ? `<div class="channel-card-link">${en ? "Open Snaap" : "เปิด Snaap"} ↗</div>` : ""}${signature}</article>`;
     } catch (error) {
       if (request === previewRequest && dialog.open)
         dialog.querySelector("[data-channel-preview]").innerHTML =
@@ -262,25 +295,21 @@
         const button = event.target.closest("button");
         if (!button) return;
         if (button.hasAttribute("data-preview-jump")) {
-          dialog
-            .querySelector(".channel-preview-area")
-            .scrollIntoView({
-              block: "start",
-              behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-                ? "instant"
-                : "smooth",
-            });
+          dialog.querySelector(".channel-preview-area").scrollIntoView({
+            block: "start",
+            behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+              ? "instant"
+              : "smooth",
+          });
           return;
         }
         if (button.hasAttribute("data-controls-jump")) {
-          dialog
-            .querySelector(".channel-step-nav")
-            .scrollIntoView({
-              block: "start",
-              behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-                ? "instant"
-                : "smooth",
-            });
+          dialog.querySelector(".channel-step-nav").scrollIntoView({
+            block: "start",
+            behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+              ? "instant"
+              : "smooth",
+          });
           return;
         }
         if (button.hasAttribute("data-studio-close")) {
@@ -345,6 +374,12 @@
       });
       dialog.addEventListener("input", () => {
         readAppearance();
+        const creator = dialog.querySelector("[data-creator-name]");
+        if (creator) {
+          creator.hidden = !session.appearance.showCreator;
+          creator.querySelector("input").required =
+            session.appearance.showCreator;
+        }
         clearTimeout(previewTimer);
         previewTimer = setTimeout(updatePreview, 180);
       });
