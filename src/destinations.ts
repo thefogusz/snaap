@@ -18,6 +18,7 @@ import {
   telegramToken,
   telegramRecipient,
   verifyTelegramDestination,
+  discoverTelegramChats,
 } from "./telegram-destination.js";
 import {
   appearanceSchema,
@@ -123,6 +124,13 @@ export async function registerDestinations(
         ? "data:image/png;base64," + previewChart.toString("base64")
         : undefined,
     };
+  });
+  app.post("/api/v1/destinations/telegram/chats", async (req) => {
+    const input = z
+      .object({ botToken: telegramToken })
+      .strict()
+      .parse(req.body);
+    return { chats: await discoverTelegramChats(input.botToken) };
   });
   app.patch("/api/v1/destinations/:id", async (req) => {
     const id = parseId(req.params);

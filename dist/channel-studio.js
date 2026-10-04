@@ -3,77 +3,98 @@
   const guides = {
     TELEGRAM: {
       name: "Telegram",
-      format: "ใช้บอตของคุณ ส่งเข้าแชตส่วนตัว กลุ่ม หรือช่องที่คุณเลือก",
+      url: "https://t.me/BotFather",
+      format:
+        "สิ่งที่ต้องมี: บัญชี Telegram และบอตของคุณ · ถ้ามีบอตแล้ว ข้ามข้อ 1 ได้",
       steps: [
         [
-          "เตรียมบอตของคุณ",
-          "เปิด @BotFather ใน Telegram ส่ง /newbot แล้วทำตามคำแนะนำ คัดลอก Bot Token ที่ได้รับ หากมีบอตแล้ว ใช้ Token ของบอตนั้นได้",
+          "สร้างบอตใน BotFather",
+          "เปิด @BotFather ส่ง /newbot → ตั้งชื่อบอต → ตั้ง username ที่ลงท้ายด้วย bot เช่น mysignals_bot",
         ],
         [
-          "เลือกแชตที่จะรับสัญญาณ",
-          "แชตส่วนตัว: เปิดบอตของคุณแล้วกด Start · กลุ่ม: เพิ่มบอตเข้ากลุ่ม · ช่อง: เพิ่มบอตเป็นผู้ดูแลและให้สิทธิ์โพสต์ จากนั้นเตรียม Chat ID ของปลายทาง หรือ @username ของช่องสาธารณะ",
+          "คัดลอก Bot Token",
+          "เมื่อสร้างสำเร็จ BotFather จะส่ง Token ให้ คัดลอกไปวางในช่อง Bot Token ของ Snaap ห้ามส่ง Token ในแชตอื่น",
         ],
         [
-          "เชื่อมกับ Snaap",
-          "กด “เริ่มเชื่อมต่อ” กรอก Bot Token และ Chat ID แล้วกด “เชื่อมและส่งทดสอบ” เมื่อได้รับตัวอย่าง ให้ปรับหน้าตา บันทึก และเลือกช่องทางนี้ในเซตอัป",
+          "เปิดแชตที่จะรับสัญญาณ",
+          "ส่วนตัว: เปิดบอตแล้วกด Start · กลุ่ม: เพิ่มบอตแล้วส่ง /start@ชื่อบอต · ช่อง: เพิ่มบอตเป็นผู้ดูแลที่โพสต์ได้ แล้วโพสต์ข้อความใหม่หนึ่งข้อความ",
+        ],
+        [
+          "เลือกแชตใน Snaap",
+          "กด “เริ่มเชื่อมต่อ” วาง Token แล้วกด “ค้นหาแชต” เลือกปลายทางที่ต้องการ ระบบจะเติม Chat ID ให้ หรือกรอก @ชื่อช่องสาธารณะเองได้",
+        ],
+        [
+          "ส่งตัวอย่างแล้วเปิดใช้งาน",
+          "กด “เชื่อมและส่งทดสอบ” แล้วดูว่าข้อความถึงปลายทาง จากนั้นปรับหน้าตา บันทึก และเลือกช่องทางนี้ในเซตอัป",
         ],
       ],
     },
     LINE: {
       name: "LINE",
-      format: "รับในแชต LINE OA ของ Snaap · ไม่ต้องสร้าง OA เอง",
-      url: "https://developers.line.biz/en/docs/messaging-api/using-flex-messages/",
+      format: "รับผ่าน LINE OA ของ Snaap · ใช้บัญชี LINE ของคุณ",
       steps: [
         [
-          "สร้างช่องทางรับสัญญาณ",
-          "กด “เริ่มเชื่อมต่อ” แล้วกด “สร้างช่องทาง” ในขั้น 2 เพื่อรับคำสั่งเชื่อมบัญชี",
+          "รับคำสั่งเชื่อมบัญชี",
+          "กด “เริ่มเชื่อมต่อ” → “สร้างช่องทาง” แล้วคัดลอกคำสั่ง /start ที่แสดง",
         ],
         [
-          "เพิ่มเพื่อนและส่งคำสั่ง",
-          "กด “เปิด LINE” เพิ่มเพื่อน OA ของ Snaap ด้วยบัญชีที่ต้องการรับสัญญาณ แล้วส่งคำสั่ง /start ทั้งบรรทัดในแชต OA ภายใน 10 นาที",
+          "ส่งคำสั่งใน LINE",
+          "กด “เปิด LINE” → เพิ่มเพื่อน OA ของ Snaap → วางคำสั่งที่คัดลอกในแชต OA แล้วส่ง ภายใน 10 นาที",
         ],
         [
-          "ยืนยันแล้วลองรับสัญญาณ",
-          "กลับมากด “ตรวจสถานะการเชื่อมต่อ” แล้วปรับหน้าตาและบันทึกในขั้น 3 ส่งตัวอย่างเพื่อตรวจผล และเลือกช่องทางนี้ในเซตอัป การส่งตัวอย่างนับในโควตา LINE",
+          "ตรวจว่าเชื่อมสำเร็จ",
+          "กลับ Snaap กด “ตรวจสถานะการเชื่อมต่อ” เมื่อยืนยันแล้ว จะเปิดหน้าปรับหน้าตาสัญญาณ",
+        ],
+        [
+          "ตั้งหน้าตาและเริ่มรับสัญญาณ",
+          "ปรับหน้าตา → บันทึก → ส่งตัวอย่าง แล้วเลือกช่องทางนี้ในเซตอัป การส่งตัวอย่างนับในโควตา LINE",
         ],
       ],
     },
     DISCORD: {
       name: "Discord",
-      format: "ส่งเข้าห้องของคุณ · ต้องมีสิทธิ์ Manage Webhooks ในเซิร์ฟเวอร์",
+      format: "ส่งเข้าห้องของคุณ · ต้องมีสิทธิ์ Manage Webhooks",
       url: "https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks",
       steps: [
         [
-          "สร้าง Webhook ใน Discord",
-          "เปิด Server Settings → Integrations → Webhooks → New Webhook แล้วเลือกห้องข้อความที่จะรับสัญญาณ ตั้งชื่อได้ตามต้องการ",
+          "สร้าง Webhook",
+          "ใน Discord เปิด Server Settings → Integrations → Webhooks → New Webhook",
         ],
         [
-          "คัดลอก URL แล้วเชื่อม",
-          "กด Copy Webhook URL ใน Discord แล้วกด “เริ่มเชื่อมต่อ” นำ URL มาวางในขั้น 2 และกด “เชื่อมและส่งทดสอบ”",
+          "เลือกห้องและคัดลอก URL",
+          "เลือกห้องข้อความที่จะรับสัญญาณ ตั้งชื่อตามต้องการ แล้วกด Copy Webhook URL",
         ],
         [
-          "ตรวจห้องแล้วตั้งหน้าตา",
-          "เมื่อเห็นข้อความตัวอย่างในห้อง Discord ให้ไปขั้น 3 ปรับหน้าตาและบันทึก จากนั้นเลือกช่องทางนี้ในเซตอัป",
+          "วาง URL ใน Snaap",
+          "กด “เริ่มเชื่อมต่อ” วาง URL แล้วกด “เชื่อมและส่งทดสอบ” ตรวจว่ามีข้อความเข้าห้องที่เลือก",
+        ],
+        [
+          "ตั้งหน้าตาและเริ่มรับสัญญาณ",
+          "กด “ปรับหน้าตา” → บันทึก แล้วเลือกช่องทางนี้ในเซตอัป",
         ],
       ],
     },
     WEBHOOK: {
       name: "Webhook",
       format:
-        "ส่งไปยังระบบของคุณ · ต้องมี HTTPS URL ที่รับข้อมูลตามรูปแบบ Snaap",
+        "สำหรับระบบที่มี URL รับข้อมูลอยู่แล้ว · ต้องรองรับรูปแบบ Snaap",
       url: null,
       steps: [
         [
-          "เตรียม URL รับสัญญาณ",
-          "ใช้ HTTPS endpoint ที่รับ POST JSON ได้ หากยังไม่มี ให้ใช้ตัวอย่าง Node.js ด้านล่างเป็นจุดเริ่มต้น โดเมนต้องอยู่ในรายการที่ Snaap อนุญาต",
+          "เตรียม URL ของระบบคุณ",
+          "URL ต้องเป็น HTTPS และรับ POST JSON ได้ โดเมนต้องได้รับอนุญาตจาก Snaap ถ้ายังไม่มีระบบรับข้อมูล ดูตัวอย่าง Node.js ด้านล่าง",
         ],
         [
-          "วาง URL และยืนยันปลายทาง",
-          "กด “เริ่มเชื่อมต่อ” วาง URL ในขั้น 2 แล้วกด “สร้างช่องทาง” เมื่อได้รับ type: snaap.verify ระบบปลายทางต้องตอบค่า challenge เป็นข้อความ HTTP 200",
+          "ตั้งให้ระบบตอบรหัสยืนยัน",
+          "เมื่อรับ type: snaap.verify ให้ตอบค่า challenge เป็นข้อความ HTTP 200 ใช้ตัวอย่างด้านล่างได้",
         ],
         [
-          "เก็บ Secret แล้วตั้งหน้าตา",
-          "คัดลอก Signing Secret ที่แสดงครั้งเดียวไปเก็บในระบบปลายทาง ใช้ตรวจลายเซ็นก่อนรับสัญญาณ จากนั้นไปขั้น 3 ปรับหน้าตาและบันทึก แล้วเลือกช่องทางนี้ในเซตอัป",
+          "เชื่อมและเก็บ Secret",
+          "กด “เริ่มเชื่อมต่อ” วาง URL → “สร้างช่องทาง” แล้วคัดลอก Signing Secret ไปเก็บในระบบปลายทาง สำหรับตรวจลายเซ็น ข้อมูลนี้แสดงครั้งเดียว",
+        ],
+        [
+          "ตั้งหน้าตาและเริ่มรับสัญญาณ",
+          "ปรับหน้าตา → บันทึก → ส่งตัวอย่าง แล้วเลือกช่องทางนี้ในเซตอัป ระบบของคุณต้องนำข้อมูลหน้าตาที่ได้รับไปแสดงเอง",
         ],
       ],
     },
@@ -125,9 +146,9 @@
     const available = session.channels.available[kind];
     let content;
     if (step === 0)
-      content = `<div class="channel-flow-art" aria-hidden="true"><span class="channel-snaap-mark"><img class="brand-badge-symbol" src="/assets/snaap-favicon.svg?v=2" alt="" aria-hidden="true"></span><span class="channel-flow-line"><i></i></span><span class="channel-target-mark">${kind === "WEBHOOK" ? "{}" : `<img src="${channelInfo[kind].logo}" alt="">`}</span></div><h3>รับสัญญาณใน ${guide.name}</h3><p class="channel-intro">${guide.format}</p><ol class="channel-guide-list">${guide.steps.map(([title, detail], i) => `<li style="--step:${i}"><span>${i + 1}</span><div><h4>${title}</h4><p>${detail}</p></div></li>`).join("")}</ol>${kind === "DISCORD" ? `<a class="text-button" href="${guide.url}" target="_blank" rel="noopener noreferrer">วิธีสร้าง Webhook ใน Discord ↗</a>` : ""}${kind === "WEBHOOK" ? `<details class="channel-admin-guide"><summary>ตัวอย่างรับ challenge และสัญญาณ</summary><a class="text-button" href="/assets/snaap-webhook-example.mjs" download>ดาวน์โหลดตัวอย่าง Node.js ↧</a><pre><code>${esc('if (body.type === "snaap.verify") {\n  // HTTP 200, Content-Type: text/plain\n  return body.challenge;\n}\n// ตรวจ HMAC จาก raw body ก่อน parse JSON\n// ตรวจ timestamp และบันทึก body.id กันซ้ำ\n// ตอบ HTTP 2xx หลังบันทึกสัญญาณแล้ว')}</code></pre></details>` : ""}`;
+      content = `<div class="channel-flow-art" aria-hidden="true"><span class="channel-snaap-mark"><img class="brand-badge-symbol" src="/assets/snaap-favicon.svg?v=2" alt="" aria-hidden="true"></span><span class="channel-flow-line"><i></i></span><span class="channel-target-mark">${kind === "WEBHOOK" ? "{}" : `<img src="${channelInfo[kind].logo}" alt="">`}</span></div><h3>รับสัญญาณใน ${guide.name}</h3><p class="channel-intro">${guide.format}</p><ol class="channel-guide-list">${guide.steps.map(([title, detail], i) => `<li style="--step:${i}"><span>${i + 1}</span><div><h4>${title}</h4><p>${detail}</p></div></li>`).join("")}</ol>${guide.url && ["TELEGRAM", "DISCORD"].includes(kind) ? `<a class="text-button" href="${guide.url}" target="_blank" rel="noopener noreferrer">${kind === "TELEGRAM" ? "เปิด BotFather" : "วิธีสร้าง Webhook ใน Discord"} ↗</a>` : ""}${kind === "WEBHOOK" ? `<details class="channel-admin-guide"><summary>ตัวอย่างรับ challenge และสัญญาณ</summary><a class="text-button" href="/assets/snaap-webhook-example.mjs" download>ดาวน์โหลดตัวอย่าง Node.js ↧</a><pre><code>${esc('if (body.type === "snaap.verify") {\n  // HTTP 200, Content-Type: text/plain\n  return body.challenge;\n}\n// ตรวจ HMAC จาก raw body ก่อน parse JSON\n// ตรวจ timestamp และบันทึก body.id กันซ้ำ\n// ตอบ HTTP 2xx หลังบันทึกสัญญาณแล้ว')}</code></pre></details>` : ""}`;
     else if (step === 1)
-      content = `<h3>${row?.verified ? "ช่องทางของคุณ" : "เชื่อมต่อ " + guide.name}</h3><p class="channel-intro">${kind === "TELEGRAM" ? "ระบุบอตและแชตของคุณ ระบบจะตรวจและส่งตัวอย่างก่อนยืนยัน" : kind === "DISCORD" ? "เมื่อกดเชื่อม จะส่งสัญญาณตัวอย่างหนึ่งข้อความไปยังห้องที่เลือก" : kind === "WEBHOOK" ? "ยืนยัน URL แล้วรับ secret สำหรับตรวจสอบลายเซ็น" : "ยืนยันบัญชีที่รับสัญญาณด้วยรหัสใช้ครั้งเดียว"}</p>${!available ? '<p class="channel-config-notice">ช่องทางนี้ยังไม่พร้อมเชื่อมต่อ คุณอ่านคู่มือและลองปรับหน้าตาในขั้น 3 ได้ก่อน</p>' : ""}${!session.result && !row ? `<form id="studio-connection"><input type="hidden" name="name" value="${esc(session.name)}">${kind === "TELEGRAM" ? `<label>Bot Token<input name="botToken" type="password" required autocomplete="off" spellcheck="false" placeholder="Token จาก @BotFather"></label><label>Chat ID / @ชื่อช่อง<input name="recipient" required autocomplete="off" spellcheck="false" placeholder="เช่น 123456789, -1001234567890 หรือ @your_channel"></label><p class="channel-help">Token จะถูกเข้ารหัสและไม่แสดงอีก · การเชื่อมจะส่งตัวอย่างหนึ่งข้อความไปยังปลายทางที่คุณระบุ</p>` : ""}${["WEBHOOK", "DISCORD"].includes(kind) ? `<label>${kind === "DISCORD" ? "Discord Webhook URL" : "HTTPS endpoint"}<input name="url" type="${kind === "DISCORD" ? "password" : "url"}" required autocomplete="off" placeholder="${kind === "DISCORD" ? "https://discord.com/api/webhooks/…" : "https://your-domain.com/snaap"}"></label>` : ""}<p class="channel-help">${kind === "TELEGRAM" ? "ใช้บอตของคุณเอง ไม่ต้องเชื่อมกับบอต Snaap" : kind === "DISCORD" ? "URL เก็บแบบเข้ารหัส ไม่แสดงในรายการช่องทาง" : kind === "WEBHOOK" ? "ปลายทางต้องตอบ challenge กลับเป็นข้อความ" : "คุณไม่ต้องกรอก API key หรือรหัสผ่านบัญชี"}</p><button class="primary" type="submit" ${available ? "" : "disabled"}>${["TELEGRAM", "DISCORD"].includes(kind) ? "เชื่อมและส่งทดสอบ" : "สร้างช่องทาง"}</button></form>` : connectionResult() || `<p>${esc(row.name)} · ${row.verified ? "ยืนยันแล้ว" : "ยังไม่ยืนยัน / ตัดการเชื่อมต่อแล้ว"}</p>${!row.verified ? '<p class="channel-help">หากรหัสหมดอายุหรือช่องทางถูกตัด ให้เพิ่มช่องทางใหม่</p>' : ""}`}${kind === "LINE" ? `<div class="channel-quota-note">LINE เดือนนี้: ${session.channels.lineQuota?.used ?? 0} / ${session.channels.lineQuota?.limit ?? 30} ข้อความ · รวมการทดสอบ</div>` : ""}`;
+      content = `<h3>${row?.verified ? "ช่องทางของคุณ" : "เชื่อมต่อ " + guide.name}</h3><p class="channel-intro">${kind === "TELEGRAM" ? "ระบุบอตและแชตของคุณ ระบบจะตรวจและส่งตัวอย่างก่อนยืนยัน" : kind === "DISCORD" ? "เมื่อกดเชื่อม จะส่งสัญญาณตัวอย่างหนึ่งข้อความไปยังห้องที่เลือก" : kind === "WEBHOOK" ? "ยืนยัน URL แล้วรับ secret สำหรับตรวจสอบลายเซ็น" : "ยืนยันบัญชีที่รับสัญญาณด้วยรหัสใช้ครั้งเดียว"}</p>${!available ? '<p class="channel-config-notice">ช่องทางนี้ยังไม่พร้อมเชื่อมต่อ คุณอ่านคู่มือและลองปรับหน้าตาในขั้น 3 ได้ก่อน</p>' : ""}${!session.result && !row ? `<form id="studio-connection"><input type="hidden" name="name" value="${esc(session.name)}">${kind === "TELEGRAM" ? `<label>Bot Token<input name="botToken" type="password" required autocomplete="off" spellcheck="false" placeholder="Token จาก @BotFather"></label><button type="button" class="secondary" data-find-telegram-chats>ค้นหาแชต</button><div data-telegram-chats></div><label>Chat ID / @ชื่อช่อง<input name="recipient" required autocomplete="off" spellcheck="false" placeholder="เช่น 123456789, -1001234567890 หรือ @your_channel"></label><p class="channel-help">Token จะถูกเข้ารหัสและไม่แสดงอีก · การเชื่อมจะส่งตัวอย่างหนึ่งข้อความไปยังปลายทางที่คุณระบุ</p>` : ""}${["WEBHOOK", "DISCORD"].includes(kind) ? `<label>${kind === "DISCORD" ? "Discord Webhook URL" : "HTTPS endpoint"}<input name="url" type="${kind === "DISCORD" ? "password" : "url"}" required autocomplete="off" placeholder="${kind === "DISCORD" ? "https://discord.com/api/webhooks/…" : "https://your-domain.com/snaap"}"></label>` : ""}<p class="channel-help">${kind === "TELEGRAM" ? "ใช้บอตของคุณเอง ไม่ต้องเชื่อมกับบอต Snaap" : kind === "DISCORD" ? "URL เก็บแบบเข้ารหัส ไม่แสดงในรายการช่องทาง" : kind === "WEBHOOK" ? "ปลายทางต้องตอบ challenge กลับเป็นข้อความ" : "คุณไม่ต้องกรอก API key หรือรหัสผ่านบัญชี"}</p><button class="primary" type="submit" ${available ? "" : "disabled"}>${["TELEGRAM", "DISCORD"].includes(kind) ? "เชื่อมและส่งทดสอบ" : "สร้างช่องทาง"}</button></form>` : connectionResult() || `<p>${esc(row.name)} · ${row.verified ? "ยืนยันแล้ว" : "ยังไม่ยืนยัน / ตัดการเชื่อมต่อแล้ว"}</p>${!row.verified ? '<p class="channel-help">หากรหัสหมดอายุหรือช่องทางถูกตัด ให้เพิ่มช่องทางใหม่</p>' : ""}`}${kind === "LINE" ? `<div class="channel-quota-note">LINE เดือนนี้: ${session.channels.lineQuota?.used ?? 0} / ${session.channels.lineQuota?.limit ?? 30} ข้อความ · รวมการทดสอบ</div>` : ""}`;
     else
       content = `<h3>หน้าตาสัญญาณของคุณ</h3><p class="channel-intro">ตั้งแยกสำหรับแต่ละช่องทาง · พรีวิวอัปเดตตามที่เลือก</p><form id="studio-appearance"><label>หัวข้อข้อความ<input name="heading" maxlength="35" value="${esc(appearance.heading)}" placeholder="เช่น สัญญาณของฉัน"></label><fieldset class="channel-layout-options"><legend>รูปแบบ</legend>${[
         ["card", kind === "TELEGRAM" ? "ภาพ Snaap + ข้อความ" : "การ์ด Snaap"],
@@ -324,6 +345,41 @@
           });
           return;
         }
+        if (button.hasAttribute("data-find-telegram-chats")) {
+          const active = session;
+          const tokenInput = dialog.querySelector('input[name="botToken"]');
+          if (!tokenInput.value.trim()) {
+            status("วาง Bot Token ก่อนค้นหาแชต", true);
+            tokenInput.focus();
+            return;
+          }
+          button.disabled = true;
+          try {
+            const result = await api("/destinations/telegram/chats", "POST", {
+              botToken: tokenInput.value.trim(),
+            });
+            if (
+              session !== active ||
+              !dialog.open ||
+              !dialog.querySelector("[data-telegram-chats]")
+            )
+              return;
+            dialog.querySelector("[data-telegram-chats]").innerHTML = result
+              .chats.length
+              ? `<label>เลือกแชต<select data-telegram-chat-select><option value="">เลือกปลายทาง…</option>${result.chats.map((chat) => `<option value="${esc(chat.id)}">${esc(chat.label)} · ${esc(chat.id)}</option>`).join("")}</select></label>`
+              : `<p class="channel-help">ยังไม่พบแชต เปิดบอตแล้วกด Start หรือส่ง /start@ชื่อบอต ในกลุ่ม จากนั้นกดค้นหาอีกครั้ง · ช่องสาธารณะกรอก @ชื่อช่อง ได้เลย</p>`;
+            status(
+              result.chats.length
+                ? "พบแชตแล้ว เลือกปลายทางด้านล่าง"
+                : "ยังไม่พบแชตที่บอตได้รับข้อความ",
+            );
+          } catch (error) {
+            if (session === active) status(error.message, true);
+          } finally {
+            if (button.isConnected) button.disabled = false;
+          }
+          return;
+        }
         if (button.hasAttribute("data-studio-close")) {
           dialog.close();
           return;
@@ -384,7 +440,13 @@
         if (button.hasAttribute("data-studio-test"))
           await testChannel(session.id, button);
       });
+      dialog.addEventListener("change", (event) => {
+        if (event.target.matches("[data-telegram-chat-select]"))
+          dialog.querySelector('input[name="recipient"]').value =
+            event.target.value;
+      });
       dialog.addEventListener("input", (event) => {
+        if (!event.target.closest("#studio-appearance")) return;
         readAppearance();
         if (
           event.target.name === "layout" &&

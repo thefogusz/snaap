@@ -6,7 +6,69 @@ import { registerDestinations } from "../src/destinations.js";
 import { unseal, seal } from "../src/vault.js";
 import { sendNotification } from "../src/notification-send.js";
 import { demoSignal } from "../src/notification-format.js";
-import { verifyTelegramDestination } from "../src/telegram-destination.js";
+import {
+  verifyTelegramDestination,
+  discoverTelegramChats,
+} from "../src/telegram-destination.js";
+
+test("chat discovery deduplicates chats without acknowledging updates or exposing messages", async () => {
+  const original = globalThis.fetch;
+  const calls: { url: string; body: any }[] = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), body: JSON.parse(init?.body as string) });
+    const result = String(url).endsWith("getWebhookInfo")
+      ? { url: "" }
+      : [
+          {
+            message: {
+              chat: { id: 123, type: "private", first_name: "Gus" },
+              text: "private message",
+            },
+          },
+          {
+            message: { chat: { id: 123, type: "private", first_name: "Gus" } },
+          },
+          {
+            channel_post: {
+              chat: { id: -100123, type: "channel", title: "My channel" },
+            },
+          },
+        ];
+    return new Response(JSON.stringify({ ok: true, result }));
+  };
+  try {
+    const chats = await discoverTelegramChats("fixture-token");
+    assert.deepEqual(
+      chats.map((chat) => chat.id),
+      ["123", "-100123"],
+    );
+    assert.doesNotMatch(JSON.stringify(chats), /private message|fixture-token/);
+    assert.deepEqual(calls.at(-1)?.body, { timeout: 0, limit: 100 });
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("chat discovery leaves existing Telegram webhooks in place", async () => {
+  const original = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        result: { url: "https://existing.example/hook" },
+      }),
+    );
+  };
+  try {
+    await assert.rejects(discoverTelegramChats("fixture-token"), /Chat ID/);
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].endsWith("getWebhookInfo"));
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 
 test("Telegram connects a user's bot and chat, encrypts credentials, and never returns them", async () => {
   const originalFetch = globalThis.fetch;
