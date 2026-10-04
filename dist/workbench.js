@@ -1178,7 +1178,11 @@ async function chat(text) {
   showDesigner();
   location.hash = "home";
   message(text, true);
-  appendChatImages([...state.images, ...(state.useMyData ? state.libraryImages : [])]);
+  const pendingImages = state.images.filter(image => !image.sent);
+  appendChatImages([...pendingImages, ...(state.useMyData ? state.libraryImages : [])]);
+  pendingImages.forEach(image => { image.sent = true; });
+  renderImages();
+  let requestCompleted = false;
   followingChat=true;
   requestAnimationFrame(scrollChatToLatest);
   $("#chat-input").value = "";
@@ -1227,6 +1231,7 @@ async function chat(text) {
 
       },
     );
+    requestCompleted = true;
     clearTimeout(thinkingWaitTimer);
     thinking.remove();
     message(result.text);
@@ -1250,6 +1255,10 @@ async function chat(text) {
     persistRecovery();
     await refresh();
   } catch (error) {
+    if (!requestCompleted) {
+      pendingImages.forEach(image => { image.sent = false; });
+      renderImages();
+    }
     message(error.message);
     $("#followup-input").value = text;
     resizeChatInputs();
@@ -1290,16 +1299,18 @@ function appendChatImages(images) {
   }
   $('#messages').append(gallery);
 }
-async function restoreChatImages(selectedIds) {
+async function restoreChatImages(selectedIds, sentIds = []) {
   if (!state.conversation) return;
   const conversationId = state.conversation;
   const images = await api(`/conversations/${conversationId}/images`);
   if (state.conversation !== conversationId) return;
   state.images = selectedIds ? images.filter(image => selectedIds.includes(image.id)).slice(-5) : images.slice(-5);
+  state.images.forEach(image => { image.sent = !selectedIds || sentIds.includes(image.id); });
   renderImages();
 }
 function renderImages() {
   previews.innerHTML = state.images
+    .filter(image => !image.sent)
     .map(
       (i) =>
         `<span><img src="/api/v1/images/${i.id}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
@@ -2039,7 +2050,7 @@ function persistRecovery() {
       savedId:state.saved?.id??null,draftRevision:state.draftRevision,persistedDraft:state.persistedDraft,
       chatText:$('#chat-input').value,followupText:$('#followup-input').value,
       tab:requestedWorkbenchMode??workbench.dataset.tab,designerOpen:!workbench.hidden,useMyData:state.useMyData,
-      aiMode:$('#ai-mode').value,imageIds:state.images.map(image=>image.id)};
+      aiMode:$('#ai-mode').value,imageIds:state.images.map(image=>image.id),sentImageIds:state.images.filter(image=>image.sent).map(image=>image.id)};
     const fingerprint=key+JSON.stringify(snapshot);
     if(fingerprint!==recoveryFingerprint){
       localStorage.setItem(key,JSON.stringify({...snapshot,updatedAt:Date.now()}));
@@ -2074,7 +2085,7 @@ async function restoreRecovery() {
       }
     }
     if(stored.useMyData){try{await setMyData(true);}catch{}}
-    if(state.conversation){try{await restoreChatImages(Array.isArray(stored.imageIds)?stored.imageIds:undefined);}catch{}}
+    if(state.conversation){try{await restoreChatImages(Array.isArray(stored.imageIds)?stored.imageIds:undefined,Array.isArray(stored.sentImageIds)?stored.sentImageIds:[]);}catch{}}
   }
   recoveryReady=true;
   if(state.draft)queueDraftSave();
