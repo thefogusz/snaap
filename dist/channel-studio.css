@@ -508,7 +508,7 @@
 .channel-card-preview.line .channel-card-body {
   padding: 12px;
 }
-.channel-card-preview.line .channel-card-heading {
+.channel-card-preview .channel-card-heading {
   color: #f4f4f5;
   font-size: 14px;
   font-weight: 700;

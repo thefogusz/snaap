@@ -399,8 +399,10 @@ export function renderSignal(
             embeds: [
               {
                 title: discordText(testLabel + title),
-                description: discordText(event + " · " + heading),
-                color: parseInt(directionBadge.color.slice(1), 16),
+                description: discordText(
+                  (appearance.heading ? heading + "\n" : "") + event,
+                ),
+                color: parseInt(accents[appearance.accent].slice(1), 16),
                 fields: fields.map((x) => ({
                   name: x.label,
                   value: discordText(x.value) || "—",
@@ -428,6 +430,12 @@ export function renderSignal(
       test: !!signal.test,
       presentation: {
         text,
+        heading: appearance.heading,
+        signature,
+        fields,
+        directionBadge,
+        accent: accents[appearance.accent],
+        brandName: "snaap.me",
         appearance: {
           ...appearance,
           creatorName: appearance.showCreator ? appearance.creatorName : "",

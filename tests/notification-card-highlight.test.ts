@@ -58,3 +58,32 @@ test("custom LINE heading is visible inside the card while creator stays in head
   assert.equal(card.header.contents[0].text, "snaap.me");
   assert.equal(card.header.contents[1].text, "Gus");
 });
+
+test("shared appearance reaches Discord, Telegram and custom webhook presentations", () => {
+  const appearance = appearanceSchema.parse({
+    heading: "My signals",
+    creatorName: "Gus",
+    showCreator: true,
+    showPrice: false,
+    accent: "violet",
+  });
+  const discord = renderSignal("DISCORD", demoSignal(), appearance, "").payload
+    .embeds[0];
+  assert.match(discord.description, /^My signals\n/);
+  assert.equal(discord.footer.text, "Gus");
+  assert.equal(discord.color, parseInt("C8B5FF", 16));
+  assert.ok(discord.fields.every((field: any) => field.name !== "ราคาอ้างอิง"));
+  const telegram = renderSignal("TELEGRAM", demoSignal(), appearance, "");
+  assert.match(telegram.text, /My signals/);
+  assert.match(telegram.text, /Gus$/);
+  const webhook = renderSignal("WEBHOOK", demoSignal(), appearance, "").payload;
+  assert.equal(webhook.presentation.heading, "My signals");
+  assert.equal(webhook.presentation.signature, "Gus");
+  assert.equal(webhook.presentation.brandName, "snaap.me");
+  assert.ok(
+    webhook.presentation.fields.every(
+      (field: any) => field.key !== "referencePrice",
+    ),
+  );
+  assert.equal(webhook.event.referencePrice, 68420.5);
+});
