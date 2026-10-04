@@ -15,3 +15,12 @@ test('templates differ and invalid preset fails',()=>{
  assert.equal(new Set(entries.map(e=>JSON.stringify(e))).size,6);
  assert.throws(()=>buildPreset('invalid',{exchange:'Binance',pair:'BTC/USDT',market:'Spot',side:'SPOT'}));
 });
+test('all presets retain ten independent pairs and describe every selected pair',()=>{
+ const pairs=['BTC','ETH','SOL','XRP','DOGE','ADA','AVAX','LINK','DOT','LTC'].map(base=>base+'/USDT');
+ for(const p of presets){
+  const spec=strategySchema.parse(buildPreset(p.id,{exchange:'MEXC',pairs,market:'Perpetual Futures',side:'LONG'}));
+  assert.deepEqual(spec.pairs,pairs);
+  assert.match(spec.name,/10 คู่/);
+  for(const pair of pairs)assert.ok(describePreset(spec).includes(pair));
+ }
+});
