@@ -438,6 +438,87 @@
 .channel-card-preview.discord {
   border-left: 4px solid var(--signal-accent);
 }
+.channel-card-preview.line {
+  width: 300px;
+  max-width: 100%;
+  border-radius: 12px;
+}
+.channel-card-preview.line header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+.channel-card-preview.line header strong {
+  font-size: 16px;
+  letter-spacing: -0.03em;
+  flex-shrink: 0;
+}
+.channel-card-preview.line header span {
+  font-size: 12px;
+  text-align: right;
+}
+.channel-card-preview.line .channel-card-body {
+  padding: 12px;
+}
+.channel-card-preview.line .channel-signal-event {
+  font-size: 14px;
+}
+.channel-card-preview.line h3 {
+  font-size: 16px;
+  line-height: 1.45;
+  margin: 4px 0 10px;
+}
+.channel-card-preview.line dl {
+  gap: 6px;
+}
+.channel-card-preview.line dl > div {
+  display: grid;
+  grid-template-columns: 2fr 5fr;
+  align-items: baseline;
+  gap: 8px;
+}
+.channel-card-preview.line dt,
+.channel-card-preview.line dd {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+.channel-card-preview.line dd {
+  text-align: right;
+}
+.channel-card-preview.line > .channel-signature {
+  padding: 0 12px 12px;
+}
+.channel-card-preview.line .channel-card-link {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+.channel-card-preview.line .channel-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.channel-card-preview.line .channel-card-footer .channel-card-link {
+  border: 0;
+  padding: 0;
+  text-align: left;
+  flex-shrink: 0;
+}
+.channel-card-preview.line .channel-card-footer .channel-signature {
+  color: #b9c3d0;
+  margin-left: auto;
+}
+.channel-card-footer > .channel-signature {
+  color: #b9c3d0;
+  padding: 0 22px 20px;
+}
+.channel-card-preview.line .channel-card-footer > .channel-signature {
+  padding: 0;
+}
 .channel-card-preview.discord header {
   background: #181d24;
 }

@@ -209,24 +209,27 @@ export function renderSignal(
             altText: text.slice(0, 400),
             contents: {
               type: "bubble",
-              size: "mega",
+              size: "kilo",
               header: {
                 type: "box",
-                layout: "vertical",
+                layout: "horizontal",
                 backgroundColor: "#181D24",
-                paddingAll: "20px",
+                paddingAll: "10px",
+                spacing: "sm",
                 contents: [
                   {
                     type: "text",
                     text: `${testLabel}Snaap`,
                     weight: "bold",
-                    size: "xl",
+                    size: "sm",
+                    flex: 0,
                     color: accents[appearance.accent],
                   },
                   {
                     type: "text",
                     text: clean(heading, 60),
-                    size: "sm",
+                    size: "xs",
+                    align: "end",
                     color: "#B9C3D0",
                     wrap: true,
                   },
@@ -241,44 +244,50 @@ export function renderSignal(
                       aspectRatio:
                         appearance.showChart && graphUrl ? "5:3" : "3:1",
                       aspectMode: "cover",
+                      action: { type: "uri", uri: image },
                     },
                   }
                 : {}),
               body: {
                 type: "box",
                 layout: "vertical",
-                spacing: "md",
+                spacing: "sm",
+                paddingAll: "12px",
                 backgroundColor: "#181D24",
                 contents: [
                   {
                     type: "text",
                     text: title,
                     weight: "bold",
-                    size: "xl",
+                    size: "md",
                     color: "#F4F7FB",
                     wrap: true,
                   },
                   {
                     type: "text",
                     text: event,
-                    size: "md",
+                    size: "sm",
                     color: accents[appearance.accent],
                   },
                   ...fields.map((x) => ({
                     type: "box",
-                    layout: "vertical",
-                    spacing: "xs",
+                    layout: "baseline",
+                    spacing: "sm",
                     contents: [
                       {
                         type: "text",
                         text: x.label,
                         size: "sm",
+                        flex: 2,
+                        wrap: true,
                         color: "#B9C3D0",
                       },
                       {
                         type: "text",
                         text: x.value,
-                        size: "md",
+                        size: "sm",
+                        flex: 5,
+                        align: "end",
                         color: "#F4F7FB",
                         wrap: true,
                       },
@@ -290,17 +299,20 @@ export function renderSignal(
                 ? {
                     footer: {
                       type: "box",
-                      layout: "vertical",
+                      layout: "horizontal",
+                      paddingAll: "12px",
+                      paddingTop: "0px",
                       backgroundColor: "#181D24",
                       spacing: "sm",
                       contents: [
                         ...(url
                           ? [
                               {
-                                type: "button",
-                                style: "link",
+                                type: "text",
+                                text: en ? "Open Snaap ↗" : "เปิด Snaap ↗",
+                                size: "sm",
+                                flex: 1,
                                 color: accents[appearance.accent],
-                                height: "sm",
                                 action: {
                                   type: "uri",
                                   label: en ? "Open Snaap" : "เปิด Snaap",
@@ -315,6 +327,7 @@ export function renderSignal(
                                 type: "text",
                                 text: signature,
                                 size: "sm",
+                                flex: 1,
                                 color: "#B9C3D0",
                                 align: "end",
                                 wrap: true,
