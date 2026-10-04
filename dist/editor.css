@@ -536,7 +536,6 @@
     border-color 200ms,
     box-shadow 200ms;
 }
-.chat-composer .attachment-hint { margin: 8px 6px 0; font-size: 12px; }
 .is-image-dragover { outline: 2px dashed var(--accent-ink); outline-offset: 3px; }
 .chat-composer:focus-within {
   border-color: var(--muted);
