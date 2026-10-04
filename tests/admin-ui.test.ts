@@ -201,6 +201,9 @@ async function dashboard() {
     plans,
     mutations,
     releaseMutation: () => releaseMutation?.(),
+    setDatabaseLatency: (latencyMs: number) => {
+      (responses["/api/v1/admin/overview"] as any).health.database.latencyMs = latencyMs;
+    },
     setOffline: () => {
       offline = true;
     },
@@ -233,6 +236,22 @@ test("admin dashboard escapes stored HTML in overview, feed, users, diagnostics 
       `${selector} must not create an executable element`,
     );
   }
+});
+
+test("database status refreshes on every tab and shows failure instead of an old healthy value", async () => {
+  const page = await dashboard();
+  for (const [index, tab] of page.tabs.entries()) {
+    tab.listeners.click();
+    page.setDatabaseLatency(177 + index);
+    page.poll();
+    await page.flush();
+    assert.match(page.node("#system-status-text").textContent, new RegExp(`${177 + index}\\s*ms`));
+  }
+  assert.match(page.node("#system-status-text").textContent, /\d{2}:\d{2}:\d{2}/);
+  page.setOffline();
+  page.poll();
+  await page.flush();
+  assert.equal(page.node("#system-status-text").textContent, "เชื่อมต่อล้มเหลว");
 });
 
 test("plan changes prevent conflicting repeated clicks and keep the modal open until saved", async () => {
