@@ -96,8 +96,14 @@ export async function buildApp(
       throw new ApiError(403, "HOST", "ไม่อนุญาต host นี้");
     if (req.headers.origin && req.headers.origin !== origin)
       throw new ApiError(403, "ORIGIN", "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
+    const publicPageNavigation =
+      req.method === "GET" &&
+      req.headers["sec-fetch-mode"] === "navigate" &&
+      req.headers["sec-fetch-dest"] === "document" &&
+      !req.url.startsWith("/api/");
     if (
       req.headers["sec-fetch-site"] === "cross-site" &&
+      !publicPageNavigation &&
       !req.url.startsWith("/api/v1/auth/google/callback")
     )
       throw new ApiError(403, "ORIGIN", "ไม่อนุญาตคำขอข้ามเว็บไซต์");
