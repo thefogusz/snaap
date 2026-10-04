@@ -35,6 +35,13 @@
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
 }
+.channel-studio-grid.channel-studio-guide-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+.channel-studio-guide-only .channel-studio-work {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
 .channel-preview-jump {
   display: none;
 }

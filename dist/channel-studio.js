@@ -3,87 +3,80 @@
   const guides = {
     TELEGRAM: {
       name: "Telegram",
-      format: "ข้อความ / ภาพพร้อมข้อความ",
+      format: "รับในแชตส่วนตัวผ่านบอต Snaap · ไม่ต้องสร้างบอตหรือกรอก Token",
       url: "https://core.telegram.org/bots",
       steps: [
         [
-          "กดเริ่มเชื่อมต่อ",
-          "Snaap จะเตรียมลิงก์สำหรับเชื่อมบัญชี Telegram ของคุณ",
+          "เริ่มเชื่อมบัญชี",
+          "กด “เริ่มเชื่อมต่อ” แล้วกด “สร้างช่องทาง” ในขั้น 2",
         ],
         [
           "เปิด Telegram แล้วกด Start",
-          "เปิดผ่านลิงก์ที่ Snaap ให้ ถ้าส่งรหัสไม่สำเร็จ ให้คัดลอกคำสั่งทั้งบรรทัดไปส่งในแชตบอต",
+          "กด “เปิด Telegram” ใช้บัญชีที่ต้องการรับสัญญาณ แล้วกด Start หากไม่สำเร็จ ให้คัดลอกคำสั่ง /start ทั้งบรรทัดไปส่งในแชตบอต รหัสใช้ได้ 10 นาที",
         ],
         [
-          "ตรวจการเชื่อมต่อ แล้วลองส่งข้อความ",
-          "กลับมากดตรวจสถานะ เลือกหน้าตาสัญญาณ แล้วส่งตัวอย่าง จากนั้นเลือก Telegram ในเซตอัปที่ต้องการ",
+          "กลับมายืนยันและเลือกหน้าตา",
+          "กลับมากด “ตรวจสถานะการเชื่อมต่อ” เมื่อยืนยันแล้วจะไปขั้น 3 เพื่อปรับหน้าตา บันทึก และส่งตัวอย่าง จากนั้นเลือกช่องทางนี้ในเซตอัป",
         ],
       ],
-      operator:
-        "สร้างบอตผ่าน @BotFather แล้วตั้ง TELEGRAM_BOT_TOKEN และ TELEGRAM_BOT_USERNAME ใน .env · dev รับคำสั่งผ่าน polling ได้โดยไม่เปิดเว็บไซต์สู่ภายนอก ใช้บอตทดสอบแยกจาก production",
     },
     LINE: {
       name: "LINE",
-      format: "Flex Card / ข้อความ",
+      format: "รับในแชต LINE OA ของ Snaap · ไม่ต้องสร้าง OA เอง",
       url: "https://developers.line.biz/en/docs/messaging-api/using-flex-messages/",
       steps: [
         [
-          "เพิ่มเพื่อน LINE OA",
-          "ใช้บัญชี LINE ที่คุณต้องการรับสัญญาณ เพิ่มเพื่อน OA ของ Snaap",
+          "สร้างช่องทางรับสัญญาณ",
+          "กด “เริ่มเชื่อมต่อ” แล้วกด “สร้างช่องทาง” ในขั้น 2 เพื่อรับคำสั่งเชื่อมบัญชี",
         ],
         [
-          "ส่งรหัสเชื่อมต่อ",
-          "คัดลอกคำสั่ง /start จาก Snaap ไปส่งในแชต OA รหัสหมดอายุใน 10 นาที",
+          "เพิ่มเพื่อนและส่งคำสั่ง",
+          "กด “เปิด LINE” เพิ่มเพื่อน OA ของ Snaap ด้วยบัญชีที่ต้องการรับสัญญาณ แล้วส่งคำสั่ง /start ทั้งบรรทัดในแชต OA ภายใน 10 นาที",
         ],
         [
-          "ตรวจสถานะและโควตา",
-          "ส่งสัญญาณทดสอบ แล้วเลือกช่องทางในเซตอัป การทดสอบนับรวมในโควตา LINE",
+          "ยืนยันแล้วลองรับสัญญาณ",
+          "กลับมากด “ตรวจสถานะการเชื่อมต่อ” แล้วปรับหน้าตาและบันทึกในขั้น 3 ส่งตัวอย่างเพื่อตรวจผล และเลือกช่องทางนี้ในเซตอัป การส่งตัวอย่างนับในโควตา LINE",
         ],
       ],
-      operator:
-        "ผู้ดูแลเปิด Messaging API ของ OA ตั้ง LINE_CHANNEL_SECRET, LINE_ACCESS_TOKEN และ LINE_OA_URL · ตั้ง webhook เป็น https://โดเมนของเรา/api/v1/hooks/line และเปิด Use webhook · LINE ต้องเข้าถึง HTTPS URL ได้ ตั้งโควตาให้ไม่เกินแพ็กเกจจริง",
     },
     DISCORD: {
       name: "Discord",
-      format: "Embed Card / ข้อความ",
+      format: "ส่งเข้าห้องของคุณ · ต้องมีสิทธิ์ Manage Webhooks ในเซิร์ฟเวอร์",
       url: "https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks",
       steps: [
         [
-          "เลือกห้องรับสัญญาณ",
-          "เปิด Server Settings → Integrations → Webhooks ต้องมีสิทธิ์ Manage Webhooks",
+          "สร้าง Webhook ใน Discord",
+          "เปิด Server Settings → Integrations → Webhooks → New Webhook แล้วเลือกห้องข้อความที่จะรับสัญญาณ ตั้งชื่อได้ตามต้องการ",
         ],
         [
-          "สร้าง Webhook",
-          "เลือก New Webhook ตั้งชื่อ Snaap แล้วเลือก text channel ที่ต้องการรับข้อความ",
+          "คัดลอก URL แล้วเชื่อม",
+          "กด Copy Webhook URL ใน Discord แล้วกด “เริ่มเชื่อมต่อ” นำ URL มาวางในขั้น 2 และกด “เชื่อมและส่งทดสอบ”",
         ],
         [
-          "คัดลอก URL มาเชื่อม",
-          "กด Copy Webhook URL แล้ววางในขั้นถัดไป Snaap จะส่งการ์ดทดสอบหนึ่งข้อความ",
+          "ตรวจห้องแล้วตั้งหน้าตา",
+          "เมื่อเห็นข้อความตัวอย่างในห้อง Discord ให้ไปขั้น 3 ปรับหน้าตาและบันทึก จากนั้นเลือกช่องทางนี้ในเซตอัป",
         ],
       ],
-      operator:
-        "ไม่ต้องมีบอตหรือ Nitro · ผู้ดูแล Snaap ต้องตั้ง DATA_ENCRYPTION_KEY เพื่อเข้ารหัส URL · ถ้า URL ถูกเปิดเผย ให้ลบ webhook เดิมและสร้างใหม่ใน Discord",
     },
     WEBHOOK: {
       name: "Webhook",
-      format: "JSON / ข้อความใน payload",
+      format:
+        "ส่งไปยังระบบของคุณ · ต้องมี HTTPS URL ที่รับข้อมูลตามรูปแบบ Snaap",
       url: null,
       steps: [
         [
-          "เตรียม HTTPS endpoint",
-          "ระบบของคุณต้องรับ POST application/json ได้ ให้ผู้ดูแล Snaap อนุญาตโดเมนก่อนเชื่อม",
+          "เตรียม URL รับสัญญาณ",
+          "ใช้ HTTPS endpoint ที่รับ POST JSON ได้ หากยังไม่มี ให้ใช้ตัวอย่าง Node.js ด้านล่างเป็นจุดเริ่มต้น โดเมนต้องอยู่ในรายการที่ Snaap อนุญาต",
         ],
         [
-          "ตอบ challenge",
-          "เมื่อ type เป็น snaap.verify ให้ตอบค่า challenge เป็นข้อความ HTTP 200 เพื่อยืนยันปลายทาง",
+          "วาง URL และยืนยันปลายทาง",
+          "กด “เริ่มเชื่อมต่อ” วาง URL ในขั้น 2 แล้วกด “สร้างช่องทาง” เมื่อได้รับ type: snaap.verify ระบบปลายทางต้องตอบค่า challenge เป็นข้อความ HTTP 200",
         ],
         [
-          "เก็บ Signing Secret",
-          "เชื่อมสำเร็จแล้วเก็บ secret ที่แสดงครั้งเดียว ตรวจลายเซ็นและ ID ซ้ำก่อนประมวลผลสัญญาณ",
+          "เก็บ Secret แล้วตั้งหน้าตา",
+          "คัดลอก Signing Secret ที่แสดงครั้งเดียวไปเก็บในระบบปลายทาง ใช้ตรวจลายเซ็นก่อนรับสัญญาณ จากนั้นไปขั้น 3 ปรับหน้าตาและบันทึก แล้วเลือกช่องทางนี้ในเซตอัป",
         ],
       ],
-      operator:
-        'ตั้ง WEBHOOK_ALLOWED_HOSTS เป็นรายชื่อโดเมนที่อนุญาต และ DATA_ENCRYPTION_KEY · ใช้ x-snaap-signature-v1 = HMAC-SHA256(secret, timestamp + "." + rawBody), timestamp จาก x-snaap-timestamp · ปฏิเสธ timestamp เก่าเกิน 5 นาที และ deduplicate ด้วย id',
     },
   };
   let dialog,
@@ -126,14 +119,16 @@
     return `<div class="channel-binding"><h3>${result.verified ? "เชื่อมต่อแล้ว" : "ยืนยันผู้รับ"}</h3><p>${esc(result.instruction)}</p>${result.command ? `<div class="channel-copy-row"><code>${esc(result.command)}</code><button type="button" class="secondary" data-copy-command>คัดลอก</button></div><p class="channel-help">หมดอายุ ${new Date(result.expiresAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} · ห้ามแชร์รหัสนี้</p>` : ""}${url ? `<a class="primary" href="${esc(url)}" target="_blank" rel="noopener noreferrer">เปิด ${guides[session.kind].name} ↗</a>` : ""}${!result.verified ? '<button type="button" class="secondary" data-check-binding>ตรวจสถานะการเชื่อมต่อ</button>' : ""}${result.signingSecret ? `<label>Signing Secret · แสดงครั้งเดียว<input type="password" readonly value="${esc(result.signingSecret)}" autocomplete="off"></label><button type="button" class="secondary" data-copy-secret>คัดลอก Secret</button><p class="channel-help">เก็บในระบบปลายทางก่อนปิดหน้าต่าง หากสูญหายให้เชื่อมช่องทางใหม่</p>` : ""}</div>`;
   }
   function paint() {
+    ++previewRequest;
+    clearTimeout(previewTimer);
     const { kind, step, appearance, row } = session,
       guide = guides[kind];
     const available = session.channels.available[kind];
     let content;
     if (step === 0)
-      content = `<div class="channel-flow-art" aria-hidden="true"><span class="channel-snaap-mark"><img class="brand-badge-symbol" src="/assets/snaap-favicon.svg?v=2" alt="" aria-hidden="true"></span><span class="channel-flow-line"><i></i></span><span class="channel-target-mark">${kind === "WEBHOOK" ? "{}" : `<img src="${channelInfo[kind].logo}" alt="">`}</span></div><h3>รับสัญญาณใน ${guide.name}</h3><p class="channel-intro">${kind === "TELEGRAM" ? "เชื่อมบัญชีของคุณ แล้วลองรับสัญญาณ" : guide.format}</p><ol class="channel-guide-list">${guide.steps.map(([title, detail], i) => `<li style="--step:${i}"><span>${i + 1}</span><div><h4>${title}</h4><p>${detail}</p></div></li>`).join("")}</ol><details class="channel-admin-guide"><summary>ตั้งค่าสำหรับผู้ดูแล</summary><p>${guide.operator}</p>${guide.url ? `<a class="text-button" href="${guide.url}" target="_blank" rel="noopener noreferrer">เอกสารทางการ ↗</a>` : ""}</details>${kind === "WEBHOOK" ? `<details class="channel-admin-guide"><summary>ตัวอย่างรับ challenge และสัญญาณ</summary><a class="text-button" href="/assets/snaap-webhook-example.mjs" download>ดาวน์โหลดตัวอย่าง Node.js ↧</a><pre><code>${esc('if (body.type === "snaap.verify") {\n  // HTTP 200, Content-Type: text/plain\n  return body.challenge;\n}\n// ตรวจ HMAC จาก raw body ก่อน parse JSON\n// ตรวจ timestamp และบันทึก body.id กันซ้ำ\n// ตอบ HTTP 2xx หลังบันทึกสัญญาณแล้ว')}</code></pre></details>` : ""}`;
+      content = `<div class="channel-flow-art" aria-hidden="true"><span class="channel-snaap-mark"><img class="brand-badge-symbol" src="/assets/snaap-favicon.svg?v=2" alt="" aria-hidden="true"></span><span class="channel-flow-line"><i></i></span><span class="channel-target-mark">${kind === "WEBHOOK" ? "{}" : `<img src="${channelInfo[kind].logo}" alt="">`}</span></div><h3>รับสัญญาณใน ${guide.name}</h3><p class="channel-intro">${guide.format}</p><ol class="channel-guide-list">${guide.steps.map(([title, detail], i) => `<li style="--step:${i}"><span>${i + 1}</span><div><h4>${title}</h4><p>${detail}</p></div></li>`).join("")}</ol>${kind === "DISCORD" ? `<a class="text-button" href="${guide.url}" target="_blank" rel="noopener noreferrer">วิธีสร้าง Webhook ใน Discord ↗</a>` : ""}${kind === "WEBHOOK" ? `<details class="channel-admin-guide"><summary>ตัวอย่างรับ challenge และสัญญาณ</summary><a class="text-button" href="/assets/snaap-webhook-example.mjs" download>ดาวน์โหลดตัวอย่าง Node.js ↧</a><pre><code>${esc('if (body.type === "snaap.verify") {\n  // HTTP 200, Content-Type: text/plain\n  return body.challenge;\n}\n// ตรวจ HMAC จาก raw body ก่อน parse JSON\n// ตรวจ timestamp และบันทึก body.id กันซ้ำ\n// ตอบ HTTP 2xx หลังบันทึกสัญญาณแล้ว')}</code></pre></details>` : ""}`;
     else if (step === 1)
-      content = `<h3>${row?.verified ? "ช่องทางของคุณ" : "เชื่อมต่อ " + guide.name}</h3><p class="channel-intro">${kind === "DISCORD" ? "เมื่อกดเชื่อม จะส่งสัญญาณตัวอย่างหนึ่งข้อความไปยังห้องที่เลือก" : kind === "WEBHOOK" ? "ยืนยัน URL แล้วรับ secret สำหรับตรวจสอบลายเซ็น" : "ยืนยันบัญชีที่รับสัญญาณด้วยรหัสใช้ครั้งเดียว"}</p>${!available ? '<p class="channel-config-notice">ผู้ดูแลยังไม่ได้เปิดช่องทางนี้ คุณอ่านคู่มือและลองปรับหน้าตาได้ก่อน</p>' : ""}${!session.result && !row ? `<form id="studio-connection"><input type="hidden" name="name" value="${esc(session.name)}">${["WEBHOOK", "DISCORD"].includes(kind) ? `<label>${kind === "DISCORD" ? "Discord Webhook URL" : "HTTPS endpoint"}<input name="url" type="${kind === "DISCORD" ? "password" : "url"}" required autocomplete="off" placeholder="${kind === "DISCORD" ? "https://discord.com/api/webhooks/…" : "https://your-domain.com/snaap"}"></label>` : ""}<p class="channel-help">${kind === "DISCORD" ? "URL เก็บแบบเข้ารหัส ไม่แสดงในรายการช่องทาง" : kind === "WEBHOOK" ? "ปลายทางต้องตอบ challenge กลับเป็นข้อความ" : "คุณไม่ต้องกรอก API key หรือรหัสผ่านบัญชี"}</p><button class="primary" type="submit" ${available ? "" : "disabled"}>${kind === "DISCORD" ? "เชื่อมและส่งทดสอบ" : "สร้างช่องทาง"}</button></form>` : connectionResult() || `<p>${esc(row.name)} · ${row.verified ? "ยืนยันแล้ว" : "ยังไม่ยืนยัน / ตัดการเชื่อมต่อแล้ว"}</p>${!row.verified ? '<p class="channel-help">หากรหัสหมดอายุหรือช่องทางถูกตัด ให้เพิ่มช่องทางใหม่</p>' : ""}`}${kind === "LINE" ? `<div class="channel-quota-note">LINE เดือนนี้: ${session.channels.lineQuota?.used ?? 0} / ${session.channels.lineQuota?.limit ?? 30} ข้อความ · รวมการทดสอบ</div>` : ""}`;
+      content = `<h3>${row?.verified ? "ช่องทางของคุณ" : "เชื่อมต่อ " + guide.name}</h3><p class="channel-intro">${kind === "DISCORD" ? "เมื่อกดเชื่อม จะส่งสัญญาณตัวอย่างหนึ่งข้อความไปยังห้องที่เลือก" : kind === "WEBHOOK" ? "ยืนยัน URL แล้วรับ secret สำหรับตรวจสอบลายเซ็น" : "ยืนยันบัญชีที่รับสัญญาณด้วยรหัสใช้ครั้งเดียว"}</p>${!available ? '<p class="channel-config-notice">ช่องทางนี้ยังไม่พร้อมเชื่อมต่อ คุณอ่านคู่มือและลองปรับหน้าตาในขั้น 3 ได้ก่อน</p>' : ""}${!session.result && !row ? `<form id="studio-connection"><input type="hidden" name="name" value="${esc(session.name)}">${["WEBHOOK", "DISCORD"].includes(kind) ? `<label>${kind === "DISCORD" ? "Discord Webhook URL" : "HTTPS endpoint"}<input name="url" type="${kind === "DISCORD" ? "password" : "url"}" required autocomplete="off" placeholder="${kind === "DISCORD" ? "https://discord.com/api/webhooks/…" : "https://your-domain.com/snaap"}"></label>` : ""}<p class="channel-help">${kind === "DISCORD" ? "URL เก็บแบบเข้ารหัส ไม่แสดงในรายการช่องทาง" : kind === "WEBHOOK" ? "ปลายทางต้องตอบ challenge กลับเป็นข้อความ" : "คุณไม่ต้องกรอก API key หรือรหัสผ่านบัญชี"}</p><button class="primary" type="submit" ${available ? "" : "disabled"}>${kind === "DISCORD" ? "เชื่อมและส่งทดสอบ" : "สร้างช่องทาง"}</button></form>` : connectionResult() || `<p>${esc(row.name)} · ${row.verified ? "ยืนยันแล้ว" : "ยังไม่ยืนยัน / ตัดการเชื่อมต่อแล้ว"}</p>${!row.verified ? '<p class="channel-help">หากรหัสหมดอายุหรือช่องทางถูกตัด ให้เพิ่มช่องทางใหม่</p>' : ""}`}${kind === "LINE" ? `<div class="channel-quota-note">LINE เดือนนี้: ${session.channels.lineQuota?.used ?? 0} / ${session.channels.lineQuota?.limit ?? 30} ข้อความ · รวมการทดสอบ</div>` : ""}`;
     else
       content = `<h3>หน้าตาสัญญาณของคุณ</h3><p class="channel-intro">ตั้งแยกสำหรับแต่ละช่องทาง · พรีวิวอัปเดตตามที่เลือก</p><form id="studio-appearance"><label>หัวข้อข้อความ<input name="heading" maxlength="35" value="${esc(appearance.heading)}" placeholder="เช่น สัญญาณของฉัน"></label><fieldset class="channel-layout-options"><legend>รูปแบบ</legend>${[
         ["card", kind === "TELEGRAM" ? "ภาพ Snaap + ข้อความ" : "การ์ด Snaap"],
@@ -171,9 +166,9 @@
         .join(
           "",
         )}</fieldset><label data-creator-name ${appearance.showCreator ? "" : "hidden"}>ชื่อผู้สร้างที่แสดง<input name="creatorName" maxlength="13" value="${esc(appearance.creatorName)}" placeholder="เช่น Gus Signals" ${appearance.showCreator ? "required" : ""}></label><p class="channel-help" data-chart-help>กราฟใช้คู่เหรียญ กระดาน และกรอบเวลาของสัญญาณ · สัญญาณเก่าที่ไม่มีข้อมูลกราฟจะแสดงเฉพาะข้อความ</p><p class="channel-help">คู่เทรด ฝั่ง ประเภทสัญญาณ และชื่อ Snaap แสดงเสมอ${kind === "WEBHOOK" ? " · ส่งหน้าตาเป็นข้อมูลให้ระบบปลายทางนำไปแสดง" : ""}</p><button class="primary" type="submit">${session.id ? "บันทึกหน้าตาสัญญาณ" : "ใช้รูปแบบนี้และเชื่อมต่อ"}</button>${session.id && session.row?.verified ? '<button class="secondary" type="button" data-studio-test>ส่งตัวอย่างที่บันทึกแล้ว</button>' : ""}</form>`;
-    dialog.innerHTML = `<header class="channel-studio-header"><div><span class="channel-studio-overline">SNAAP / CHANNEL STUDIO</span><h2 id="channel-studio-title">${guide.name}</h2></div><button type="button" class="icon-button" data-studio-close aria-label="ปิดคู่มือ">${uiIcon("close")}</button></header><div class="channel-studio-grid"><section class="channel-studio-work"><nav class="channel-step-nav" aria-label="ขั้นตอนเชื่อมต่อ">${["คู่มือ", "เชื่อมต่อ", "หน้าตาสัญญาณ"].map((label, i) => `<button type="button" data-studio-step="${i}" aria-current="${step === i ? "step" : "false"}"><span>${i + 1}</span>${label}</button>`).join("")}</nav><button class="channel-preview-jump text-button" type="button" data-preview-jump>ดูตัวอย่างสัญญาณ ↓</button><div class="channel-step-body">${content}</div><p data-channel-status role="status" aria-live="polite"></p><footer class="channel-step-footer">${step > 0 ? '<button type="button" class="text-button" data-studio-prev>← ย้อนกลับ</button>' : "<span>เชื่อมครั้งเดียว ใช้กับหลายเซตอัปได้</span>"}${step < 2 ? `<button type="button" class="secondary" data-studio-next>${step === 0 ? "เริ่มเชื่อมต่อ" : "ปรับหน้าตา"} →</button>` : ""}</footer></section><aside class="channel-preview-area"><button class="channel-preview-jump text-button" type="button" data-controls-jump>กลับไปปรับหน้าตา ↑</button><div class="channel-preview-label"><span>ตัวอย่างสัญญาณ</span><small>${guide.name}</small></div><div data-channel-preview aria-live="polite"><p>กำลังเตรียมตัวอย่าง…</p></div><p class="channel-preview-note">ข้อมูลตัวอย่าง · รูปแบบจริงอาจต่างตามอุปกรณ์${kind === "LINE" ? " · LINE รับภาพจริงเมื่อ Snaap มีโดเมน HTTPS สาธารณะ" : ""}</p></aside></div>`;
+    dialog.innerHTML = `<header class="channel-studio-header"><div><span class="channel-studio-overline">SNAAP / CHANNEL STUDIO</span><h2 id="channel-studio-title">${guide.name}</h2></div><button type="button" class="icon-button" data-studio-close aria-label="ปิดคู่มือ">${uiIcon("close")}</button></header><div class="channel-studio-grid ${step === 2 ? "" : "channel-studio-guide-only"}"><section class="channel-studio-work"><nav class="channel-step-nav" aria-label="ขั้นตอนเชื่อมต่อ">${["คู่มือ", "เชื่อมต่อ", "หน้าตาสัญญาณ"].map((label, i) => `<button type="button" data-studio-step="${i}" aria-current="${step === i ? "step" : "false"}"><span>${i + 1}</span>${label}</button>`).join("")}</nav>${step === 2 ? `<button class="channel-preview-jump text-button" type="button" data-preview-jump>ดูตัวอย่างสัญญาณ ↓</button>` : ""}<div class="channel-step-body">${content}</div><p data-channel-status role="status" aria-live="polite"></p><footer class="channel-step-footer">${step > 0 ? '<button type="button" class="text-button" data-studio-prev>← ย้อนกลับ</button>' : "<span>เชื่อมครั้งเดียว ใช้กับหลายเซตอัปได้</span>"}${step < 2 ? `<button type="button" class="secondary" data-studio-next>${step === 0 ? "เริ่มเชื่อมต่อ" : "ปรับหน้าตา"} →</button>` : ""}</footer></section>${step === 2 ? `<aside class="channel-preview-area"><button class="channel-preview-jump text-button" type="button" data-controls-jump>กลับไปปรับหน้าตา ↑</button><div class="channel-preview-label"><span>ตัวอย่างสัญญาณ</span><small>${guide.name}</small></div><div data-channel-preview aria-live="polite"><p>กำลังเตรียมตัวอย่าง…</p></div><p class="channel-preview-note">ข้อมูลตัวอย่าง · รูปแบบจริงอาจต่างตามอุปกรณ์${kind === "LINE" ? " · LINE รับภาพจริงเมื่อ Snaap มีโดเมน HTTPS สาธารณะ" : ""}</p></aside>` : ""}</div>`;
     syncAppearanceOptions();
-    updatePreview();
+    if (step === 2) updatePreview();
   }
   function syncAppearanceOptions() {
     const minimal = session.appearance.layout === "minimal";
@@ -224,6 +219,7 @@
       session.appearance[key] = data.has(key);
   }
   async function updatePreview() {
+    if (!session || session.step !== 2) return;
     const request = ++previewRequest,
       current = session;
     try {
