@@ -428,7 +428,7 @@ export function renderSignal(
                     : "attachment://snaap-card-symbol.png",
                   ...(brand ? { url: brand } : {}),
                 },
-                title: discordText(`${marker} ${testLabel}${title}`),
+                title: discordText(testLabel + title),
                 description: discordText(
                   (appearance.heading ? heading + "\n" : "") + event,
                 ),
@@ -520,7 +520,6 @@ export function renderSignal(
     title,
     pair,
     directionBadge,
-    marker,
     event,
     fields,
     test: !!signal.test,
