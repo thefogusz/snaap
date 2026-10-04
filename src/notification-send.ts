@@ -88,19 +88,40 @@ export async function sendNotification(
       );
       let body: string | Buffer = JSON.stringify(rendered.payload);
       const headers: Record<string, string> = {};
-      if (graph) {
+      const files: { filename: string; data: Buffer }[] = [];
+      if (graph) files.push({ filename: "snaap-chart.png", data: graph });
+      if (
+        rendered.payload.embeds?.[0]?.author?.icon_url ===
+        "attachment://snaap-card-symbol.png"
+      )
+        files.push({
+          filename: "snaap-card-symbol.png",
+          data: await readFile(
+            new URL("../dist/assets/snaap-card-symbol.png", import.meta.url),
+          ),
+        });
+      if (files.length) {
         const boundary = "snaap-" + randomBytes(16).toString("hex");
-        rendered.payload.attachments = [{ id: 0, filename: "snaap-chart.png" }];
-        if (rendered.payload.embeds?.[0])
+        rendered.payload.attachments = files.map((file, id) => ({
+          id,
+          filename: file.filename,
+        }));
+        if (graph && rendered.payload.embeds?.[0])
           rendered.payload.embeds[0].image = {
             url: "attachment://snaap-chart.png",
           };
         body = Buffer.concat([
           Buffer.from(
-            `--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(rendered.payload)}\r\n--${boundary}\r\nContent-Disposition: form-data; name="files[0]"; filename="snaap-chart.png"\r\nContent-Type: image/png\r\n\r\n`,
+            `--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(rendered.payload)}\r\n`,
           ),
-          graph,
-          Buffer.from(`\r\n--${boundary}--\r\n`),
+          ...files.flatMap((file, id) => [
+            Buffer.from(
+              `--${boundary}\r\nContent-Disposition: form-data; name="files[${id}]"; filename="${file.filename}"\r\nContent-Type: image/png\r\n\r\n`,
+            ),
+            file.data,
+            Buffer.from("\r\n"),
+          ]),
+          Buffer.from(`--${boundary}--\r\n`),
         ]);
         headers["Content-Type"] = "multipart/form-data; boundary=" + boundary;
       }

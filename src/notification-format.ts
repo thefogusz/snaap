@@ -421,6 +421,13 @@ export function renderSignal(
         : {
             embeds: [
               {
+                author: {
+                  name: "snaap.me",
+                  icon_url: brand
+                    ? brand + "/assets/snaap-card-symbol.png"
+                    : "attachment://snaap-card-symbol.png",
+                  ...(brand ? { url: brand } : {}),
+                },
                 title: discordText(testLabel + title),
                 description: discordText(
                   (appearance.heading ? heading + "\n" : "") + event,
@@ -459,6 +466,29 @@ export function renderSignal(
         directionBadge,
         accent: accents[appearance.accent],
         brandName: "snaap.me",
+        pair,
+        event,
+        ...(brand
+          ? { brandLogo: brand + "/assets/snaap-card-symbol.png" }
+          : {}),
+        card:
+          appearance.layout === "card"
+            ? {
+                background: "#151515",
+                brandName: "snaap.me",
+                ...(brand
+                  ? { brandLogo: brand + "/assets/snaap-card-symbol.png" }
+                  : {}),
+                heading: appearance.heading,
+                signature,
+                pair,
+                event,
+                directionBadge,
+                fields,
+                accent: accents[appearance.accent],
+                ...(image ? { image } : {}),
+              }
+            : undefined,
         appearance: {
           ...appearance,
           creatorName: appearance.showCreator ? appearance.creatorName : "",

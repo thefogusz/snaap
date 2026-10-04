@@ -116,3 +116,62 @@ test("Telegram photo captions use the same clean signal text as text mode", () =
     assert.match(card.text, side === "LONG" ? /🟢/ : /🔴/);
   }
 });
+
+test("Discord card carries the brand icon including local attachment fallback", () => {
+  for (const origin of ["https://snaap.example", "http://127.0.0.1:4183"]) {
+    const embed = renderSignal(
+      "DISCORD",
+      demoSignal(),
+      appearanceSchema.parse({ showChart: false }),
+      origin,
+    ).payload.embeds[0];
+    assert.equal(embed.author.name, "snaap.me");
+    assert.equal(
+      embed.author.icon_url,
+      origin.startsWith("https:")
+        ? origin + "/assets/snaap-card-symbol.png"
+        : "attachment://snaap-card-symbol.png",
+    );
+  }
+});
+test("custom webhook card includes branded display data and text mode omits card and chart", () => {
+  const appearance = appearanceSchema.parse({
+    heading: "My signals",
+    showCreator: true,
+    creatorName: "Gus",
+    showPrice: false,
+    accent: "cyan",
+  });
+  const payload = renderSignal(
+    "WEBHOOK",
+    demoSignal(),
+    appearance,
+    "https://snaap.example",
+    "https://snaap.example/chart.png",
+  ).payload;
+  assert.equal(
+    payload.presentation.card.brandLogo,
+    "https://snaap.example/assets/snaap-card-symbol.png",
+  );
+  assert.equal(payload.presentation.card.heading, "My signals");
+  assert.equal(payload.presentation.card.signature, "Gus");
+  assert.equal(
+    payload.presentation.card.image,
+    "https://snaap.example/chart.png",
+  );
+  assert.ok(
+    payload.presentation.card.fields.every(
+      (f: any) => f.key !== "referencePrice",
+    ),
+  );
+  assert.equal(payload.event.referencePrice, 68420.5);
+  const plain = renderSignal(
+    "WEBHOOK",
+    demoSignal(),
+    { ...appearance, layout: "minimal" },
+    "https://snaap.example",
+  ).payload;
+  assert.equal(plain.presentation.card, undefined);
+  assert.equal(plain.presentation.chart, undefined);
+  assert.equal(plain.presentation.image, undefined);
+});

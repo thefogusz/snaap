@@ -480,12 +480,14 @@
 .channel-card-preview.discord {
   border-left: 4px solid var(--signal-accent);
 }
-.channel-card-preview.line {
+.channel-card-preview.line,
+.channel-card-preview.webhook {
   width: 280px;
   max-width: 100%;
   border-radius: 12px;
 }
-.channel-card-preview.line header {
+.channel-card-preview.line header,
+.channel-card-preview.webhook header {
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
@@ -502,12 +504,12 @@
   width: 86px;
   height: auto;
 }
-.channel-card-preview.line header .signal-brand {
+.channel-card-preview header .signal-brand {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.channel-card-preview.line header .signal-brand > img {
+.channel-card-preview header .signal-brand > img {
   width: 22px;
   height: 22px;
   object-fit: contain;
