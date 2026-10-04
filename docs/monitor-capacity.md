@@ -21,7 +21,17 @@
 - Once all checkpoints reach the current close: no recovery evaluation jobs until the next primary close. Streams can still trigger jobs when additional required frames close, and workers recheck checkpoints.
 - Rules still have 6,000 separate lifecycle states. A reduction in queue entries is not an equivalent reduction in CPU or the Railway bill. Unique pairs/markets/timeframes reduce opportunities for grouping.
 
-TypeScript compilation was checked. No exchange end-to-end, production concurrency, crash/retry integration or billing measurements were run for this change.
+## Verification on 2026-10-05 (local machine)
+
+- All 362 unit tests passed, plus realtime integration checks for committed delivery IDs, signal deduplication, missing higher-frame protection and LISTEN/NOTIFY wakeup.
+- 100 isolated authenticated users issued 300 API reads concurrently: zero failures, 130 ms total, 124 ms p95 per user's three reads. This uses Fastify injection and real local PostgreSQL, not Internet/browser round trips.
+- 100 users x six active setups x ten shared pairs generated 6,000 evaluations and 6,000 owned signal rows through real PostgreSQL and pg-boss using a simulated closed candle. Each user had exactly 60 signals. Zero failed jobs.
+- Initial worker polling: 32,519 ms to process the close; maximum observed queue wait 32,443 ms. Bounded fetch batches of eight plus burst mode: 4,248 ms, maximum wait 4,330 ms. This is a synthetic workload with no exchange network or external notification delivery.
+- A duplicate pass produced no extra signals and did not invoke the market fetcher. Recovery planning returned zero groups after every checkpoint reached the current close.
+- Observed Node RSS at the end of the burst run was 300 MB (not peak or total app+database hosting memory). Timings depend on the local machine and do not establish Railway throughput/cost.
+- Free limit integration: ten-pair saves accepted; eleven-pair saves rejected; six activations accepted and the seventh rejected. Seven simultaneous activation requests on another account/workspace resulted in exactly six active rules.
+
+TypeScript compilation passed. Real exchange feed latency, external notification bursts, production concurrency and actual Railway/LLM billing remain unmeasured.
 
 ## Deployment and future scaling
 
@@ -33,4 +43,4 @@ Before increasing capacity, observe maximum queue wait, batch duration, database
 
 Future changes that need separate measurements: shared indicator results across compatible warmup variants, per-destination rate limits and retry scheduling, durable market snapshots for multiple workers, paginated/streamed scheduling at much larger rule counts, and archiving old signal snapshots. Redis or another queue is not required for the current batching changes.
 
-Pro activation, billing and Free plan quotas are unchanged by this performance change.
+Pro remains unopened. Launch Free quota is six active setups across all workspaces and at most ten pairs per setup. The schema currently caps every setup at ten pairs while Pro is unopened; All is a coming-soon button. Saved legacy setups above ten pairs are retained but paused by migration, and must be reduced before reactivation. Chats and signal history are preserved.

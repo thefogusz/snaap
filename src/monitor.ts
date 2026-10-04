@@ -64,7 +64,7 @@ export async function evaluateTarget(
     return;
   const blocked = (
     await db.query(
-      "SELECT (SELECT count(*) FROM rules WHERE owner_id=$1 AND active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) THEN 20 ELSE 3 END AS blocked",
+      "SELECT (SELECT count(*) FROM rules WHERE owner_id=$1 AND active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) THEN 20 ELSE 6 END AS blocked",
       [row.owner_id],
     )
   ).rows[0].blocked;
@@ -112,7 +112,7 @@ export async function evaluateTarget(
     if (!current) return;
     const quota = (
       await c.query(
-        "SELECT (SELECT count(*) FROM rules WHERE owner_id=$1 AND active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) THEN 20 ELSE 3 END AS blocked",
+        "SELECT (SELECT count(*) FROM rules WHERE owner_id=$1 AND active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) THEN 20 ELSE 6 END AS blocked",
         [current.owner_id],
       )
     ).rows[0];
@@ -325,6 +325,8 @@ export async function startMonitor(
     "evaluate-market",
     {
       localConcurrency: 3,
+      batchSize: 8,
+      burstWhenBatchFull: true,
       pollingIntervalSeconds: 0.5,
       notifyPollingIntervalSeconds: 5,
     },

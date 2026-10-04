@@ -67,6 +67,7 @@ export async function migrate(db: pg.Pool) {
     CREATE INDEX IF NOT EXISTS setup_shares_owner ON setup_shares(owner_id);
     CREATE UNIQUE INDEX IF NOT EXISTS workspaces_default_owner ON workspaces(owner_id) WHERE is_default;
     ALTER TABLE rules ADD COLUMN IF NOT EXISTS workspace_id uuid REFERENCES workspaces;
+    UPDATE rules SET active=false,revision=revision+1,updated_at=now() WHERE active AND jsonb_array_length(spec->'pairs')>10;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS workspace_id uuid REFERENCES workspaces;
     UPDATE conversations c SET saved_rule_id=(SELECT r.id FROM messages m JOIN rules r ON r.id=(m.ui_card->>'ruleId')::uuid AND r.owner_id=c.owner_id AND r.deleted_at IS NULL WHERE m.conversation_id=c.id AND m.ui_card->>'type'='preset' AND m.ui_card->>'ruleId' IS NOT NULL ORDER BY m.created_at DESC,m.id DESC LIMIT 1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;
     UPDATE conversations c SET saved_rule_id=(SELECT min(r.id::text)::uuid FROM rules r WHERE r.owner_id=c.owner_id AND r.workspace_id IS NOT DISTINCT FROM c.workspace_id AND r.deleted_at IS NULL AND r.spec=c.draft HAVING count(*)=1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;

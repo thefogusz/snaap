@@ -189,7 +189,7 @@ const strategyStructure = z
           ),
       )
       .min(1)
-      .max(5000),
+      .max(10, "เลือกคู่เทรดได้สูงสุด 10 คู่ต่อเซตอัป"),
     timeframe,
     entry: condition,
     exit: condition.optional(),

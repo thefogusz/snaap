@@ -240,9 +240,10 @@ export async function buildApp(
       ...user,
       plan: pro ? "PRO" : "FREE",
       proUntil: pro?.pro_until ?? null,
-      requiresRuleSelection: active > (pro ? 20 : 3),
+      requiresRuleSelection: active > (pro ? 20 : 6),
       limits: {
-        activeRules: pro ? 20 : 3,
+        activeRules: pro ? 20 : 6,
+        pairsPerSetup: 10,
         standard: pro ? 100 : 20,
         deep: pro ? 10 : 0,
       },
@@ -255,7 +256,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT r.*, (r.active AND (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 3 END) AS quota_blocked FROM rules r WHERE r.deleted_at IS NULL AND owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY created_at DESC",
+          "SELECT r.*, (r.active AND (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 6 END) AS quota_blocked FROM rules r WHERE r.deleted_at IS NULL AND owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY created_at DESC",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,
@@ -448,7 +449,7 @@ export async function buildApp(
             )
           ).rows[0].n,
         );
-        if (count >= (pro ? 20 : 3))
+        if (count >= (pro ? 20 : 6))
           throw new ApiError(
             409,
             "RULE_LIMIT",
@@ -481,7 +482,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,CASE WHEN NOT r.active THEN 'PAUSED' WHEN (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 3 END THEN 'QUOTA_BLOCKED' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id WHERE r.deleted_at IS NULL AND r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2)",
+          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,CASE WHEN NOT r.active THEN 'PAUSED' WHEN (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 6 END THEN 'QUOTA_BLOCKED' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id WHERE r.deleted_at IS NULL AND r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2)",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,
