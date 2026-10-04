@@ -719,6 +719,10 @@
   padding-top: 22px;
   margin-top: 24px;
 }
+
+.channel-connected-next strong {
+  font-size: 14px;
+}
 .channel-connected-next-icon {
   display: grid;
   place-items: center;
@@ -729,8 +733,13 @@
   background: var(--pale);
   color: var(--accent-ink);
 }
-.channel-connected-next strong {
-  font-size: 14px;
+.channel-connected-next-icon > svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  opacity: 1;
+  visibility: visible;
 }
 .channel-connected-next p {
   margin: 6px 0 0;
