@@ -109,9 +109,10 @@ export async function registerDestinations(
       .strict()
       .parse(req.body);
     const demo = demoSignal();
-    const chart = input.appearance.showChart
-      ? await chartPng(demo, input.appearance.accent)
-      : undefined;
+    const chart =
+      input.appearance.layout === "card" && input.appearance.showChart
+        ? await chartPng(demo, input.appearance.accent)
+        : undefined;
     return {
       ...renderSignal(input.kind, demo, input.appearance, origin),
       chartPreview: chart

@@ -103,6 +103,8 @@ export function renderSignal(
   origin: string,
   graphUrl?: string,
 ) {
+  if (appearance.layout === "minimal")
+    appearance = { ...appearance, showChart: false };
   const en = appearance.language === "en";
   const labels = en
     ? {
@@ -172,17 +174,29 @@ export function renderSignal(
   const brand = publicBrandOrigin(origin);
   const url = brand ? brand + "/#notifications" : undefined;
   const image =
-    appearance.showChart && graphUrl
-      ? graphUrl
-      : brand
-        ? brand + "/assets/" + signalBanner(appearance.accent)
-        : undefined;
+    appearance.layout === "minimal"
+      ? undefined
+      : appearance.showChart && graphUrl
+        ? graphUrl
+        : brand
+          ? brand + "/assets/" + signalBanner(appearance.accent)
+          : undefined;
   const testLabel = signal.test ? (en ? "[TEST] " : "[ทดสอบ] ") : "";
+  const marker =
+    signal.event.kind === "CANCEL" || signal.event.kind === "EXPIRED"
+      ? "⚪"
+      : signal.event.kind === "EXIT"
+        ? "🟡"
+        : effectiveSide === "SHORT"
+          ? "🔴"
+          : effectiveSide === "LONG" || effectiveSide === "SPOT"
+            ? "🟢"
+            : "⚪";
   const text = [
     `${testLabel}Snaap · ${clean(heading, 60)}`,
-    `${title} · ${event}`,
+    `${appearance.layout === "minimal" ? marker + " " : ""}${title} · ${event}`,
     ...fields.map((x) => `${x.label}: ${x.value}`),
-    ...(url ? [url] : []),
+    ...(url && appearance.layout === "card" ? [url] : []),
     ...(signature ? [signature] : []),
   ].join("\n");
   let payload: any;
@@ -313,9 +327,7 @@ export function renderSignal(
       ...(appearance.layout === "minimal"
         ? {
             content: discordText(text).slice(0, 2000),
-            ...(appearance.showChart && graphUrl
-              ? { embeds: [{ image: { url: graphUrl } }] }
-              : {}),
+            flags: 4,
           }
         : {
             embeds: [
@@ -368,7 +380,7 @@ export function renderSignal(
     payload = {
       text,
       link_preview_options: { is_disabled: true },
-      ...(url
+      ...(url && appearance.layout === "card"
         ? {
             reply_markup: {
               inline_keyboard: [

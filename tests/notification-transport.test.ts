@@ -74,7 +74,7 @@ test("LINE sends Flex with stable retry key; Telegram sends minimal text or bran
         ...base,
         kind: "TELEGRAM",
         appearance: {
-          layout: "minimal",
+          layout: "card",
           showChart: true,
           showCreator: true,
           creatorName: "Gus Signals",
@@ -122,7 +122,7 @@ test("LINE sends Flex with stable retry key; Telegram sends minimal text or bran
       JSON.parse(requests.at(-1)!.init.body as string).messages.map(
         (m: any) => m.type,
       ),
-      ["image", "text"],
+      ["text"],
     );
     await sendNotification(
       {
@@ -130,10 +130,13 @@ test("LINE sends Flex with stable retry key; Telegram sends minimal text or bran
         kind: "TELEGRAM",
         appearance: { layout: "minimal", showChart: true },
       },
-      { ...demoSignal(), chart: undefined },
+      demoSignal(),
       id,
     );
     assert.ok(requests.at(-1)!.url.endsWith("/sendMessage"));
+    const minimal = JSON.parse(requests.at(-1)!.init.body as string);
+    assert.match(minimal.text, /🟢/);
+    assert.equal(minimal.reply_markup, undefined);
   } finally {
     globalThis.fetch = original;
     if (beforeLine === undefined) delete process.env.LINE_ACCESS_TOKEN;

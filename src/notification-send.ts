@@ -59,9 +59,10 @@ export async function sendNotification(
     destination.appearance,
   );
   try {
-    const graph = appearance.showChart
-      ? await chartPng(signal, appearance.accent)
-      : undefined;
+    const graph =
+      appearance.layout === "card" && appearance.showChart
+        ? await chartPng(signal, appearance.accent)
+        : undefined;
     const graphUrl = graph
       ? chartUrl(
           signal.test ? `demo-${signal.event.time}` : signal.signal_id,
@@ -155,18 +156,7 @@ export async function sendNotification(
       headers["Content-Type"] = "application/json";
       body = JSON.stringify({
         to: destination.config.recipient,
-        messages: [
-          ...(graphUrl && appearance.layout === "minimal"
-            ? [
-                {
-                  type: "image",
-                  originalContentUrl: graphUrl,
-                  previewImageUrl: graphUrl,
-                },
-              ]
-            : []),
-          rendered.payload,
-        ],
+        messages: [rendered.payload],
       });
     } else if (rendered.layout === "card" || graph) {
       url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`;
