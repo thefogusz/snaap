@@ -50,11 +50,17 @@ export function registerAdminEvents(
           .optional(),
         severity: z.enum(["info", "success", "warning", "error"]).optional(),
         state: z.enum(["all", "unread", "open", "resolved"]).default("all"),
-        before: z.string().uuid().optional(),
+        before: z.string().max(300).regex(/^[A-Za-z0-9_-]+$/).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(50),
       })
       .strict()
       .parse(req.query);
+    let cursor: {time:string;id:string} | undefined;
+    if(q.before) {
+      try {
+        cursor=z.object({time:z.iso.datetime({offset:true}),id:z.string().uuid()}).strict().parse(JSON.parse(Buffer.from(q.before,'base64url').toString('utf8')));
+      } catch { throw new ApiError(400,'INVALID_CURSOR','ตำแหน่งเหตุการณ์ไม่ถูกต้อง'); }
+    }
     if (monitoring) {
       await db.query(`INSERT INTO admin_events(event_key,category,severity,title,detail,status)
         SELECT 'service:monitor','system','error','ตัวเฝ้าตลาดหยุดตอบสนอง','ไม่มีรอบสแกนสำเร็จใน 3 นาที','open'
@@ -84,18 +90,19 @@ export function registerAdminEvents(
         "SELECT category,title,severity FROM admin_events WHERE status='open' ORDER BY (severity='error') DESC,updated_at DESC LIMIT 3",
       ),
       db.query(
-        `SELECT e.*,e.updated_at AS timestamp,(r.seen_at IS NULL OR r.seen_at<e.updated_at) AS unread
+        `SELECT e.*,e.updated_at AS timestamp,to_char(e.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_time,(r.seen_at IS NULL OR r.seen_at<e.updated_at) AS unread
         FROM admin_events e LEFT JOIN admin_event_receipts r ON r.event_id=e.id AND r.admin_id=$1
         WHERE ($2::text IS NULL OR e.category=$2) AND ($3::text IS NULL OR e.severity=$3)
         AND ($4='all' OR ($4='unread' AND (r.seen_at IS NULL OR r.seen_at<e.updated_at)) OR e.status=$4)
-        AND ($5::uuid IS NULL OR (e.updated_at,e.id)<(SELECT updated_at,id FROM admin_events WHERE id=$5))
-        ORDER BY e.updated_at DESC,e.id DESC LIMIT $6`,
+        AND ($5::timestamptz IS NULL OR (e.updated_at,e.id)<($5::timestamptz,$6::uuid))
+        ORDER BY e.updated_at DESC,e.id DESC LIMIT $7`,
         [
           req.userId,
           q.category ?? null,
           q.severity ?? null,
           q.state,
-          q.before ?? null,
+          cursor?.time ?? null,
+          cursor?.id ?? null,
           q.limit + 1,
         ],
       ),
@@ -106,12 +113,13 @@ export function registerAdminEvents(
       ),
     ]);
     const events = feed.rows.slice(0, q.limit);
+    const last=events.at(-1);
     return {
       summary: summary.rows[0] ?? {},
       events,
       highlights: highlights.rows,
       activeIncidents: active.rows,
-      nextCursor: feed.rows.length > q.limit ? events.at(-1)?.id : null,
+      nextCursor: feed.rows.length > q.limit ? Buffer.from(JSON.stringify({time:last.cursor_time,id:last.id})).toString('base64url') : null,
       timezone: "Asia/Bangkok",
       checkedAt: summary.rows[0]?.checkedAt ?? new Date().toISOString(),
       monitoring,
