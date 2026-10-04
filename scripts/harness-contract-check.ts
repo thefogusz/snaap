@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
+import ccxt from 'ccxt';
 import { localDatabase } from "./postgres.js";
 import { database, migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
@@ -52,7 +53,7 @@ const pg = process.env.TEST_DATABASE_URL
     ? { url: process.env.TEST_DATABASE_URL, stop: async () => {} }
     : await localDatabase(),
   db = database(pg.url);
-if (process.env.TEST_DATABASE_URL) await migrate(db);
+await migrate(db);
 const { app } = await buildApp(db, { local: true });
 const owner = randomUUID(),
   token = randomUUID(),
@@ -341,6 +342,18 @@ try {
     imageIds.push(upload.json().id);
   }
   reply = async () => response('เห็นภาพทั้งห้าภาพ');
+  const recoveredImages = await app.inject({ method: 'GET', url: `/api/v1/conversations/${id}/images`, headers });
+  assert.equal(recoveredImages.statusCode, 200);
+  assert.ok(imageIds.every(imageId => recoveredImages.json().some((image: any) => image.id === imageId)));
+  assert.ok(recoveredImages.json().every((image: any) => !('storage_path' in image)));
+  const inaccessible = await app.inject({ method: 'GET', url: `/api/v1/conversations/${randomUUID()}/images`, headers });
+  assert.equal(inaccessible.statusCode, 404);
+  const otherOwner = randomUUID(), otherConversation = randomUUID(), otherWorkspace = randomUUID();
+  await db.query('INSERT INTO users(id) VALUES($1)', [otherOwner]);
+  await db.query('INSERT INTO conversations(id,owner_id,title) VALUES($1,$2,$3)', [otherConversation, otherOwner, 'Private fixture']);
+  assert.equal((await app.inject({ method: 'GET', url: `/api/v1/conversations/${otherConversation}/images`, headers })).statusCode, 404);
+  await db.query('INSERT INTO workspaces(id,owner_id,name) VALUES($1,$2,$3)', [otherWorkspace, owner, 'Separate fixture']);
+  assert.equal((await app.inject({ method: 'GET', url: `/api/v1/conversations/${id}/images`, headers: {...headers, 'x-snaap-workspace': otherWorkspace} })).statusCode, 404);
   const fiveImages = await app.inject({
     method: 'POST', url: `/api/v1/conversations/${id}/turns`, headers,
     payload: { text: 'เห็นภาพนี้ไหม', mode: 'standard', imageIds },
@@ -362,6 +375,43 @@ try {
   assert.equal(mixedImages.json().error.code, 'IMAGE_LIMIT');
   assert.equal(requests.length, beforeTooMany);
   console.log('PASS five uploaded images reach provider; six and mixed overflow rejected without silent truncation');
+  let providerAttempts = 0;
+  reply = async () => ++providerAttempts === 1 ? { error: { code: 503 } } : response('retry recovered');
+  assert.equal((await turn('temporary provider failure')).statusCode, 200);
+  assert.equal(providerAttempts, 2);
+  reply = async () => ({ error: { code: 400, param: 'reasoning', message: 'PRIVATE_PROVIDER_SENTINEL' } });
+  const providerFailure = await turn('incompatible provider');
+  assert.equal(providerFailure.statusCode, 502);
+  const failedRun = (await db.query("SELECT a.trace,u.status FROM agent_runs a JOIN usage_ledger u ON u.id=a.id WHERE a.owner_id=$1 ORDER BY a.created_at DESC LIMIT 1", [owner])).rows[0];
+  assert.equal(failedRun.status, 'REFUNDED');
+  assert.ok(JSON.stringify(failedRun.trace).includes('reasoning'));
+  assert.ok(!JSON.stringify(failedRun.trace).includes('PRIVATE_PROVIDER_SENTINEL'));
+  console.log('PASS HTTP 200 provider errors retry only transient failures, preserve diagnostics and refund quota');
+  const loadMarkets = ccxt.mexc.prototype.loadMarkets;
+  ccxt.mexc.prototype.loadMarkets = async () => ({ 'PHA/USDT:USDT': { symbol: 'PHA/USDT:USDT', active: true, swap: true, linear: true, settle: 'USDT' } }) as any;
+  try {
+    const spec = {schemaVersion:2,name:'Validated budget fixture',exchange:['MEXC'],market:'Perpetual Futures',side:'LONG',pairs:['PHA/USDT'],timeframe:'5m',
+      entry:{kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe:'5m'},right:{kind:'INDICATOR',name:'EMA',period:50,timeframe:'5m'}},stages:[],cooldownBars:0,destinations:[]};
+    spec.entry = {kind:'GROUP',op:'AND',children:Array(20).fill(spec.entry)} as any;
+    let proposalRequests = 0;
+    reply = async () => {
+      proposalRequests++;
+      return {...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'validated-fixture',arguments:JSON.stringify({spec})}], usage:{input_tokens:100000,output_tokens:100}};
+    };
+    const proposal = await turn('สร้างร่างตามเงื่อนไขที่ระบุ');
+    assert.equal(proposal.statusCode, 200, proposal.body);
+    assert.deepEqual(proposal.json().draft, spec);
+    assert.equal(proposalRequests, 1, 'no over-budget summary request');
+    assert.ok(proposal.json().text.includes('ยังไม่ได้เปิดใช้งาน'));
+    reply = async () => ({...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'invalid-fixture',arguments:JSON.stringify({spec:{...spec,pairs:['UNSUPPORTED/USDT']}})}], usage:{input_tokens:100000,output_tokens:100}});
+    const invalid = await turn('สร้างร่างคู่ที่ไม่รองรับ');
+    assert.equal(invalid.statusCode, 502);
+    assert.equal(invalid.json().error.code, 'AI_DRAFT_INVALID');
+    assert.equal(invalid.json().draft, undefined);
+    reply = async () => ({...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'over-cap-fixture',arguments:JSON.stringify({spec})}], usage:{input_tokens:200000,output_tokens:100}});
+    assert.equal((await turn('สร้างร่างที่ใช้ค่าใช้จ่ายเกินเพดาน')).statusCode, 422);
+    console.log('PASS validated draft survives exhausted summary budget without another provider request');
+  } finally { ccxt.mexc.prototype.loadMarkets = loadMarkets; }
 } finally {
   await app.close();
   await db.end();

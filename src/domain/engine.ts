@@ -138,7 +138,7 @@ const condition: z.ZodType<Condition> = z.lazy(() =>
       .object({
         kind: z.literal("GROUP"),
         op: z.enum(["AND", "OR"]),
-        children: z.array(condition).min(1).max(12),
+        children: z.array(condition).min(1).max(20),
       })
       .strict(),
     z
@@ -371,11 +371,11 @@ const strategyStructure = z
       .forEach((c) => walk(c!));
     if (count > 60)
       ctx.addIssue({ code: "custom", message: "Maximum 60 conditions" });
-    if (comparisonCount > 6)
+    if (comparisonCount > 20)
       ctx.addIssue({
         code: "custom",
         message:
-          "เซตอัปมีได้สูงสุด 6 เงื่อนไข รวมเงื่อนไขเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก",
+          "เซตอัปมีได้สูงสุด 20 เงื่อนไข รวมเงื่อนไขเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก",
       });
     if (
       new Set(s.exchange).size !== s.exchange.length ||
