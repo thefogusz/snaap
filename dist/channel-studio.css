@@ -440,6 +440,11 @@
   margin: 3px 0 0;
   overflow-wrap: anywhere;
 }
+.channel-card-preview .channel-card-body dd[data-field="referencePrice"] {
+  color: #d0f64c;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .channel-card-body p {
   font-size: 10px;
   color: #72796b;

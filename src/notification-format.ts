@@ -176,7 +176,7 @@ export function renderSignal(
       minute: "2-digit",
       hour12: false,
     }) + " (UTC+7)";
-  const fields: { label: string; value: string }[] = [];
+  const fields: { label: string; value: string; key?: string }[] = [];
   fields.push({
     label: en ? "Market" : "ตลาด",
     value: `${clean(signal.exchange, 40)} · ${clean(signal.event.market ?? signal.setup_market ?? "", 30)}${signal.timeframe ? " · " + clean(signal.timeframe, 12) : ""}`,
@@ -184,6 +184,7 @@ export function renderSignal(
   if (appearance.showPrice)
     fields.push({
       label: en ? "Reference price" : "ราคาอ้างอิง",
+      key: "referencePrice",
       value: price,
     });
   if (appearance.showSetup)
@@ -355,7 +356,8 @@ export function renderSignal(
                         size: "sm",
                         flex: 5,
                         align: "end",
-                        color: "#F4F7FB",
+                        color: x.key === "referencePrice" ? "#D0F64C" : "#F4F7FB",
+                        weight: x.key === "referencePrice" ? "bold" : "regular",
                         wrap: true,
                       },
                     ],
