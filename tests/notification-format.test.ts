@@ -54,7 +54,7 @@ test("LINE card is a Flex bubble and falls back to text when minimal is selected
   );
   assert.equal(card.payload.contents.header.backgroundColor, "#181D24");
   assert.equal(card.payload.contents.body.backgroundColor, "#181D24");
-  assert.equal(card.payload.contents.footer.backgroundColor, "#181D24");
+  assert.equal(card.payload.contents.footer, undefined);
   assert.equal(
     card.payload.contents.hero.url,
     "https://snaap.example/assets/snaap-signal-banner.png",

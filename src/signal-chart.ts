@@ -1,15 +1,10 @@
 import sharp from "sharp";
-import { readFile } from "node:fs/promises";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import type pg from "pg";
 import type { Candle } from "./domain/engine.js";
 import type { Signal } from "./notification-format.js";
-
-const brandSymbol = (await readFile(new URL("../dist/assets/snaap-symbol.svg", import.meta.url), "utf8"))
-  .match(/<g[^>]*>([\s\S]*?)<\/g>/)![1]
-  .replace('fill="currentColor"', 'fill="#f4f4f5"');
 
 export type ChartSnapshot = {
   timeframe: string;
@@ -40,20 +35,6 @@ export function captureChart(
     }));
   return candles.length ? { timeframe, candles } : undefined;
 }
-const escape = (text: unknown) =>
-  String(text ?? "")
-    .slice(0, 100)
-    .replace(
-      /[&<>"']/g,
-      (c) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;",
-          "'": "&apos;",
-        })[c]!,
-    );
 export function chartToken(
   id: string,
   accent: string,
@@ -87,9 +68,9 @@ export async function chartPng(
     width = 1200,
     height = 720,
     left = 65,
-    right = 1040,
-    top = 145,
-    bottom = 590;
+    right = 980,
+    top = 28,
+    bottom = 692;
   const max = Math.max(...bars.map((b) => b.high), signal.event.referencePrice),
     min = Math.min(...bars.map((b) => b.low), signal.event.referencePrice);
   const range = Math.max(max - min, Math.abs(max) * 0.001),
@@ -114,7 +95,7 @@ export async function chartPng(
     )[accent] ?? "#d0f64c";
   const ticks = Array.from({ length: 5 }, (_, i) => {
     const value = low + ((high - low) * i) / 4;
-    return `<path d="M${left} ${y(value)}H${right}" stroke="#353c44"/><text x="1060" y="${y(value) + 6}" fill="#c3ccd6" font-size="20">${value.toLocaleString("en-US", { maximumFractionDigits: 5 })}</text>`;
+    return `<path d="M${left} ${y(value)}H${right}" stroke="#353c44"/><text x="1000" y="${y(value) + 6}" fill="#c3ccd6" font-size="30">${value.toLocaleString("en-US", { maximumSignificantDigits: 7 })}</text>`;
   }).join("");
   const candleWidth = Math.max(
     5,
@@ -126,17 +107,11 @@ export async function chartPng(
       return `<path d="M${x(b.time)} ${y(b.high)}V${y(b.low)}" stroke="${fill}" stroke-width="2"/><rect x="${x(b.time) - candleWidth / 2}" y="${Math.min(y(b.open), y(b.close))}" width="${candleWidth}" height="${Math.max(3, Math.abs(y(b.open) - y(b.close)))}" rx="1" fill="${fill}"/>`;
     })
     .join("");
-  const stamp = (time: number) =>
-    new Date(time).toLocaleString("en-GB", {
-      timeZone: "Asia/Bangkok",
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="1200" height="720" rx="22" fill="#181d24"/><g font-family="Arial,sans-serif"><text x="65" y="63" font-size="34" font-weight="700" fill="#f4f4f5">Snaap</text><svg x="165" y="37" width="12" height="15" viewBox="34 20 128 155">${brandSymbol}</svg><text x="65" y="110" font-size="28" font-weight="700" fill="#f6f8fb">${escape(signal.pair)} · ${escape(signal.exchange)} · ${escape(signal.setup_market ?? signal.event.market)} · ${escape(chart.timeframe)}</text><text x="1115" y="63" text-anchor="end" font-size="22" fill="${color}">${escape(signal.event.kind)} ${escape(signal.event.side ?? signal.setup_side)}</text>${ticks}${candles}<path d="M${left} ${y(signal.event.referencePrice)}H${right}" stroke="${color}" stroke-width="2" stroke-dasharray="8 6"/><circle cx="${x(end)}" cy="${y(signal.event.referencePrice)}" r="7" fill="${color}"/><text x="65" y="640" fill="#c3ccd6" font-size="21">${escape(stamp(start))}</text><text x="1040" y="640" text-anchor="end" fill="#c3ccd6" font-size="21">${escape(stamp(end))} · UTC+7</text><text x="65" y="687" fill="${color}" font-size="20">CANDLES · ${bars.length} bars · Reference ${signal.event.referencePrice.toLocaleString("en-US", { maximumFractionDigits: 8 })}</text></g></svg>`;
-  return sharp(Buffer.from(svg)).resize({width:1024,withoutEnlargement:true}).png().toBuffer();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="1200" height="720" rx="22" fill="#181d24"/><g font-family="Arial,sans-serif">${ticks}${candles}<path d="M${left} ${y(signal.event.referencePrice)}H${right}" stroke="${color}" stroke-width="2" stroke-dasharray="8 6"/><circle cx="${x(end)}" cy="${y(signal.event.referencePrice)}" r="7" fill="${color}"/></g></svg>`;
+  return sharp(Buffer.from(svg))
+    .resize({ width: 1024, withoutEnlargement: true })
+    .png()
+    .toBuffer();
 }
 export function demoChart(at: number): ChartSnapshot {
   let price = 67410;

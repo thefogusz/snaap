@@ -52,7 +52,7 @@ Official format and delivery references: [Telegram Bot API](https://core.telegra
 
 ## Optional signal charts
 
-Enable the candlestick-chart option in appearance settings. New signals preserve up to 60 closed candles from their exchange, pair and timeframe at evaluation; delivery never fetches newer prices to replace this snapshot. Old signals without snapshots fall back to their normal message. The generated PNG includes Snaap branding and the event reference price. Sample context is shown outside the preview card; cards and chart images omit test/DEMO markings. Structured webhook metadata retains the test flag.
+Enable the candlestick-chart option in appearance settings. New signals preserve up to 60 closed candles from their exchange, pair and timeframe at evaluation; delivery never fetches newer prices to replace this snapshot. Old signals without snapshots fall back to their normal message. The chart PNG contains only candles, price-axis labels and a reference-price line. Snaap branding appears once in the card header. Sample context is shown outside the preview card; cards and chart images omit test/DEMO markings. Structured webhook metadata retains the test flag.
 
 Telegram and Discord upload the PNG directly. LINE uses the image in its Flex hero, which requires a public HTTPS APP_ORIGIN. Generic webhooks receive presentation.chart and a signed image URL when a public origin exists. Image URLs require a per-signal/accent HMAC and become invalid after encryption-key rotation. They include market data only. No external chart service or paid image hosting is used.
 
@@ -69,3 +69,5 @@ LINE cards use a compact kilo bubble: one header row, a full chart with tap-to-o
 The compact card header uses the shared green/white symbol with a white Snaap wordmark, exported as a transparent PNG for LINE. HTTPS origins serve /assets/snaap-card-wordmark.png; local delivery falls back to the text name while the studio previews the local asset. Chart output is capped at 1024 pixels to comply with LINE Flex image limits.
 
 Cards emphasize direction with a green Long/Buy or red Short badge, separate from the pair title. LINE renders the pill as a colored box; Discord uses the direction color on the embed. Minimal test text is unchanged.
+
+Chart annotations for timestamps, candle counts, pair/exchange, event labels and repeated branding are omitted for a clean compact card. The card body retains the readable signal details. LINE/Discord card footers show only the optional creator signature; redundant Snaap footer text and return links are omitted.

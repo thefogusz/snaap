@@ -356,7 +356,8 @@ export function renderSignal(
                         size: "sm",
                         flex: 5,
                         align: "end",
-                        color: x.key === "referencePrice" ? "#D0F64C" : "#F4F7FB",
+                        color:
+                          x.key === "referencePrice" ? "#D0F64C" : "#F4F7FB",
                         weight: x.key === "referencePrice" ? "bold" : "regular",
                         wrap: true,
                       },
@@ -364,7 +365,7 @@ export function renderSignal(
                   })),
                 ],
               },
-              ...(url || signature
+              ...(signature
                 ? {
                     footer: {
                       type: "box",
@@ -374,22 +375,6 @@ export function renderSignal(
                       backgroundColor: "#181D24",
                       spacing: "sm",
                       contents: [
-                        ...(url
-                          ? [
-                              {
-                                type: "text",
-                                text: en ? "Open Snaap ↗" : "เปิด Snaap ↗",
-                                size: "sm",
-                                flex: 1,
-                                color: accents[appearance.accent],
-                                action: {
-                                  type: "uri",
-                                  label: en ? "Open Snaap" : "เปิด Snaap",
-                                  uri: url,
-                                },
-                              },
-                            ]
-                          : []),
                         ...(signature
                           ? [
                               {
@@ -429,11 +414,9 @@ export function renderSignal(
                   value: discordText(x.value) || "—",
                   inline: true,
                 })),
-                footer: {
-                  text: signature
-                    ? `Snaap · ${discordText(signature)}`
-                    : "Snaap",
-                },
+                ...(signature
+                  ? { footer: { text: discordText(signature) } }
+                  : {}),
                 timestamp: new Date(signal.event.time).toISOString(),
                 ...(url ? { url } : {}),
                 ...(image ? { image: { url: image } } : {}),
