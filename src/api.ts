@@ -166,7 +166,7 @@ export async function buildApp(
   registerHarness(app, db);
   registerMarkets(app, db, !!options.monitoring);
   await registerBilling(app, db, origin);
-  await registerDestinations(app, db);
+  await registerDestinations(app, db, {local: options.local, origin});
   registerHistory(app, db);
   app.get("/api/v1/health", async () => ({
     database: (await db.query("SELECT 1")).rowCount === 1,

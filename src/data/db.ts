@@ -19,6 +19,10 @@ export async function migrate(db: pg.Pool) {
     CREATE TABLE IF NOT EXISTS asset_cleanup (id uuid PRIMARY KEY,storage_path text NOT NULL);
     CREATE TABLE IF NOT EXISTS imports (id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users, name text NOT NULL, rows jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE IF NOT EXISTS destinations (id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users, kind text NOT NULL, name text NOT NULL, config jsonb NOT NULL, verified boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now());
+    ALTER TABLE destinations ADD COLUMN IF NOT EXISTS appearance jsonb NOT NULL DEFAULT '{}';
+    CREATE TABLE IF NOT EXISTS notification_quota(request_id uuid PRIMARY KEY,owner_id uuid NOT NULL REFERENCES users,month text NOT NULL);
+    CREATE INDEX IF NOT EXISTS notification_quota_month ON notification_quota(month,owner_id);
+    CREATE TABLE IF NOT EXISTS channel_cursors(key text PRIMARY KEY,offset_id bigint NOT NULL);
     CREATE TABLE IF NOT EXISTS signals (id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users, rule_id uuid NOT NULL REFERENCES rules, revision integer NOT NULL, exchange text NOT NULL, pair text NOT NULL, event jsonb NOT NULL, dedup text UNIQUE NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE IF NOT EXISTS deliveries (id uuid PRIMARY KEY, signal_id uuid NOT NULL REFERENCES signals, destination_id uuid NOT NULL REFERENCES destinations, status text NOT NULL, attempts integer NOT NULL DEFAULT 0, detail text, UNIQUE(signal_id,destination_id));
     CREATE TABLE IF NOT EXISTS billing_events (id text PRIMARY KEY, processed_at timestamptz NOT NULL DEFAULT now());

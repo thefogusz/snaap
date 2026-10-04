@@ -1,0 +1,175 @@
+import { readFile } from "node:fs/promises";
+import { createHmac } from "node:crypto";
+import { postWebhook } from "./network.js";
+import { discordWebhookUrl } from "./discord.js";
+import { unseal } from "./vault.js";
+import {
+  channelAppearance,
+  renderSignal,
+  signalBanner,
+  type Signal,
+} from "./notification-format.js";
+
+export type Destination = {
+  id: string;
+  owner_id: string;
+  kind: string;
+  config: any;
+  appearance?: unknown;
+  verified: boolean;
+};
+export type SendResult = { status: string; detail: string };
+export function providerResult(
+  kind: string,
+  http: number,
+  body: any,
+  acceptedId?: string | null,
+): SendResult {
+  if (kind === "LINE" && http === 409 && acceptedId)
+    return { status: "SENT", detail: "ผู้ให้บริการรับคำขอเดิมแล้ว" };
+  if (http === 429)
+    return {
+      status: kind === "LINE" ? "QUOTA_OR_RATE_LIMIT" : "RETRY",
+      detail: "ถึงขีดจำกัดการส่ง สัญญาณยังอยู่ในเว็บ",
+    };
+  if (http < 200 || http >= 300)
+    return { status: http >= 500 ? "RETRY" : "FAILED", detail: `HTTP ${http}` };
+  if (
+    kind === "TELEGRAM" &&
+    (body?.ok !== true || !Number.isInteger(body?.result?.message_id))
+  )
+    return { status: "FAILED", detail: "Telegram ยังไม่ยืนยันข้อความ" };
+  if (kind === "DISCORD" && !body?.id)
+    return { status: "UNKNOWN", detail: "Discord ยังไม่ยืนยันข้อความ" };
+  return {
+    status: "SENT",
+    detail: "ผู้ให้บริการรับคำขอแล้ว · ไม่ใช่การยืนยันว่าอ่านแล้ว",
+  };
+}
+export async function sendNotification(
+  destination: Destination,
+  signal: Signal,
+  requestId: string,
+  origin = process.env.APP_ORIGIN ?? "http://127.0.0.1:4173",
+): Promise<SendResult> {
+  const appearance = channelAppearance(
+    destination.kind,
+    destination.appearance,
+  );
+  const rendered = renderSignal(destination.kind, signal, appearance, origin);
+  try {
+    if (destination.kind === "DISCORD") {
+      const config = unseal(
+        destination.config.encryptedUrl,
+        `discord:${destination.owner_id}:${destination.id}`,
+      );
+      const response = await postWebhook(
+        discordWebhookUrl(config.url),
+        JSON.stringify(rendered.payload),
+        {},
+        ["discord.com"],
+      );
+      let body;
+      try {
+        body = JSON.parse(response.body);
+      } catch {}
+      return providerResult("DISCORD", response.status, body);
+    }
+    if (destination.kind === "WEBHOOK") {
+      const config = destination.config.encryptedWebhook
+        ? unseal(
+            destination.config.encryptedWebhook,
+            `webhook:${destination.owner_id}:${destination.id}`,
+          )
+        : destination.config;
+      const secret = config.signingSecret ?? process.env.WEBHOOK_SIGNING_SECRET;
+      if (!secret)
+        return { status: "FAILED", detail: "ยังไม่ได้ตั้งค่าลายเซ็น Webhook" };
+      const body = JSON.stringify(rendered.payload);
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const response = await postWebhook(config.url, body, {
+        "x-snaap-id": signal.signal_id,
+        "x-snaap-timestamp": timestamp,
+        "x-snaap-signature": createHmac("sha256", secret)
+          .update(body)
+          .digest("hex"),
+        "x-snaap-signature-v1": createHmac("sha256", secret)
+          .update(timestamp + "." + body)
+          .digest("hex"),
+      });
+      return providerResult("WEBHOOK", response.status, null);
+    }
+    const line = destination.kind === "LINE";
+    if (line ? !process.env.LINE_ACCESS_TOKEN : !process.env.TELEGRAM_BOT_TOKEN)
+      return {
+        status: "FAILED",
+        detail: "ช่องทางนี้ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์",
+      };
+    let url = line
+      ? "https://api.line.me/v2/bot/message/push"
+      : `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    let body: BodyInit;
+    const headers: Record<string, string> = {};
+    if (line) {
+      headers.Authorization = `Bearer ${process.env.LINE_ACCESS_TOKEN}`;
+      headers["X-Line-Retry-Key"] = requestId;
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify({
+        to: destination.config.recipient,
+        messages: [rendered.payload],
+      });
+    } else if (rendered.layout === "card") {
+      url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`;
+      const form = new FormData();
+      form.set("chat_id", destination.config.recipient);
+      form.set("caption", rendered.text.slice(0, 1024));
+      if (rendered.payload.reply_markup)
+        form.set("reply_markup", JSON.stringify(rendered.payload.reply_markup));
+      form.set(
+        "photo",
+        new Blob(
+          [
+            await readFile(
+              new URL(
+                "../dist/assets/" + signalBanner(appearance.accent),
+                import.meta.url,
+              ),
+            ),
+          ],
+          { type: "image/png" },
+        ),
+        "snaap.png",
+      );
+      body = form;
+    } else {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify({
+        chat_id: destination.config.recipient,
+        ...rendered.payload,
+      });
+    }
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+      signal: AbortSignal.timeout(10000),
+    });
+    let result;
+    try {
+      result = await response.json();
+    } catch {}
+    return providerResult(
+      destination.kind,
+      response.status,
+      result,
+      response.headers.get("x-line-accepted-request-id"),
+    );
+  } catch {
+    return {
+      status: ["TELEGRAM", "DISCORD"].includes(destination.kind)
+        ? "UNKNOWN"
+        : "RETRY",
+      detail: "ยืนยันผลการส่งไม่ได้",
+    };
+  }
+}
