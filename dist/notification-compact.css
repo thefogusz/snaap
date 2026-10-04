@@ -53,11 +53,12 @@
   line-height: 20px; color: var(--ink); cursor: pointer;
   transition: background-color .24s ease, border-color .24s ease, color .24s ease, box-shadow .24s ease, transform .16s ease;
 }
-.browser-alert-toggle:hover, .browser-alert-preview:hover { background: var(--pale); border-color: var(--accent-ink); }
+.browser-alert-toggle { border-color: transparent; background: transparent; }
+.browser-alert-toggle:hover { background: var(--pale); }
+.browser-alert-preview:hover { background: var(--pale); border-color: var(--accent-ink); }
 .browser-alert-toggle:focus-visible, .browser-alert-preview:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
 .browser-alert-dot { position: relative; width: 30px; height: 18px; flex: 0 0 30px; border-radius: 99px; background: var(--muted); transition: background-color .24s ease; }
 .browser-alert-dot::after { content: ''; position: absolute; width: 12px; height: 12px; top: 3px; left: 3px; border-radius: 50%; background: #fff; transition: transform .26s cubic-bezier(.22, 1, .36, 1), background-color .24s ease; }
-.browser-alert-toggle[aria-pressed="true"] { background: var(--pale); border-color: var(--accent-ink); }
 .browser-alert-toggle[aria-pressed="true"] .browser-alert-dot { background: var(--accent-ink); }
 .browser-alert-toggle[aria-pressed="true"] .browser-alert-dot::after { transform: translateX(12px); }
 .browser-alert-preview .ui-icon { display: block; width: 14px; height: 14px; }
