@@ -18,6 +18,8 @@ The editor now selects one exchange and one chart pair. Existing multi-target re
 
 ## Verification
 
+- Harness compatibility (2026-10-05): deterministic provider and public-candle fixtures run through the actual authenticated turn, draft-save and preview routes. The harness creates a 20-condition 4h/1h/15m/5m draft; all four chart views retain the same original evaluation timeline and events; replay_strategy uses the current draft's 5m clock; a follow-up changes only the 5m RSI threshold. View-only chat questions do not force proposal tools, and invalid proposals containing chartFrame are rejected without changing the stored draft/revision. Existing image, context, refund and budget contract groups still pass. This verifies runtime contracts, not a guarantee that a live model always follows instructions.
+
 - 21 unit tests passed, including shared-engine preview parity, higher-timeframe future exclusion, and insufficient data. TypeScript check passed.
 - Read-only Spot catalog probes returned Binance 1372, Bybit 530, OKX 1143, Bitget 3387, MEXC 1822 pairs at test time (counts change).
 - Browser: Binance and MEXC real candle previews; EMA 200 -> 50 changed the plotted line and signal count; RSI extra pane; play/pause; latest; per-bar evidence; search ETH/BTC in Binance catalog.

@@ -6,6 +6,7 @@ import ccxt from 'ccxt';
 import { localDatabase } from "./postgres.js";
 import { database, migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
+import { frames, strategySchema } from "../src/domain/engine.js";
 const requests: any[] = [];
 let reply: (body: any) => Promise<any> = async () => response("complete");
 function response(text: string, status = "completed") {
@@ -388,7 +389,22 @@ try {
   assert.ok(!JSON.stringify(failedRun.trace).includes('PRIVATE_PROVIDER_SENTINEL'));
   console.log('PASS HTTP 200 provider errors retry only transient failures, preserve diagnostics and refund quota');
   const loadMarkets = ccxt.mexc.prototype.loadMarkets;
-  ccxt.mexc.prototype.loadMarkets = async () => ({ 'PHA/USDT:USDT': { symbol: 'PHA/USDT:USDT', active: true, swap: true, linear: true, settle: 'USDT' } }) as any;
+  const fetchOHLCV = ccxt.mexc.prototype.fetchOHLCV;
+  ccxt.mexc.prototype.loadMarkets = async function () {
+    const markets = { 'PHA/USDT:USDT': { symbol: 'PHA/USDT:USDT', active: true, swap: true, linear: true, settle: 'USDT' } };
+    this.markets = markets as any;
+    return markets as any;
+  };
+  const fetchedFrames = new Set<string>();
+  ccxt.mexc.prototype.fetchOHLCV = async (_symbol, timeframe, since, limit) => {
+    fetchedFrames.add(timeframe!);
+    const step = frames[timeframe as keyof typeof frames];
+    return Array.from({length:limit ?? 300},(_,i) => {
+      const time = since! + i * step;
+      const close = 100 + (Math.floor(time / step) % 8);
+      return [time,close,close+1,close-1,close,10] as [number,number,number,number,number,number];
+    }).filter(row => row[0] + step <= Date.now());
+  };
   try {
     const spec = {schemaVersion:2,name:'Validated budget fixture',exchange:['MEXC'],market:'Perpetual Futures',side:'LONG',pairs:['PHA/USDT'],timeframe:'5m',
       entry:{kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe:'5m'},right:{kind:'INDICATOR',name:'EMA',period:50,timeframe:'5m'}},stages:[],cooldownBars:0,destinations:[]};
@@ -411,7 +427,108 @@ try {
     reply = async () => ({...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'over-cap-fixture',arguments:JSON.stringify({spec})}], usage:{input_tokens:200000,output_tokens:100}});
     assert.equal((await turn('สร้างร่างที่ใช้ค่าใช้จ่ายเกินเพดาน')).statusCode, 422);
     console.log('PASS validated draft survives exhausted summary budget without another provider request');
-  } finally { ccxt.mexc.prototype.loadMarkets = loadMarkets; }
+
+    const mtf = strategySchema.parse({...spec,name:'Harness MTF chart contract',entry:{kind:'GROUP',op:'AND',children:
+      (['4h','1h','15m','5m'] as const).flatMap(timeframe => [
+        ...[12,26,50].map(period => ({kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe},right:{kind:'INDICATOR',name:'EMA',period,timeframe}})),
+        ...[['>',40],['<',70]].map(([op,value]) => ({kind:'COMPARE',op,left:{kind:'INDICATOR',name:'RSI',period:14,timeframe},right:{kind:'CONSTANT',value}})),
+      ])}});
+    let round = 0;
+    reply = async () => ++round === 1
+      ? {...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'mtf-create',arguments:JSON.stringify({spec:mtf})}]}
+      : response('สร้างร่างหลายไทม์เฟรมแล้ว');
+    const created = await turn('สร้างร่าง 20 เงื่อนไข แยก 4h 1h 15m 5m');
+    assert.equal(created.statusCode,200,created.body);
+    assert.deepEqual(created.json().draft,mtf);
+    assert.match(requests.at(-1).instructions,/chartFrame is a view-only preview request field/);
+    const saved = await app.inject({method:'PUT',url:`/api/v1/conversations/${id}/draft`,headers,payload:{spec:created.json().draft,expectedRevision:0}});
+    assert.equal(saved.statusCode,200,saved.body);
+    const revision = saved.json().draft_revision;
+    const view = async (chartFrame?:string) => {
+      const result = await app.inject({method:'POST',url:'/api/v1/preview',headers,payload:{spec:mtf,...(chartFrame?{chartFrame}:{})}});
+      assert.equal(result.statusCode,200,result.body);
+      return result.json();
+    };
+    const baseline = await view();
+    for (const chartFrame of ['4h','1h','15m','5m']) {
+      const chart = await view(chartFrame);
+      assert.equal(chart.source.frame,chartFrame);
+      assert.equal(chart.source.evaluationFrame,'5m');
+      assert.equal(chart.overlays.length,4);
+      assert.ok(chart.overlays.every((o:any)=>o.operand.timeframe===chartFrame));
+      assert.equal(chart.candles[1].time-chart.candles[0].time,frames[chartFrame as keyof typeof frames]);
+      assert.deepEqual(chart.timeline,baseline.timeline);
+      assert.deepEqual(chart.events,baseline.events);
+    }
+    assert.deepEqual([...fetchedFrames].sort(),['15m','1h','4h','5m'].sort());
+    const stored = (await db.query('SELECT draft,draft_revision FROM conversations WHERE id=$1',[id])).rows[0];
+    assert.deepEqual(stored.draft,mtf);
+    assert.equal(stored.draft_revision,revision);
+
+    // A chart-view question must not force the provider to author a new strategy.
+    reply = async body => {
+      assert.ok(body.tool_choice === undefined || body.tool_choice === 'auto');
+      assert.ok(body.instructions.includes(JSON.stringify(mtf)));
+      return response('กดปุ่ม 4h เหนือกราฟเพื่อดูเงื่อนไขไทม์เฟรมนี้');
+    };
+    const viewQuestion = await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'ดูกราฟ 4h ได้ตรงไหน',mode:'standard',draft:mtf}});
+    assert.equal(viewQuestion.statusCode,200,viewQuestion.body);
+    assert.equal(viewQuestion.json().draft,null);
+
+    // Replay must continue to use the editable setup's 5m clock after viewing 4h.
+    round = 0;
+    reply = async body => {
+      if (++round === 1) return {...response(''),output:[{type:'function_call',name:'replay_strategy',call_id:'mtf-replay',arguments:JSON.stringify({spec:mtf})}]};
+      const replay = JSON.parse(body.input.find((item:any)=>item.type==='function_call_output'&&item.call_id==='mtf-replay').output);
+      assert.deepEqual(replay.spec,mtf);
+      assert.equal(replay.source.timeframe,'5m');
+      assert.equal(replay.coverage.bars,baseline.timeline.length);
+      assert.equal(replay.coverage.totalEvents,baseline.events.length);
+      assert.deepEqual(replay.events,baseline.events.slice(-20));
+      return response('ทดสอบสัญญาณบนร่างเดิมแล้ว');
+    };
+    const replayed = await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'ทดสอบย้อนหลังร่างเดิม',mode:'standard',draft:mtf}});
+    assert.equal(replayed.statusCode,200,replayed.body);
+
+    const edited = structuredClone(mtf);
+    assert.ok(edited.entry.kind==='GROUP');
+    const last = edited.entry.children.at(-1)!;
+    assert.ok(last.kind==='COMPARE'&&last.right.kind==='CONSTANT');
+    last.right.value=65;
+    round=0;
+    reply = async body => {
+      assert.ok(body.instructions.includes(JSON.stringify(mtf)));
+      return ++round === 1
+        ? {...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'mtf-edit',arguments:JSON.stringify({spec:edited})}]}
+        : response('แก้เฉพาะ RSI 5m เป็น 65 แล้ว');
+    };
+    const followup = await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'แก้เฉพาะ RSI 5m จาก <70 เป็น <65',mode:'standard',draft:mtf}});
+    assert.equal(followup.statusCode,200,followup.body);
+    assert.deepEqual(followup.json().draft,edited);
+    assert.equal((await view('4h')).source.evaluationFrame,'5m');
+
+    const rejected = await app.inject({method:'POST',url:'/api/v1/preview',headers,payload:{spec:mtf,chartFrame:'1d'}});
+    assert.equal(rejected.statusCode,400);
+    assert.equal(rejected.json().error.code,'CHART_FRAME');
+    assert.equal(strategySchema.safeParse({...mtf,chartFrame:'4h'}).success,false);
+    round=0;
+    reply = async body => {
+      if (++round === 1) return {...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'mtf-invalid-view',arguments:JSON.stringify({spec:{...mtf,chartFrame:'4h'}})}]};
+      const validation = JSON.parse(body.input.find((item:any)=>item.type==='function_call_output'&&item.call_id==='mtf-invalid-view').output);
+      assert.equal(validation.valid,false);
+      assert.ok(validation.errors.some((issue:any)=>issue.code==='unrecognized_keys'&&issue.keys.includes('chartFrame')));
+      return response('เลือกมุมมองกราฟด้วยปุ่ม 4h ได้ โดยคงร่างเดิมไว้');
+    };
+    const invalidViewDraft = await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'ดูกราฟ 4h',mode:'standard',draft:mtf}});
+    assert.equal(invalidViewDraft.statusCode,200,invalidViewDraft.body);
+    assert.equal(invalidViewDraft.json().draft,null);
+    const untouched = (await db.query('SELECT draft,draft_revision FROM conversations WHERE id=$1',[id])).rows[0];
+    assert.deepEqual(untouched,stored);
+    console.log('PASS Harness creates and edits 20-condition MTF drafts; chart views preserve replay clock, conditions and persisted draft');
+  } finally {
+    ccxt.mexc.prototype.loadMarkets = loadMarkets;
+    ccxt.mexc.prototype.fetchOHLCV = fetchOHLCV;
+  }
 } finally {
   await app.close();
   await db.end();
