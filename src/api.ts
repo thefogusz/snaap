@@ -293,8 +293,8 @@ export async function buildApp(
       );
       if (conversationId)
         await c.query(
-          "UPDATE conversations SET setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
-          [conversationId, req.userId],
+          "UPDATE conversations SET title=$3,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
+          [conversationId, req.userId, spec.name],
         );
     });
     if (conversationId)
@@ -339,8 +339,8 @@ export async function buildApp(
       );
       if (input.conversationId)
         await c.query(
-          "UPDATE conversations SET setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
-          [input.conversationId, req.userId],
+          "UPDATE conversations SET title=$3,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
+          [input.conversationId, req.userId, input.spec.name],
         );
       return row;
     });
@@ -519,7 +519,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT * FROM conversations WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY created_at DESC LIMIT 100",
+          "SELECT c.*,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY created_at DESC LIMIT 100",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,

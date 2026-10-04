@@ -220,8 +220,8 @@ export function registerPresets(
       }
       const draft = (
         await c.query(
-          "UPDATE conversations SET draft=$1,draft_revision=draft_revision+1,setup_saved_at=now(),setup_status_known=true WHERE id=$2 RETURNING draft_revision",
-          [spec, id],
+          "UPDATE conversations SET draft=$1,title=$3,draft_revision=draft_revision+1,setup_saved_at=now(),setup_status_known=true WHERE id=$2 RETURNING draft_revision",
+          [spec, id, spec.name],
         )
       ).rows[0];
       const card = { ...m.ui_card, ruleId: rule.id };
