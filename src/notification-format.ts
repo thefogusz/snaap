@@ -249,23 +249,14 @@ export function renderSignal(
                 paddingAll: "10px",
                 spacing: "sm",
                 contents: [
-                  brand
-                    ? {
-                        type: "image",
-                        url: brand + "/assets/snaap-card-wordmark.png",
-                        size: "86px",
-                        aspectRatio: "65:21",
-                        aspectMode: "fit",
-                        flex: 0,
-                      }
-                    : {
-                        type: "text",
-                        text: `${testLabel}Snaap`,
-                        weight: "bold",
-                        size: "sm",
-                        flex: 0,
-                        color: "#F4F4F5",
-                      },
+                  {
+                    type: "text",
+                    text: "snaap.me",
+                    weight: "bold",
+                    size: "lg",
+                    flex: 0,
+                    color: "#F4F4F5",
+                  },
                   ...(signature
                     ? [
                         {

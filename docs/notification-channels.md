@@ -66,7 +66,7 @@ Snaap cards default to a chart-enabled dark presentation with bright text and an
 
 LINE cards use a compact kilo bubble: one header row with optional creator name, a full chart with tap-to-open image action, and baseline label/value rows. The studio preview is capped at 280 CSS pixels and keeps readable 14px values. Long text wraps without truncation. Reference: https://developers.line.biz/en/reference/messaging-api/#bubble
 
-The compact card header uses the shared green/white symbol with a white Snaap wordmark, exported as a transparent PNG for LINE. HTTPS origins serve /assets/snaap-card-wordmark.png; local delivery falls back to the text name while the studio previews the local asset. Chart output is capped at 1024 pixels to comply with LINE Flex image limits.
+The compact LINE card header displays snaap.me as bold white text at the top left, with the optional creator name at the top right. The brand label needs no hosted image. Chart output is capped at 1024 pixels to comply with LINE Flex image limits.
 
 Cards emphasize direction with a green Long/Buy or red Short badge, separate from the pair title. LINE renders the pill as a colored box; Discord uses the direction color on the embed. Minimal test text is unchanged.
 
