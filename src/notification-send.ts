@@ -3,6 +3,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { postWebhook } from "./network.js";
 import { discordWebhookUrl } from "./discord.js";
 import { unseal } from "./vault.js";
+import { telegramChartPng } from "./telegram-chart.js";
 import {
   channelAppearance,
   renderSignal,
@@ -170,7 +171,9 @@ export async function sendNotification(
         new Blob(
           [
             new Uint8Array(
-              graph ??
+              (graph
+                ? await telegramChartPng(graph, appearance.accent)
+                : undefined) ??
                 (await readFile(
                   new URL(
                     "../dist/assets/" + signalBanner(appearance.accent),

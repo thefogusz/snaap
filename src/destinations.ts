@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type pg from "pg";
+import { telegramChartPng } from "./telegram-chart.js";
 import {
   randomUUID,
   randomBytes,
@@ -113,10 +114,14 @@ export async function registerDestinations(
       input.appearance.layout === "card" && input.appearance.showChart
         ? await chartPng(demo, input.appearance.accent)
         : undefined;
+    const previewChart =
+      chart && input.kind === "TELEGRAM"
+        ? await telegramChartPng(chart, input.appearance.accent)
+        : chart;
     return {
       ...renderSignal(input.kind, demo, input.appearance, origin),
-      chartPreview: chart
-        ? "data:image/png;base64," + chart.toString("base64")
+      chartPreview: previewChart
+        ? "data:image/png;base64," + previewChart.toString("base64")
         : undefined,
     };
   });

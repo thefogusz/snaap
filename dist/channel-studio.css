@@ -609,6 +609,11 @@
 .channel-studio [hidden] {
   display: none !important;
 }
+.channel-photo-preview > .channel-chart-preview {
+  aspect-ratio: auto;
+  height: auto;
+  object-fit: contain;
+}
 .channel-photo-preview .channel-text-preview {
   border-radius: 0 0 14px 14px;
   background: #151515;
