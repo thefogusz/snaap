@@ -45,7 +45,22 @@
     document.querySelectorAll("[data-browser-alert-slot]").forEach(slot => {
       if (slot.dataset.alertMarkup === markup) return;
       const focused = slot.contains(document.activeElement) ? document.activeElement.dataset.browserAlert : null;
-      slot.innerHTML = markup;
+      if (slot.querySelector(".browser-alert-settings")) {
+        // Keep the controls mounted so CSS can animate between their states.
+        const template = document.createElement("template");
+        template.innerHTML = markup;
+        template.content.querySelectorAll("[data-browser-alert]").forEach(next => {
+          const current = slot.querySelector(`[data-browser-alert="${next.dataset.browserAlert}"]`);
+          if (!current) return;
+          if (next.hasAttribute("aria-pressed")) current.setAttribute("aria-pressed", next.getAttribute("aria-pressed"));
+          current.disabled = next.disabled;
+        });
+        const hint = slot.querySelector(".browser-alert-hint");
+        const nextHint = template.content.querySelector(".browser-alert-hint");
+        if (hint && nextHint) hint.textContent = nextHint.textContent;
+        else if (hint) hint.remove();
+        else if (nextHint) slot.querySelector(".browser-alert-settings").append(nextHint);
+      } else slot.innerHTML = markup;
       slot.dataset.alertMarkup = markup;
       if (focused) slot.querySelector(`[data-browser-alert="${focused}"]`)?.focus({ preventScroll: true });
     });
