@@ -261,12 +261,33 @@ export function renderSignal(
                 spacing: "sm",
                 contents: [
                   {
-                    type: "text",
-                    text: "snaap.me",
-                    weight: "bold",
-                    size: "lg",
+                    type: "box",
+                    layout: "horizontal",
+                    alignItems: "center",
+                    spacing: "xs",
                     flex: 0,
-                    color: "#F4F4F5",
+                    contents: [
+                      ...(brand
+                        ? [
+                            {
+                              type: "image",
+                              url: brand + "/assets/snaap-card-symbol.png",
+                              size: "22px",
+                              aspectRatio: "1:1",
+                              aspectMode: "fit",
+                              flex: 0,
+                            },
+                          ]
+                        : []),
+                      {
+                        type: "text",
+                        text: "snaap.me",
+                        weight: "bold",
+                        size: "lg",
+                        flex: 0,
+                        color: "#F4F4F5",
+                      },
+                    ],
                   },
                   ...(signature
                     ? [

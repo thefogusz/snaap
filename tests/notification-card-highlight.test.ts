@@ -55,7 +55,7 @@ test("custom LINE heading is visible inside the card while creator stays in head
     "https://snaap.example",
   ).payload.contents;
   assert.equal(card.body.contents[0].text, "My signals");
-  assert.equal(card.header.contents[0].text, "snaap.me");
+  assert.equal(card.header.contents[0].contents[1].text, "snaap.me");
   assert.equal(card.header.contents[1].text, "Gus");
 });
 
