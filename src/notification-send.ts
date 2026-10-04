@@ -162,14 +162,21 @@ export async function sendNotification(
       return providerResult("WEBHOOK", response.status, null);
     }
     const line = destination.kind === "LINE";
-    if (line ? !process.env.LINE_ACCESS_TOKEN : !process.env.TELEGRAM_BOT_TOKEN)
+    const telegramToken =
+      !line && destination.config.encryptedTelegram
+        ? unseal(
+            destination.config.encryptedTelegram,
+            `telegram:${destination.owner_id}:${destination.id}`,
+          ).token
+        : process.env.TELEGRAM_BOT_TOKEN;
+    if (line ? !process.env.LINE_ACCESS_TOKEN : !telegramToken)
       return {
         status: "FAILED",
         detail: "ช่องทางนี้ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์",
       };
     let url = line
       ? "https://api.line.me/v2/bot/message/push"
-      : `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+      : `https://api.telegram.org/bot${telegramToken}/sendMessage`;
     let body: BodyInit;
     const headers: Record<string, string> = {};
     if (line) {
@@ -181,7 +188,7 @@ export async function sendNotification(
         messages: [rendered.payload],
       });
     } else if (rendered.layout === "card" || graph) {
-      url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`;
+      url = `https://api.telegram.org/bot${telegramToken}/sendPhoto`;
       const form = new FormData();
       form.set("chat_id", destination.config.recipient);
       form.set("caption", rendered.text.slice(0, 1024));

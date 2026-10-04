@@ -3,20 +3,19 @@
   const guides = {
     TELEGRAM: {
       name: "Telegram",
-      format: "รับในแชตส่วนตัวผ่านบอต Snaap · ไม่ต้องสร้างบอตหรือกรอก Token",
-      url: "https://core.telegram.org/bots",
+      format: "ใช้บอตของคุณ ส่งเข้าแชตส่วนตัว กลุ่ม หรือช่องที่คุณเลือก",
       steps: [
         [
-          "สร้างลิงก์เชื่อม Telegram",
-          "กดปุ่ม “เริ่มเชื่อมต่อ” ด้านล่าง แล้วกด “สร้างช่องทาง” เพื่อรับลิงก์เปิดบอต",
+          "เตรียมบอตของคุณ",
+          "เปิด @BotFather ใน Telegram ส่ง /newbot แล้วทำตามคำแนะนำ คัดลอก Bot Token ที่ได้รับ หากมีบอตแล้ว ใช้ Token ของบอตนั้นได้",
         ],
         [
-          "ยืนยันบัญชีใน Telegram",
-          "กด “เปิด Telegram” แล้วกด Start ในแชตบอต ด้วยบัญชีที่คุณต้องการรับสัญญาณ",
+          "เลือกแชตที่จะรับสัญญาณ",
+          "แชตส่วนตัว: เปิดบอตของคุณแล้วกด Start · กลุ่ม: เพิ่มบอตเข้ากลุ่ม · ช่อง: เพิ่มบอตเป็นผู้ดูแลและให้สิทธิ์โพสต์ จากนั้นเตรียม Chat ID ของปลายทาง หรือ @username ของช่องสาธารณะ",
         ],
         [
-          "กลับมาที่ Snaap",
-          "กด “ตรวจสถานะการเชื่อมต่อ” เมื่อเชื่อมแล้ว ให้ปรับหน้าตาและบันทึก จากนั้นเลือกช่องทาง Telegram นี้ในเซตอัปที่ต้องการแจ้งเตือน",
+          "เชื่อมกับ Snaap",
+          "กด “เริ่มเชื่อมต่อ” กรอก Bot Token และ Chat ID แล้วกด “เชื่อมและส่งทดสอบ” เมื่อได้รับตัวอย่าง ให้ปรับหน้าตา บันทึก และเลือกช่องทางนี้ในเซตอัป",
         ],
       ],
     },
@@ -128,7 +127,7 @@
     if (step === 0)
       content = `<div class="channel-flow-art" aria-hidden="true"><span class="channel-snaap-mark"><img class="brand-badge-symbol" src="/assets/snaap-favicon.svg?v=2" alt="" aria-hidden="true"></span><span class="channel-flow-line"><i></i></span><span class="channel-target-mark">${kind === "WEBHOOK" ? "{}" : `<img src="${channelInfo[kind].logo}" alt="">`}</span></div><h3>รับสัญญาณใน ${guide.name}</h3><p class="channel-intro">${guide.format}</p><ol class="channel-guide-list">${guide.steps.map(([title, detail], i) => `<li style="--step:${i}"><span>${i + 1}</span><div><h4>${title}</h4><p>${detail}</p></div></li>`).join("")}</ol>${kind === "DISCORD" ? `<a class="text-button" href="${guide.url}" target="_blank" rel="noopener noreferrer">วิธีสร้าง Webhook ใน Discord ↗</a>` : ""}${kind === "WEBHOOK" ? `<details class="channel-admin-guide"><summary>ตัวอย่างรับ challenge และสัญญาณ</summary><a class="text-button" href="/assets/snaap-webhook-example.mjs" download>ดาวน์โหลดตัวอย่าง Node.js ↧</a><pre><code>${esc('if (body.type === "snaap.verify") {\n  // HTTP 200, Content-Type: text/plain\n  return body.challenge;\n}\n// ตรวจ HMAC จาก raw body ก่อน parse JSON\n// ตรวจ timestamp และบันทึก body.id กันซ้ำ\n// ตอบ HTTP 2xx หลังบันทึกสัญญาณแล้ว')}</code></pre></details>` : ""}`;
     else if (step === 1)
-      content = `<h3>${row?.verified ? "ช่องทางของคุณ" : "เชื่อมต่อ " + guide.name}</h3><p class="channel-intro">${kind === "DISCORD" ? "เมื่อกดเชื่อม จะส่งสัญญาณตัวอย่างหนึ่งข้อความไปยังห้องที่เลือก" : kind === "WEBHOOK" ? "ยืนยัน URL แล้วรับ secret สำหรับตรวจสอบลายเซ็น" : "ยืนยันบัญชีที่รับสัญญาณด้วยรหัสใช้ครั้งเดียว"}</p>${!available ? '<p class="channel-config-notice">ช่องทางนี้ยังไม่พร้อมเชื่อมต่อ คุณอ่านคู่มือและลองปรับหน้าตาในขั้น 3 ได้ก่อน</p>' : ""}${!session.result && !row ? `<form id="studio-connection"><input type="hidden" name="name" value="${esc(session.name)}">${["WEBHOOK", "DISCORD"].includes(kind) ? `<label>${kind === "DISCORD" ? "Discord Webhook URL" : "HTTPS endpoint"}<input name="url" type="${kind === "DISCORD" ? "password" : "url"}" required autocomplete="off" placeholder="${kind === "DISCORD" ? "https://discord.com/api/webhooks/…" : "https://your-domain.com/snaap"}"></label>` : ""}<p class="channel-help">${kind === "DISCORD" ? "URL เก็บแบบเข้ารหัส ไม่แสดงในรายการช่องทาง" : kind === "WEBHOOK" ? "ปลายทางต้องตอบ challenge กลับเป็นข้อความ" : "คุณไม่ต้องกรอก API key หรือรหัสผ่านบัญชี"}</p><button class="primary" type="submit" ${available ? "" : "disabled"}>${kind === "DISCORD" ? "เชื่อมและส่งทดสอบ" : "สร้างช่องทาง"}</button></form>` : connectionResult() || `<p>${esc(row.name)} · ${row.verified ? "ยืนยันแล้ว" : "ยังไม่ยืนยัน / ตัดการเชื่อมต่อแล้ว"}</p>${!row.verified ? '<p class="channel-help">หากรหัสหมดอายุหรือช่องทางถูกตัด ให้เพิ่มช่องทางใหม่</p>' : ""}`}${kind === "LINE" ? `<div class="channel-quota-note">LINE เดือนนี้: ${session.channels.lineQuota?.used ?? 0} / ${session.channels.lineQuota?.limit ?? 30} ข้อความ · รวมการทดสอบ</div>` : ""}`;
+      content = `<h3>${row?.verified ? "ช่องทางของคุณ" : "เชื่อมต่อ " + guide.name}</h3><p class="channel-intro">${kind === "TELEGRAM" ? "ระบุบอตและแชตของคุณ ระบบจะตรวจและส่งตัวอย่างก่อนยืนยัน" : kind === "DISCORD" ? "เมื่อกดเชื่อม จะส่งสัญญาณตัวอย่างหนึ่งข้อความไปยังห้องที่เลือก" : kind === "WEBHOOK" ? "ยืนยัน URL แล้วรับ secret สำหรับตรวจสอบลายเซ็น" : "ยืนยันบัญชีที่รับสัญญาณด้วยรหัสใช้ครั้งเดียว"}</p>${!available ? '<p class="channel-config-notice">ช่องทางนี้ยังไม่พร้อมเชื่อมต่อ คุณอ่านคู่มือและลองปรับหน้าตาในขั้น 3 ได้ก่อน</p>' : ""}${!session.result && !row ? `<form id="studio-connection"><input type="hidden" name="name" value="${esc(session.name)}">${kind === "TELEGRAM" ? `<label>Bot Token<input name="botToken" type="password" required autocomplete="off" spellcheck="false" placeholder="Token จาก @BotFather"></label><label>Chat ID / @ชื่อช่อง<input name="recipient" required autocomplete="off" spellcheck="false" placeholder="เช่น 123456789, -1001234567890 หรือ @your_channel"></label><p class="channel-help">Token จะถูกเข้ารหัสและไม่แสดงอีก · การเชื่อมจะส่งตัวอย่างหนึ่งข้อความไปยังปลายทางที่คุณระบุ</p>` : ""}${["WEBHOOK", "DISCORD"].includes(kind) ? `<label>${kind === "DISCORD" ? "Discord Webhook URL" : "HTTPS endpoint"}<input name="url" type="${kind === "DISCORD" ? "password" : "url"}" required autocomplete="off" placeholder="${kind === "DISCORD" ? "https://discord.com/api/webhooks/…" : "https://your-domain.com/snaap"}"></label>` : ""}<p class="channel-help">${kind === "TELEGRAM" ? "ใช้บอตของคุณเอง ไม่ต้องเชื่อมกับบอต Snaap" : kind === "DISCORD" ? "URL เก็บแบบเข้ารหัส ไม่แสดงในรายการช่องทาง" : kind === "WEBHOOK" ? "ปลายทางต้องตอบ challenge กลับเป็นข้อความ" : "คุณไม่ต้องกรอก API key หรือรหัสผ่านบัญชี"}</p><button class="primary" type="submit" ${available ? "" : "disabled"}>${["TELEGRAM", "DISCORD"].includes(kind) ? "เชื่อมและส่งทดสอบ" : "สร้างช่องทาง"}</button></form>` : connectionResult() || `<p>${esc(row.name)} · ${row.verified ? "ยืนยันแล้ว" : "ยังไม่ยืนยัน / ตัดการเชื่อมต่อแล้ว"}</p>${!row.verified ? '<p class="channel-help">หากรหัสหมดอายุหรือช่องทางถูกตัด ให้เพิ่มช่องทางใหม่</p>' : ""}`}${kind === "LINE" ? `<div class="channel-quota-note">LINE เดือนนี้: ${session.channels.lineQuota?.used ?? 0} / ${session.channels.lineQuota?.limit ?? 30} ข้อความ · รวมการทดสอบ</div>` : ""}`;
     else
       content = `<h3>หน้าตาสัญญาณของคุณ</h3><p class="channel-intro">ตั้งแยกสำหรับแต่ละช่องทาง · พรีวิวอัปเดตตามที่เลือก</p><form id="studio-appearance"><label>หัวข้อข้อความ<input name="heading" maxlength="35" value="${esc(appearance.heading)}" placeholder="เช่น สัญญาณของฉัน"></label><fieldset class="channel-layout-options"><legend>รูปแบบ</legend>${[
         ["card", kind === "TELEGRAM" ? "ภาพ Snaap + ข้อความ" : "การ์ด Snaap"],

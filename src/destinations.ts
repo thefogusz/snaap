@@ -15,6 +15,11 @@ import { postWebhook } from "./network.js";
 import { discordWebhookUrl } from "./discord.js";
 import { seal } from "./vault.js";
 import {
+  telegramToken,
+  telegramRecipient,
+  verifyTelegramDestination,
+} from "./telegram-destination.js";
+import {
   appearanceSchema,
   channelAppearance,
   channelKind,
@@ -39,13 +44,7 @@ export function channelAvailability(local = false) {
     process.env.DATA_ENCRYPTION_KEY ?? "",
   );
   return {
-    TELEGRAM: !!(
-      process.env.TELEGRAM_BOT_TOKEN &&
-      process.env.TELEGRAM_BOT_USERNAME &&
-      (telegramMode(local) === "polling" ||
-        (telegramMode(local) === "webhook" &&
-          process.env.TELEGRAM_WEBHOOK_SECRET))
-    ),
+    TELEGRAM: encrypted,
     LINE: !!(process.env.LINE_CHANNEL_SECRET && process.env.LINE_ACCESS_TOKEN),
     DISCORD: encrypted,
     WEBHOOK: encrypted && !!process.env.WEBHOOK_ALLOWED_HOSTS?.trim(),
@@ -178,6 +177,8 @@ export async function registerDestinations(
           kind: channelKind,
           name: z.string().trim().min(1).max(80),
           url: z.string().url().max(2000).optional(),
+          botToken: telegramToken.optional(),
+          recipient: telegramRecipient.optional(),
           appearance: appearanceSchema.optional(),
         })
         .strict()
@@ -211,7 +212,52 @@ export async function registerDestinations(
       };
       let verified = false,
         signingSecret: string | undefined;
-      if (input.kind === "DISCORD") {
+      if (input.kind !== "TELEGRAM" && (input.botToken || input.recipient))
+        throw new ApiError(
+          400,
+          "INVALID_CHANNEL_FIELDS",
+          "ข้อมูลบอตใช้สำหรับ Telegram เท่านั้น",
+        );
+      if (input.kind === "TELEGRAM") {
+        if (!input.botToken || !input.recipient)
+          throw new ApiError(
+            400,
+            "TELEGRAM_FIELDS_REQUIRED",
+            "ระบุ Bot Token และ Chat ID ของคุณ",
+          );
+        const bot = await verifyTelegramDestination(
+          input.botToken,
+          input.recipient,
+        );
+        config = {
+          recipient: bot.recipient,
+          botUsername: bot.username,
+          encryptedTelegram: seal(
+            { token: input.botToken },
+            `telegram:${req.userId}:${id}`,
+          ),
+        };
+        const result = await sendNotification(
+          {
+            id,
+            owner_id: req.userId,
+            kind: input.kind,
+            config,
+            appearance,
+            verified: true,
+          },
+          demoSignal(),
+          randomUUID(),
+          origin,
+        );
+        if (result.status !== "SENT")
+          throw new ApiError(
+            400,
+            "TELEGRAM_SEND_FAILED",
+            "บอตยังส่งถึงปลายทางไม่ได้ ตรวจ Chat ID และสิทธิ์ของบอตแล้วลองใหม่",
+          );
+        verified = true;
+      } else if (input.kind === "DISCORD") {
         if (!input.url)
           throw new ApiError(400, "URL_REQUIRED", "วาง Discord Webhook URL");
         try {
@@ -288,12 +334,7 @@ export async function registerDestinations(
         signingSecret,
         command: verified ? undefined : command,
         expiresAt: verified ? undefined : Date.now() + 600000,
-        connectUrl:
-          input.kind === "TELEGRAM"
-            ? `https://t.me/${process.env.TELEGRAM_BOT_USERNAME}?start=${code}`
-            : input.kind === "LINE"
-              ? process.env.LINE_OA_URL
-              : undefined,
+        connectUrl: input.kind === "LINE" ? process.env.LINE_OA_URL : undefined,
         instruction: verified
           ? "ยืนยันปลายทางแล้ว"
           : `ส่ง ${command} ไปยัง ${input.kind === "TELEGRAM" ? "@" + process.env.TELEGRAM_BOT_USERNAME : "LINE OA ของ Snaap"} ภายใน 10 นาที`,
