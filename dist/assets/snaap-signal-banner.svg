@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400">
+  <rect width="1200" height="400" fill="#181b16"/>
+  <g fill="none" stroke="#d0f64c" stroke-width="2" opacity=".12"><path d="M600 0v400M700 0v400M800 0v400M900 0v400M1000 0v400M1100 0v400M550 100h650M550 200h650M550 300h650"/></g>
+  <path d="M655 288l70-44 60 19 70-96 65 32 76-80 88 20" stroke="#d0f64c" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1084" cy="139" r="9" fill="#d0f64c"/>
+  <text x="70" y="204" font-family="Arial,sans-serif" font-size="102" font-weight="700" letter-spacing="-5" fill="#f4f4f5">Snaap</text>
+  <text x="76" y="258" font-family="Arial,sans-serif" font-size="22" letter-spacing="5" fill="#c4cbbd">SIGNALS. MADE CLEAR.</text>
+  <text x="76" y="342" font-family="Arial,sans-serif" font-size="16" letter-spacing="3" fill="#78836d">MARKET SIGNAL / SNAAP</text>
+<svg x="354" y="130" width="36" height="44" viewBox="34 20 128 155"><path fill="#D0F64C" d="M120.2 24.1C125.9 21.3 129 24.7 124.9 29.1L83.1 74.7C79.4 78.7 77.8 81.8 81.3 85.9L105.9 112.4C109 115.8 106.3 118.7 102.1 116.8L47.7 92.2C36.7 87.2 34.9 82.2 41.6 74.8C53.5 61.8 89.2 39.5 120.2 24.1Z"/>
+<path fill="#F7F6F2" d="M101.6 80.2C97.6 78.3 95.9 80.6 98.7 83.9L119.4 109.2C122.8 113.5 122.3 117.6 117.9 121.7L71.7 164.7C67.3 168.9 70.2 173.3 76.2 170.6C105 157.8 138.8 140.2 151.6 128C161.3 118.8 160.6 111.2 149.5 104.6C139.1 98.5 118.1 87.6 101.6 80.2Z"/></svg></svg>

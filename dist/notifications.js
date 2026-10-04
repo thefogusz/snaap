@@ -36,6 +36,7 @@ const deliveryLabels = {
   CANCELLED: "ยกเลิก · เซตอัปถูกลบ",
   UNKNOWN: "ยังยืนยันผลไม่ได้",
   QUOTA_OR_RATE_LIMIT: "ถึงขีดจำกัดการส่ง",
+  DISCONNECTED: "ตัดการเชื่อมต่อแล้ว",
 };
 function signalAppearance(row) {
   const side=row.event.side ?? ((row.event.market ?? row.setup_market)==='Spot'?'SPOT':row.setup_side);
@@ -90,18 +91,18 @@ function paintNotifications() {
       ? `<div class="signal-list">${signals.map(signalCard).join('')}</div>`
       : `<div class="inbox-empty"><span class="inbox-illustration" aria-hidden="true">${uiIcon("inbox")}</span><h2>ยังไม่มีสัญญาณ</h2><p>เมื่อเซตอัพที่เปิดไว้เข้าเงื่อนไข สัญญาณจะปรากฏที่นี่<br>ดูได้เสมอ แม้ยังไม่ได้เชื่อมช่องทางภายนอก</p><a class="secondary with-icon" href="#watch">${uiIcon("sliders")}ดูเซตอัพที่ตั้งไว้</a></div>`;
   } else if (notificationSection === "channels") {
-    content = `<div class="notification-section-heading"><h2>เลือกช่องทางรับสัญญาณ</h2><p>รับในเว็บได้เสมอ · เพิ่มช่องทางที่คุณใช้ประจำ</p></div><div class="channel-inbox-card"><span class="channel-mark">${uiIcon("inbox")}</span><div><h3>กล่องสัญญาณ Snaap</h3><p>ทุกสัญญาณเก็บไว้ที่นี่ ไม่ต้องเชื่อมต่อ</p></div><span class="channel-ready">พร้อมใช้งาน</span></div><div class="channel-options">${Object.entries(
+    content = `<div class="notification-section-heading"><h2>เลือกช่องทางรับสัญญาณ</h2><p>รับในเว็บได้เสมอ · เพิ่มช่องทางที่คุณใช้ประจำ</p></div><div class="channel-options">${Object.entries(
       channelInfo,
     )
       .map(([kind, info]) => {
         const available = channels.available[kind];
         const count=channels.items.filter(x=>x.kind===kind&&x.verified).length;
-        return `<article class="channel-option" data-kind="${kind}"><div class="channel-card-top"><span class="channel-mark ${info.logo ? "channel-brand" : ""}" aria-hidden="true">${info.logo ? `<img src="${info.logo}" alt="" width="44" height="44">` : uiIcon(info.icon)}</span><span class="channel-availability" data-ready="${available}">${count?`เชื่อมแล้ว ${count} ช่องทาง`:available?'พร้อมเชื่อมต่อ':'ยังไม่เปิดใช้งาน'}</span></div><h3>${info.name}</h3><p>${info.detail}</p><button type="button" class="${kind==='DISCORD'&&available?'primary':'secondary'}" data-connect-channel="${kind}" ${available?'':'disabled'}>${available?'เพิ่มช่องทาง':'เร็ว ๆ นี้'}</button></article>`;
+        return `<article class="channel-option" data-kind="${kind}"><div class="channel-card-top"><span class="channel-mark ${info.logo ? "channel-brand" : ""}" aria-hidden="true">${info.logo ? `<img src="${info.logo}" alt="" width="44" height="44">` : uiIcon(info.icon)}</span><span class="channel-availability" data-ready="${available}">${count?`เชื่อมแล้ว ${count} ช่องทาง`:available?'พร้อมเชื่อมต่อ':'ยังไม่เปิดใช้งาน'}</span></div><h3>${info.name}</h3><p>${info.detail}</p><button type="button" class="${kind==='DISCORD'&&available?'primary':'secondary'}" data-connect-channel="${kind}" >เชื่อมต่อ</button></article>`;
 
       })
       .join(
         "",
-      )}</div><div id="channel-setup"></div>${channels.items.length ? `<section class="connected-channels"><h2>ช่องทางของคุณ</h2>${channels.items.map((x) => `<div class="connected-channel"><div><strong>${esc(x.name)}</strong><p>${channelInfo[x.kind]?.name ?? esc(x.kind)} · ${x.verified ? "เชื่อมแล้ว" : "ยังไม่ยืนยัน / ตัดการเชื่อมต่อแล้ว"}</p></div><button class="text-button" data-disconnect="${x.id}">ตัดการเชื่อมต่อ</button></div>`).join("")}</section>` : ""}<p class="notification-note">${Object.values(channels.available).some(Boolean) ? "เชื่อมแล้ว เลือกช่องทางในเซตอัปที่ต้องการรับแจ้งเตือน · สัญญาณยังเก็บในเว็บเสมอ" : "ผู้ดูแลยังไม่ได้ตั้งค่าช่องทางภายนอก คุณยังเปิดเซตอัพและรับสัญญาณในเว็บได้"}</p>`;
+      )}</div><div id="channel-setup"></div>${channels.items.length ? `<section class="connected-channels"><h2>ช่องทางของคุณ</h2>${channels.items.map((x) => `<div class="connected-channel"><div><strong>${esc(x.name)}</strong><p>${channelInfo[x.kind]?.name ?? esc(x.kind)} · ${x.verified ? "เชื่อมแล้ว" : "รอยืนยันการเชื่อมต่อ"}</p></div><div class="channel-row-actions"><button class="secondary" data-channel-design="${x.id}">ปรับหน้าตา</button>${x.verified?`<button class="secondary" data-channel-test="${x.id}">ส่งทดสอบ</button>`:''}<button class="text-button" data-disconnect="${x.id}">ตัดการเชื่อมต่อ</button></div></div>`).join("")}</section>` : ""}<p class="notification-note">${Object.values(channels.available).some(Boolean) ? "เชื่อมแล้ว เลือกช่องทางในเซตอัปที่ต้องการรับแจ้งเตือน · สัญญาณยังเก็บในเว็บเสมอ" : "ผู้ดูแลยังไม่ได้ตั้งค่าช่องทางภายนอก คุณยังเปิดเซตอัพและรับสัญญาณในเว็บได้"}</p>`;
   } else {
     content = `<section class="activity-section"><div class="notification-section-heading"><h2>${uiIcon("chart")}สถานะข้อมูลตลาด</h2></div>${monitor.length ? monitor.map((x) => `<div class="activity-row"><div><strong>${esc(x.exchange)} · ${esc(x.pair)}</strong><p>${x.status === "PAUSED" ? "พักการติดตาม" : x.status === "QUOTA_BLOCKED" ? "หยุดตรวจ · เลือกเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ" : x.status === "DIRECTION_REQUIRED" ? "เลือกฝั่ง Long / Short ในเซตอัป" : x.status === "READY" ? "ข้อมูลพร้อม" : "ข้อมูลขาด / เชื่อมต่อไม่ได้"}</p></div><time>${new Date(x.checked_at).toLocaleString("th-TH")}</time></div>`).join("") : '<p class="activity-empty">ยังไม่มีเซตอัพที่เริ่มตรวจ — เปิดเซตอัพจากแท็บเซตอัพที่ตั้งไว้</p>'}</section><section class="activity-section"><div class="notification-section-heading"><h2>${uiIcon("send")}ประวัติการส่งข้อความ</h2></div>${deliveries.length ? deliveries.map((x) => `<div class="activity-row"><div><strong>${esc(x.name)}</strong><p>${deliveryLabels[x.status] ?? esc(x.status)}</p>${x.detail ? `<small>${esc(x.detail)}</small>` : ""}</div></div>`).join("") : '<p class="activity-empty">ยังไม่มีการส่งไปยังช่องทางภายนอก</p>'}</section>`;
   }
@@ -144,11 +145,5 @@ document.addEventListener("click", async (event) => {
     button.disabled = true;
     await renderNotifications();
   }
-  if (button.dataset.connectChannel) {
-    const kind = button.dataset.connectChannel;
-    if (!notificationData.channels.available[kind]) return;
-    $("#channel-setup").innerHTML =
-      `<div class="channel-setup"><h2>เชื่อม ${channelInfo[kind].name}</h2>${kind==='DISCORD'?'<ol class="channel-connect-steps"><li>เปิดตั้งค่าห้อง Discord → Integrations → Webhooks</li><li>สร้าง Webhook แล้วคัดลอก URL มาวางด้านล่าง</li></ol>':''}<form id="channel-form"><input type="hidden" name="kind" value="${kind}"><label>ชื่อช่องทาง<input name="name" required maxlength="80" placeholder="เช่น แจ้งเตือนส่วนตัว"></label>${["WEBHOOK","DISCORD"].includes(kind) ? `<label>${kind==='DISCORD'?'Discord Webhook URL':'HTTPS URL'}<input name="url" type="${kind==='DISCORD'?'password':'url'}" required autocomplete="off" placeholder="${kind==='DISCORD'?'https://discord.com/api/webhooks/…':'https://'}"></label>` : ""}<button class="primary with-icon">${uiIcon("link")}${kind==='DISCORD'?'เชื่อมและส่งข้อความทดสอบ':'เชื่อม '+channelInfo[kind].name}</button></form>${kind==='DISCORD'?'<p class="channel-secret-note">เก็บ URL แบบเข้ารหัส · ส่งเฉพาะสัญญาณไปห้องที่คุณเลือก</p>':''}<p id="channel-instruction" role="status"></p></div>`;
-    $("#channel-form input[name=name]").focus();
-  }
+  if (button.dataset.connectChannel) window.SnaapChannels.open(button.dataset.connectChannel);
 });

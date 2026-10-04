@@ -38,14 +38,29 @@
     if (permission === "unsupported") hints.push("เบราว์เซอร์นี้ไม่รองรับแจ้งเตือนบนหน้าจอ");
     if (preferences.sound && audio?.state !== "running") hints.push("กดลองเสียงเพื่อเปิดเสียงในรอบนี้");
     if (failed) hints.push("เชื่อมต่อขาด กำลังลองใหม่");
-    return `<section class="browser-alert-settings" aria-label="การแจ้งเตือนในเบราว์เซอร์"><span class="browser-alert-label" title="รับสัญญาณทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วใช้ช่องทางที่เชื่อมไว้">ในเบราว์เซอร์ <small>ขณะเปิดเว็บ</small></span><div class="browser-alert-actions"><button type="button" class="browser-alert-toggle" data-browser-alert="desktop" aria-pressed="${desktopOn}" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}><span aria-hidden="true" class="browser-alert-dot"></span>แจ้งเตือน</button><button type="button" class="browser-alert-toggle" data-browser-alert="sound" aria-pressed="${preferences.sound}"><span aria-hidden="true" class="browser-alert-dot"></span>เสียง</button><button type="button" class="text-button" data-browser-alert="preview">ลองเสียง</button></div>${hints.length ? `<p class="browser-alert-hint" role="status">${hints.join(" · ")}</p>` : ""}</section>`;
+    return `<section class="browser-alert-settings" aria-label="การแจ้งเตือนในเบราว์เซอร์"><span class="browser-alert-label" title="รับสัญญาณทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วใช้ช่องทางที่เชื่อมไว้">ในเบราว์เซอร์ <small>ขณะเปิดเว็บ</small></span><div class="browser-alert-actions"><button type="button" class="browser-alert-toggle" data-browser-alert="desktop" aria-pressed="${desktopOn}" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}><span aria-hidden="true" class="browser-alert-dot"></span>แจ้งเตือน</button><button type="button" class="browser-alert-toggle" data-browser-alert="sound" aria-pressed="${preferences.sound}"><span aria-hidden="true" class="browser-alert-dot"></span>เสียง</button><button type="button" class="browser-alert-preview" data-browser-alert="preview">${uiIcon("play")}ลองเสียง</button></div>${hints.length ? `<p class="browser-alert-hint" role="status">${hints.join(" · ")}</p>` : ""}</section>`;
   }
   function repaint() {
     const markup = settingsMarkup();
     document.querySelectorAll("[data-browser-alert-slot]").forEach(slot => {
       if (slot.dataset.alertMarkup === markup) return;
       const focused = slot.contains(document.activeElement) ? document.activeElement.dataset.browserAlert : null;
-      slot.innerHTML = markup;
+      if (slot.querySelector(".browser-alert-settings")) {
+        // Keep the controls mounted so CSS can animate between their states.
+        const template = document.createElement("template");
+        template.innerHTML = markup;
+        template.content.querySelectorAll("[data-browser-alert]").forEach(next => {
+          const current = slot.querySelector(`[data-browser-alert="${next.dataset.browserAlert}"]`);
+          if (!current) return;
+          if (next.hasAttribute("aria-pressed")) current.setAttribute("aria-pressed", next.getAttribute("aria-pressed"));
+          current.disabled = next.disabled;
+        });
+        const hint = slot.querySelector(".browser-alert-hint");
+        const nextHint = template.content.querySelector(".browser-alert-hint");
+        if (hint && nextHint) hint.textContent = nextHint.textContent;
+        else if (hint) hint.remove();
+        else if (nextHint) slot.querySelector(".browser-alert-settings").append(nextHint);
+      } else slot.innerHTML = markup;
       slot.dataset.alertMarkup = markup;
       if (focused) slot.querySelector(`[data-browser-alert="${focused}"]`)?.focus({ preventScroll: true });
     });

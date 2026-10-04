@@ -13,6 +13,7 @@ import {
 } from "./domain/engine.js";
 import { strategySeries } from "./markets.js";
 import { deliver } from "./destinations.js";
+import { captureChart } from "./signal-chart.js";
 import { RealtimeMarkets } from "./realtime.js";
 import {
   monitorBatches,
@@ -151,7 +152,7 @@ export async function evaluateTarget(
             event.side,
           ].join(":");
         const inserted = await c.query(
-          "INSERT INTO signals(id,owner_id,rule_id,revision,exchange,pair,event,dedup) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(dedup) DO NOTHING RETURNING id",
+          "INSERT INTO signals(id,owner_id,rule_id,revision,exchange,pair,event,dedup,chart_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(dedup) DO NOTHING RETURNING id",
           [
             id,
             row.owner_id,
@@ -161,6 +162,11 @@ export async function evaluateTarget(
             target.pair,
             event,
             dedup,
+            captureChart(
+              series[spec.timeframe] ?? [],
+              event.time,
+              spec.timeframe,
+            ),
           ],
         );
         if (inserted.rowCount && spec.destinations.length)

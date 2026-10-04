@@ -20,7 +20,7 @@ export function publicIPv4(ip: string) {
 }
 export async function postWebhook(
   address: string,
-  body: string,
+  body: string | Buffer,
   headers: Record<string, string> = {},
   allowedHosts?: readonly string[],
 ) {

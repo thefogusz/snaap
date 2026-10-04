@@ -26,11 +26,13 @@ const configSchema = z
     exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]),
     market: z.enum(["Spot", "Perpetual Futures"]),
     side: z.enum(["SPOT", "LONG", "SHORT", "BOTH"]),
-    pair: z.string().max(61),
+    pair: z.string().min(1).max(61).optional(),
+    pairs: z.array(z.string().min(1).max(61)).min(1).max(10).refine(values => new Set(values).size === values.length, "คู่เทรดต้องไม่ซ้ำ").optional(),
     timeframe: z.enum(["5m", "15m", "1h", "4h", "1d"]),
     expectedRevision: z.number().int().nonnegative(),
   })
-  .strict();
+  .strict()
+  .refine(input => (input.pair !== undefined) !== (input.pairs !== undefined), "ระบุคู่เทรดแบบเดียวเท่านั้น");
 export function registerPresets(
   app: FastifyInstance,
   db: pg.Pool,
@@ -49,8 +51,8 @@ export function registerPresets(
     if ((input.market === "Spot") !== (input.side === "SPOT"))
       throw new ApiError(400, "DIRECTION_REQUIRED", "เลือกฝั่งให้ตรงกับตลาด");
     const spec = strategySchema.parse(buildPreset(input.presetId, input));
-    const catalog = await readInstruments(input.exchange, input.market);
-    if (!catalog.items.some((p) => p.symbol === input.pair && p.supported))
+    const catalog = await readInstruments(input.exchange, input.market, true);
+    if (spec.pairs.some(pair => !catalog.items.some((p) => p.symbol === pair && p.supported)))
       throw new ApiError(
         400,
         "UNSUPPORTED_INSTRUMENT",
@@ -114,7 +116,7 @@ export function registerPresets(
       );
     const checked = strategySchema.parse(candidate.draft);
     for (const exchange of checked.exchange) {
-      const catalog = await readInstruments(exchange, checked.market);
+      const catalog = await readInstruments(exchange, checked.market, true);
       if (
         checked.pairs.some(
           (pair) =>

@@ -66,3 +66,5 @@ Integration/load tests create isolated users and clean up only their own test re
 `npm run test:soak` is a foreground 48-hour HTTP/database availability check. It does **not** substitute for a provider/worker soak and has not been run for 48 hours.
 
 See [implementation status](docs/implementation-status.md) for implemented behavior, known gaps and release gates. The design documents describe the target; this status file describes the actual implementation.
+
+Notification setup, Channel Studio customization, LINE quota guardrails and the sample signed Webhook receiver are documented in [notification channels](docs/notification-channels.md). `npm run test:notifications` verifies bindings, ownership and concurrent quota reservations with isolated local accounts; it sends no external messages.

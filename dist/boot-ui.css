@@ -7,24 +7,12 @@ html[data-boot="loading"] .startup-status {
 }
 .startup-logo { display:inline-flex; align-items:baseline; color:#f4f4f5; font-size:40px; font-weight:800; letter-spacing:-2px; line-height:1; }
 .startup-letter { display:inline-block; animation:startup-wave .4s ease-in-out both; animation-delay:calc(.18s + var(--letter) * .12s); }
-.startup-star {
-  display:inline-block; margin-left:3px;
-  background:linear-gradient(to bottom, #f4f4f5 50%, var(--lime) 50%);
-  background-size:100% 200%; background-position:0 0;
-  background-clip:text; -webkit-background-clip:text; color:transparent;
-  animation:startup-fill .45s ease-out .78s both;
-}
 @keyframes startup-wave {
   0%, 100% { color:#f4f4f5; text-shadow:none; }
   45% { color:var(--lime); text-shadow:0 0 12px rgb(208 246 76 / 25%); }
 }
-@keyframes startup-fill {
-  from { background-position:0 0; }
-  to { background-position:0 100%; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .startup-letter, .startup-star { animation:none; }
-  .startup-star { background-position:0 100%; }
+  .startup-letter { animation:none; }
 }
 /* Suppress automatic CSS entrances during recovery. Navigation owns its motion. */
 .app .view:not([hidden]),

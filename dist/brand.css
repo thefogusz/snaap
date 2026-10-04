@@ -1,0 +1,37 @@
+/* The two-piece symbol replaces the asterisk in each Snaap wordmark. */
+.brand, .login-brand, .startup-logo {
+  display: inline-flex;
+  align-items: center;
+}
+.brand-symbol {
+  display: block;
+  flex: none;
+  width: .35em;
+  height: .425em;
+  align-self: flex-start;
+  margin-top: .045em;
+  margin-left: .025em;
+  overflow: visible;
+}
+.startup-logo .brand-symbol {
+  animation: startup-wave .4s ease-in-out .78s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .startup-logo .brand-symbol { animation: none; }
+}
+.mini-brand, .channel-snaap-mark, .channel-snaap-mini {
+  background: #101011;
+  color: #f4f4f5;
+}
+.brand-badge-symbol {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+.channel-card-preview header .signal-brand {
+  display: inline-flex;
+  align-items: center;
+  color: #f4f4f5;
+}
