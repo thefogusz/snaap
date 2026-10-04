@@ -72,6 +72,14 @@
       } else {
         // With no prior signal the endpoint is newest-first; otherwise it is oldest-first.
         const fresh = cursor ? rows : rows.slice().reverse();
+        // Drain bursts from setups covering many pairs instead of falling 100 signals behind per poll.
+        if (cursor) {
+          let page = rows;
+          for (let count = 1; page.length === 100 && count < 10; count++) {
+            page = await getSignals("?after=" + encodeURIComponent(page.at(-1).id));
+            fresh.push(...page);
+          }
+        }
         if (fresh.length) {
           cursor = fresh.at(-1).id;
           const last = fresh.at(-1);
