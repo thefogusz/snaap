@@ -18,10 +18,10 @@
 .notification-rules .watch-direction{color:var(--ink)}
 .notification-rules .watch-row :is(.status.paused,.status.is-active){font-size:11px;padding:0;background:transparent;box-shadow:none!important;white-space:nowrap;border-radius:0;flex-shrink:0;max-width:none;margin-right:8px}
 .notification-rules .watch-row .status:before{width:5px;height:5px}
-.notification-rules .watch-row-footer{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;margin:0;padding:0;border:0;grid-column:2;grid-row:1}
+.notification-rules .watch-row-footer{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin:0;padding:0;border:0;grid-column:2;grid-row:1}
 .notification-rules :is(.watch-row-footer button,.watch-details button){display:inline-flex;align-items:center;gap:6px;font-size:12px;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:transparent;line-height:1.5;white-space:nowrap}
 .notification-rules :is(.watch-row-footer button,.watch-details button):hover{background:var(--pale)}
-.notification-rules .watch-row-footer .watch-edit{width:34px;padding:7px;justify-content:center;border-color:transparent}
+.notification-rules .watch-row-footer .watch-edit{width:34px;flex-shrink:0;padding:7px;justify-content:center;border-color:transparent}
 .notification-rules .watch-row .ui-icon{width:14px;height:14px}
 .notification-rules .watch-row>[role="alert"]{grid-column:1/-1;font-size:13px;margin-top:8px}
 .notification-rules .watch-details{grid-column:1/-1;min-width:0;border:0;padding:0;margin:0}
