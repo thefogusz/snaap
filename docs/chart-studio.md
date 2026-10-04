@@ -4,6 +4,9 @@ The editor now selects one exchange and one chart pair. Existing multi-target re
 
 ## Shipped
 
+- Condition timeframe views: the chart has one button per timeframe used by the setup, including confirmation, exit, cancel and independent Short conditions. Each comparison also offers a direct “ดูกราฟ” shortcut. Selecting a view changes candles and visible indicators only; the draft and evaluation timeframe remain unchanged.
+- Preview accepts optional `chartFrame` restricted to the setup's required frames. `source.frame` identifies the displayed candles and `source.evaluationFrame` identifies the signal clock. Raw `timeline` and `events` remain evaluated on the original strategy. Separate `chartTimeline` uses the most recent non-stale evaluation at or before each displayed close; `chartEvents` places signals on their containing displayed closed candle, retaining the original `signalTime`. Gaps have no invented evidence or markers.
+
 - Locally served Lightweight Charts 5.2.0, Apache 2.0 license/NOTICE and TradingView attribution.
 - Candles, condition indicator overlays/panes, entry/exit/cancel/expiry markers, zoom/pan, play/pause, step, timeline scrub, and per-bar evidence.
 - Debounced automatic preview after editor or agent draft updates; response generations reject stale results. Preview is authenticated and does not persist replay rows on every keystroke.
