@@ -1,0 +1,9 @@
+# Research validity for Snaap v1
+
+Use when judging an edge, interpreting performance claims, comparing parameters or planning a backtest. State the hypothesis and observable condition before selecting the historical winner. Separate syntax validity, signal behavior, simulated execution, net performance and prospective evidence.
+
+Record exchange, instrument, market, bar source, timeframe, actual date coverage, missing candles and indicator warmup. At each decision use only information available then. A completed current candle is available after its close; do not require an extra bar of lag for every indicator. Higher-timeframe values must already be confirmed. Check whether historical markings depended on future candles, feed revisions or transformed charts. No skill text alone certifies freedom from leakage.
+
+For performance research, specify fills, spread/slippage, fees, funding, position sizing, baseline and available capital. Separate exploratory parameter selection from later chronological holdout evaluation. Keep count of alternatives tried; repeated inspection or tuning consumes a holdout. When outcome windows overlap, plan overlap-aware separation; do not impose one universal gap. Check behavior across periods and nearby parameter values rather than selecting a narrow historical peak.
+
+The current replay tool cannot perform execution backtests, walk-forward optimization, PBO, Deflated Sharpe, statistical significance or paper trading. Offer a concrete validation plan or inspect provided artifacts; never announce those calculations as completed. No universal number of years, Sharpe threshold or trade count proves an edge. A short result or a community screenshot is a lead to investigate, not a model or strategy ranking. If the user only wants an alert, validate the alert without requiring an investment research project.

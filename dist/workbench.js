@@ -1,0 +1,2021 @@
+"use strict";
+const setupChangesReady = import('./setup-changes.js');
+const assistantTextReady = import('./assistant-text.js');
+let indicatorCatalog;
+const indicatorCatalogReady=import('./indicator-catalog.js').then(m=>indicatorCatalog=m);
+let directionTools;
+const directionToolsReady=import('./trade-direction.js').then(m=>directionTools=m);
+function directionLabel(side,market){return directionTools.directionLabel(side,market);}
+function signalDirection(event,market,side){return directionTools.signalDirection(event,market,side);}
+function directionChoices(d){
+ if(d.market==='Spot')return '<p class="setup-direction-spot">Spot (ซื้อ)</p>';
+ return `<fieldset class="setup-direction"><legend>เลือกฝั่งเทรด</legend><div class="direction-options"><label><input type="checkbox" data-direction="LONG" ${['LONG','BOTH'].includes(d.side)?'checked':''}><span>Long <small>(ซื้อ)</small></span></label><label><input type="checkbox" data-direction="SHORT" ${['SHORT','BOTH'].includes(d.side)?'checked':''}><span>Short <small>(ขาย)</small></span></label></div>${d.side==='BOTH'?`<div class="direction-mirror-row"><label class="direction-mirror"><input type="checkbox" data-mirror-short ${d.mirrorShort?'checked':''}><span>สลับเงื่อนไข Long ให้ Short อัตโนมัติ</span></label></div><p class="field-note">${d.mirrorShort?'กลับเหนือ/ใต้และตัดขึ้น/ลง · คงค่าตัวเลขเดิม':'ตั้งเงื่อนไข Long และ Short แยกกัน'}</p>`:''}</fieldset>`;
+}
+
+const $ = (s) => document.querySelector(s),
+  $$ = (s) => [...document.querySelectorAll(s)];
+const esc = (v) =>
+  String(v).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+const state = {
+  me: null,
+  workspaceId: null,
+  workspaces: [],
+  health: null,
+  rules: [],
+  conversation: null,
+  images: [],
+  useMyData: false,
+  libraryImages: [],
+  draft: null,
+  saved: null,
+  undo: [],
+  sources: [],
+  selection: {},
+  replay: null,
+  busy: false,
+  filter: "all",
+  destinations: [],
+  conversationRows: [],
+  draftRevision: 0,
+  persistedDraft: null,
+  crop: null,
+  editorNotice: null,
+};
+const tf = ["5m", "15m", "1h", "4h", "1d"],
+  names = ["Binance", "Bybit", "OKX", "Bitget", "MEXC"];
+const constant = (value) => ({ kind: "CONSTANT", value });
+const price = () => ({ kind: "PRICE", field: "close", timeframe: "15m" });
+const cmp = () => ({
+  kind: "COMPARE",
+  op: ">",
+  left: price(),
+  right: { kind: "INDICATOR", name: "EMA", period: 200, timeframe: "15m" },
+});
+const initial = () => ({
+  schemaVersion: 2,
+  name: "เซตอัพใหม่",
+  exchange: ["Binance"],
+  market: "Spot",
+  side: "SPOT",
+  pairs: ["BTC/USDT"],
+  timeframe: "15m",
+  entry: cmp(),
+  stages: [],
+  cooldownBars: 0,
+  destinations: [],
+});
+const status = document.createElement("div");
+status.className = "runtime-status";
+status.setAttribute("role", "status");
+status.hidden = true;
+$(".topbar").after(status);
+// The page content supplies its heading; keep the header utilities in place.
+$("#page-name").classList.add("sr-only");
+const workbench = document.createElement("div");
+workbench.className = "workbench";
+workbench.hidden = true;
+workbench.dataset.tab = "chat";
+$("#view-home").append(workbench);
+workbench.append($("#conversation"));
+const panel = document.createElement("aside");
+panel.className = "design-panel";
+panel.setAttribute("aria-label", "ออกแบบเซตอัพ");
+const setupPane = document.createElement("div");
+setupPane.className = "setup-pane";
+setupPane.setAttribute("aria-label", "กราฟและเซตอัป");
+setupPane.tabIndex = 0;
+workbench.append(setupPane);
+setupPane.append(panel);
+const setupPaneNav=document.createElement('nav');
+setupPaneNav.className='setup-pane-nav';
+setupPaneNav.setAttribute('aria-label','มุมมองกราฟและเซตอัป');
+setupPaneNav.innerHTML='<button type="button" data-pane-view="chart">ไปที่กราฟ</button><button type="button" data-pane-view="setup">ไปที่เซตอัป</button>';
+setupPaneNav.hidden=true;
+setupPaneNav.addEventListener('click',event=>{
+  const button=event.target.closest('[data-pane-view]');if(!button)return;
+  const target=button.dataset.paneView==='setup'?panel:setupPane.querySelector('.setup-studio');
+  if(!target)return;
+  if(matchMedia('(min-width:1100px)').matches){
+    setupPane.scrollTo({top:target.getBoundingClientRect().top-setupPane.getBoundingClientRect().top+setupPane.scrollTop,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+  }else target.scrollIntoView({block:'start',behavior:'instant'});
+});
+const tabs = document.createElement("div");
+tabs.className = "mobile-design-tabs";
+tabs.innerHTML =
+  '<button class="secondary" data-tab="chat">แชท</button><button class="secondary split-view-button" data-tab="split">แชท + เซตอัป</button>';
+workbench.before(tabs);
+tabs.hidden = true;
+const chatTools = document.createElement("div");
+chatTools.className = "chat-tools";
+chatTools.innerHTML =
+  '<button class="secondary" data-attach-image>แนบภาพ</button><input id="image-upload" type="file" accept="image/png,image/jpeg,image/webp" hidden><select id="ai-mode" aria-label="โหมด AI"><option value="standard">ปกติ</option><option value="deep">วิเคราะห์ละเอียด · Pro</option></select><button type="button" class="text-button my-data-toggle" data-context role="switch" aria-checked="false" aria-label="ใช้ข้อมูลของฉัน"><span>ใช้ข้อมูลของฉัน</span><span class="switch-track" aria-hidden="true"></span></button>';
+$("#followup-form").before(chatTools);
+chatTools.querySelector('option[value="deep"]').disabled = true;
+chatTools.querySelector('option[value="deep"]').textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
+const previews = document.createElement("div");
+previews.className = "attachment-preview";
+chatTools.after(previews);
+const sources = document.createElement("details");
+sources.innerHTML =
+  '<summary>ดูข้อมูลที่ใช้</summary><p class="field-note">เลือกภาพจากข้อมูลของฉันได้สูงสุด 5 ภาพ หรือพิมพ์ @ชื่อภาพ ในแชท · ภาพที่แนบในแชทเป็นภาพชั่วคราวและลบหลังบันทึกเซตอัป</p><label>ตั้งแต่ <input type="date" id="context-from"></label><label>ถึง <input type="date" id="context-to"></label><div class="source-list"></div><div data-saved-images></div>';
+sources.hidden = true;
+previews.after(sources);
+async function setMyData(enabled) {
+  if (state.busy) return;
+  const button=chatTools.querySelector('[data-context]');
+  button.disabled=true;
+  try {
+    if(enabled){await refreshContext();await renderLabImageChoices(true);}
+    state.useMyData=enabled;
+    button.setAttribute('aria-checked',String(enabled));
+    sources.hidden=!enabled;
+    if(!enabled)sources.open=false;
+    persistRecovery();
+  }finally{button.disabled=false;}
+}
+const conversations = document.createElement("select");
+conversations.className = "conversation-select";
+conversations.setAttribute("aria-label", "บทสนทนาที่บันทึก");
+conversations.hidden = true;
+$("#welcome").before(conversations);
+const conversationPicker = document.createElement("button");
+conversationPicker.className = "conversation-picker";
+conversationPicker.type = "button";
+conversationPicker.innerHTML = uiIcon("clock") + "<span>บทสนทนาล่าสุด</span>";
+conversationPicker.setAttribute("aria-haspopup", "dialog");
+const workbenchToolbar = document.createElement("div");
+workbenchToolbar.className = "workbench-toolbar";
+conversations.after(workbenchToolbar);
+const conversationActions=document.createElement('div');
+conversationActions.className='conversation-actions';
+workbenchToolbar.append(tabs,conversationActions);
+conversationActions.append(setupPaneNav,conversationPicker);
+const newConversationButton=document.createElement('button');
+newConversationButton.type='button';
+newConversationButton.className='icon-button';
+newConversationButton.dataset.action='new';
+newConversationButton.setAttribute('aria-label','เริ่มบทสนทนาใหม่');
+newConversationButton.title='เริ่มบทสนทนาใหม่';
+newConversationButton.innerHTML=uiIcon('plus');
+newConversationButton.hidden=true;
+conversationActions.append(newConversationButton);
+conversationPicker.setAttribute("aria-label", "บทสนทนาล่าสุด");
+conversationPicker.title = "บทสนทนาล่าสุด";
+conversationPicker.onclick = async () => {
+  try { state.conversationRows = await api("/conversations"); } catch(error) { toast(error.message); return; }
+  const dialog = document.createElement("dialog");
+  dialog.className = "conversation-dialog";
+  dialog.setAttribute("aria-labelledby", "conversation-dialog-title");
+  dialog.innerHTML =
+    '<header><h2 id="conversation-dialog-title">บทสนทนาล่าสุด</h2><button type="button" aria-label="ปิด">' +
+    uiIcon("close") +
+    '</button></header><input type="search" autofocus aria-label="ค้นหาบทสนทนา" placeholder="ค้นหาบทสนทนา"><div class="conversation-results"></div>';
+  const list = dialog.querySelector(".conversation-results");
+  const paint = () => {
+    const query = dialog.querySelector("input").value.toLocaleLowerCase();
+    const rows = state.conversationRows.filter((row) =>
+      row.title.toLocaleLowerCase().includes(query),
+    );
+    list.innerHTML = rows.length
+      ? rows
+          .map(
+            (row) =>
+              `<button type="button" data-conversation-id="${row.id}">${uiIcon(row.setup_saved_at ? "sliders" : "chat")}<span><strong>${esc(row.title)}</strong><small>${new Date(row.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })} · ${esc(state.workspaces.find(w=>w.id===row.workspace_id)?.name??state.workspaces.find(w=>w.id===state.workspaceId)?.name??"พื้นที่หลัก")}${row.id === state.conversation ? " · กำลังเปิด" : ""}</small><span class="conversation-kind${row.setup_saved_at ? ' is-saved' : ''}">${row.setup_saved_at ? 'บันทึกเซตอัปแล้ว' : row.setup_status_known ? 'พูดคุย / วิเคราะห์' : 'บทสนทนา'}</span></span>${uiIcon("arrow")}</button>`,
+          )
+          .join("")
+      : "<p>ไม่พบบทสนทนา</p>";
+  };
+  dialog.querySelector("input").oninput = paint;
+  dialog.querySelector("header button").onclick = () => dialog.close();
+  list.onclick = (event) => {
+    const button = event.target.closest("[data-conversation-id]");
+    if (!button) return;
+    conversations.value = button.dataset.conversationId;
+    conversations.dispatchEvent(new Event("change"));
+    dialog.close();
+  };
+  dialog.onclose = () => {
+    dialog.remove();
+    conversationPicker.focus();
+  };
+  document.body.append(dialog);
+  paint();
+  dialog.showModal();
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
+    dialog.animate(
+      [
+        { opacity: 0, transform: "translateY(12px) scale(.98)" },
+        { opacity: 1, transform: "none" },
+      ],
+      { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" },
+    );
+};
+const chatComposer = document.createElement("div");
+chatComposer.className = "chat-composer";
+$("#followup-form").before(chatComposer);
+chatComposer.append(previews, $("#followup-form"), chatTools, sources);
+const presetsReady=import('./presets.js').then(m=>m.initPresets({state,api,esc,toast,chatComposer,showDesigner,setWorkbenchTab,ensureConversation,saveDraft,renderDesigner,refresh,fullSummary,message,scrollChatToLatest,persistRecovery,chatEmpty}));
+chatTools.querySelector('[data-attach-image]').setAttribute('aria-label','แนบภาพ');
+chatTools.querySelector('[data-attach-image]').title='แนบภาพกราฟ';
+const chatSendButton=$('#followup-form button[type="submit"]');
+chatSendButton.classList.add('chat-send-button');
+chatSendButton.setAttribute('form','followup-form');
+chatSendButton.setAttribute('aria-label','ส่งข้อความ');
+chatSendButton.innerHTML=uiIcon('arrowUp');
+chatTools.append(chatSendButton);
+const latestMessages = document.createElement('button');
+latestMessages.type='button';
+latestMessages.className='chat-latest';
+latestMessages.textContent='↓ ข้อความล่าสุด';
+latestMessages.hidden=true;
+chatComposer.before(latestMessages);
+const messagePane=$('#messages');
+messagePane.tabIndex=0;
+messagePane.setAttribute('aria-label','ประวัติการสนทนา');
+let followingChat=true;
+function scrollChatToLatest(){messagePane.scrollTop=messagePane.scrollHeight;followingChat=true;latestMessages.hidden=true;}
+latestMessages.onclick=scrollChatToLatest;
+messagePane.addEventListener('scroll',()=>{
+  followingChat=messagePane.scrollHeight-messagePane.scrollTop-messagePane.clientHeight<80;
+  latestMessages.hidden=followingChat;
+},{passive:true});
+messagePane.addEventListener('wheel',()=>{followingChat=false;},{passive:true});
+messagePane.addEventListener('touchstart',()=>{followingChat=false;},{passive:true});
+messagePane.addEventListener('pointerdown',()=>{followingChat=false;});
+messagePane.addEventListener('keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(event.key))followingChat=false;});
+new MutationObserver(()=>{
+  if(followingChat)scrollChatToLatest();else latestMessages.hidden=false;
+}).observe(messagePane,{childList:true,subtree:true,characterData:true});
+function sizeWorkbench(){
+  if(workbench.hidden)return;
+  const top=workbench.getBoundingClientRect().top;
+  workbench.style.setProperty('--workbench-height',Math.max(280,window.innerHeight-top-20)+'px');
+}
+window.addEventListener('resize',sizeWorkbench);
+new ResizeObserver(()=>{
+  latestMessages.style.bottom=(chatComposer.offsetHeight+20)+'px';
+  if(followingChat)requestAnimationFrame(scrollChatToLatest);
+}).observe(chatComposer);
+const followupText = document.createElement("textarea");
+followupText.id = "followup-input";
+followupText.rows = 2;
+followupText.maxLength = 1600;
+followupText.placeholder = "เล่าไอเดียเทรดที่อยากลอง…";
+$("#followup-input").replaceWith(followupText);
+const chatPromptSamples = [
+  'วิเคราะห์ประวัติเทรดที่ซิงก์ไว้ แล้วช่วยออกแบบเซตอัปให้ฉัน',
+  'มีสไตล์การเทรดแบบไหนที่เหมาะกับเวลาและเป้าหมายของฉันบ้าง?',
+  'เพิ่งเริ่มเทรด ช่วยอธิบายกราฟและอินดิเคเตอร์แบบเข้าใจง่าย',
+  'ช่วยถามทีละข้อ เพื่อหาสไตล์การเทรดที่ฉันอยากลอง',
+  'อธิบายความต่างระหว่าง Spot กับ Futures ให้ฉันหน่อย',
+  'ช่วยอ่านกราฟที่แนบ แล้วสรุปแนวโน้มกับจุดที่ควรสังเกต',
+  'ช่วยออกแบบเซตอัปตามเทรนด์ด้วย EMA และ RSI',
+  'อยากลองเซตอัป Breakout ช่วยวางเงื่อนไขยืนยันให้หน่อย',
+  'ช่วยออกแบบเซตอัปรอราคาย่อตัวในแนวโน้มขาขึ้น',
+  'ตลาดออกข้าง ควรออกแบบเงื่อนไขแบบไหน?',
+  'ช่วยออกแบบเซตอัป Long และ Short ให้มีเงื่อนไขชัดเจน',
+  'ช่วยย่อไอเดียเทรดของฉันให้เป็นเซตอัปไม่เกิน 6 เงื่อนไข',
+  'ฉันดูกราฟได้วันละนิด ควรเลือกกรอบเวลาแบบไหน?',
+  'ช่วยเปรียบเทียบการเล่นสั้นกับการถือหลายวัน',
+  'จากประวัติที่ซิงก์ไว้ ฉันซื้อขายคู่ไหนและฝั่งไหนบ่อยที่สุด?',
+  'ช่วยสรุปพฤติกรรมการเทรดที่เห็นจากข้อมูลของฉัน',
+  'ช่วยทำเช็กลิสต์ก่อนเข้าเทรดให้ใช้ได้ทุกครั้ง',
+  'ช่วยอธิบายจุดตัดขาดทุนและเป้ากำไรด้วยตัวอย่างง่าย ๆ',
+  'ช่วยวางแผนความเสี่ยงต่อครั้งจากงบที่ฉันกำหนด',
+  'เซตอัปนี้มีเงื่อนไขซ้ำซ้อนหรือขัดกันตรงไหนบ้าง?',
+  'ช่วยเพิ่มเงื่อนไขกรองสัญญาณหลอกให้เซตอัปของฉัน',
+  'ช่วยดูว่าควรใช้วอลุ่มยืนยันสัญญาณตรงไหน',
+  'อยากใช้หลายกรอบเวลาร่วมกัน ช่วยจัดเงื่อนไขให้หน่อย',
+  'ช่วยออกแบบวิธีทบทวนการเทรดและจดบันทึกหลังจบแต่ละรอบ',
+  'ช่วยอ่านภาพอ้างอิงของฉัน แล้วอธิบายแนวคิดที่นำไปทำเซตอัปได้',
+  'ช่วยวางแผนทดลองเซตอัปย้อนหลัง ก่อนนำไปใช้จริง',
+];
+const chatPromptHint = document.createElement('span');
+chatPromptHint.className = 'chat-prompt-hint';
+chatPromptHint.setAttribute('aria-hidden', 'true');
+followupText.after(chatPromptHint);
+let promptBag = [], promptMotionVersion = 0;
+function nextChatPrompt() {
+  if (!promptBag.length) {
+    promptBag = [...chatPromptSamples];
+    for (let i = promptBag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [promptBag[i], promptBag[j]] = [promptBag[j], promptBag[i]];
+    }
+    if (promptBag.at(-1) === chatPromptHint.textContent) promptBag.reverse();
+  }
+  return promptBag.pop();
+}
+function syncChatPromptHint() {
+  const visible = workbench.dataset.tab === 'chat' && !followupText.value;
+  chatPromptHint.hidden = !visible;
+  followupText.classList.toggle('has-prompt-hint', visible);
+  if (!visible) {
+    promptMotionVersion++;
+    chatPromptHint.getAnimations().forEach(animation => animation.cancel());
+  } else if (!chatPromptHint.textContent) chatPromptHint.textContent = nextChatPrompt();
+}
+async function rotateChatPrompt() {
+  syncChatPromptHint();
+  if (chatPromptHint.hidden || document.hidden || !followupText.getClientRects().length || document.activeElement === followupText) return;
+  const version = ++promptMotionVersion;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduced) {
+    try {
+      await chatPromptHint.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(10px)'}],{duration:220,easing:'ease-in',fill:'forwards'}).finished;
+    } catch { return; }
+  }
+  if (version !== promptMotionVersion || followupText.value || document.activeElement === followupText) {
+    chatPromptHint.getAnimations().forEach(animation => animation.cancel());
+    return;
+  }
+  chatPromptHint.textContent = nextChatPrompt();
+  chatPromptHint.getAnimations().forEach(animation => animation.cancel());
+  if (!reduced) chatPromptHint.animate([{opacity:0,transform:'translateX(-10px)'},{opacity:1,transform:'translateX(0)'}],{duration:420,easing:'cubic-bezier(.22,1,.36,1)'});
+}
+setInterval(rotateChatPrompt, 7000);
+followupText.addEventListener('input', syncChatPromptHint);
+followupText.addEventListener('focus', () => {
+  promptMotionVersion++;
+  chatPromptHint.getAnimations().forEach(animation => animation.cancel());
+});
+syncChatPromptHint();
+function resizeChatInputs() {
+  syncChatPromptHint();
+  for(const field of [$('#chat-input'),$('#followup-input')]){
+    if(!field?.getClientRects().length)continue;
+    const style=getComputedStyle(field);
+    const minimum=parseFloat(style.minHeight)||76;
+    const maximum=240;
+    field.style.height='auto';
+    const border=(parseFloat(style.borderTopWidth)||0)+(parseFloat(style.borderBottomWidth)||0);
+    const height=Math.max(minimum,field.scrollHeight+border);
+    field.style.height=Math.min(maximum,height)+'px';
+    field.style.overflowY=height>maximum?'auto':'hidden';
+  }
+}
+for(const field of [$('#chat-input'),followupText])field.addEventListener('input',resizeChatInputs);
+window.addEventListener('resize',resizeChatInputs);
+followupText.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    $("#followup-form").requestSubmit();
+  }
+});
+const welcomeAttach = document.createElement("button");
+welcomeAttach.type = "button";
+welcomeAttach.className = "text-button";
+welcomeAttach.setAttribute("data-attach-image", "");
+welcomeAttach.textContent = "แนบภาพกราฟ";
+$("#chat-form").after(welcomeAttach);
+$("#view-home .intro").textContent = "พิมพ์ไอเดียหรือแนบกราฟ แล้วออกแบบเทรดเซตอัพไปด้วยกัน";
+$$(".welcome .suggestions button").forEach((button) =>
+  button.insertAdjacentHTML(
+    "beforeend",
+    `<span class="launch-arrow" aria-hidden="true">${uiIcon("arrow")}</span>`,
+  ),
+);
+function chatEmpty() {
+  if (!$("#messages").children.length)
+    $("#messages").innerHTML =
+      `<div class="chat-empty"><strong>คุยกับ <span class="snaap-name">Snaap</span></strong><p><span>พิมพ์ไอเดียหรือแนบกราฟ</span> <span>แล้วออกแบบเทรดเซตอัพไปด้วยกัน</span></p></div>`;
+}
+const badge = $(".prototype-badge");
+badge.textContent = "บัญชี / แพ็กเกจ";
+badge.dataset.action = "billing";
+$(".profile").dataset.action = "billing";
+async function api(url, method = "GET", body) {
+  const headers = { "x-snaap-client": "web" };
+  if(state.workspaceId)headers['x-snaap-workspace']=state.workspaceId;
+  if (body && !(body instanceof FormData))
+    headers["Content-Type"] = "application/json";
+  const res = await fetch("/api/v1" + url, {
+    method,
+    headers,
+    body:
+      body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+  });
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw Error("ยังเชื่อมต่อ backend ไม่ได้");
+  }
+  if (!res.ok) {
+    const error = Error(data.error?.message ?? "ทำรายการไม่สำเร็จ");
+    error.statusCode = res.status;
+    if(res.status===401 && state.me){persistRecovery();location.replace('/login.html?error=expired');}
+    throw error;
+  }
+  return data;
+}
+function alignToast() {
+  const notice = $("#toast");
+  if (notice.hidden) return;
+  const shell = $(".main-shell").getBoundingClientRect();
+  const chat = $(".chat-composer").getBoundingClientRect();
+  const area = chat.width > 0 ? chat : shell;
+  const center = area.left + area.width / 2;
+  notice.style.left = `${center}px`;
+  notice.style.maxWidth = `${Math.max(0, 2 * Math.min(center - shell.left, shell.right - center) - 32)}px`;
+}
+const toastLayoutObserver = new ResizeObserver(alignToast);
+toastLayoutObserver.observe($(".main-shell"));
+toastLayoutObserver.observe($(".chat-composer"));
+window.addEventListener("resize", alignToast);
+function toast(text) {
+  window.SnaapToast.show(text, alignToast);
+}
+function message(text, user = false) {
+  const el = document.createElement("div");
+  el.className = "message " + (user ? "user" : "assistant");
+  if (user) el.textContent = text;
+  else {
+    const body = document.createElement("div");
+    body.className = "assistant-body";
+    body.textContent = text;
+    assistantTextReady.then(({renderAssistantText})=>{if(body.isConnected)renderAssistantText(body,text);}).catch(()=>{});
+    el.append(body);
+  }
+  $("#messages").append(el);
+}
+async function showSetupChanges(before, after, historicalChanges = null) {
+  const { diffSetup, describeSetupValue } = await setupChangesReady;
+  const changes = historicalChanges ?? diffSetup(before, after);
+  if (!changes.length) return;
+  const card = document.createElement('section');
+  card.className = 'setup-change-card';
+  card.setAttribute('aria-label', 'สิ่งที่ snaap เปลี่ยนในเซตอัป');
+  const valueText = (value, path) => path === 'destinations' && Array.isArray(value)
+    ? (value.map(id => state.destinations.find(d => d.id === id)?.name ?? 'ช่องทางที่บันทึกไว้').join(', ') || 'กล่องแจ้งเตือนในเว็บ')
+    : describeSetupValue(value);
+  const {setupCardMarkup}=await import('./setup-card.js');
+  if (!historicalChanges) card.classList.add('setup-proposal-card');
+  card.innerHTML=historicalChanges?`<details><summary>ข้อเสนอเซตอัปในข้อความนี้ · ${changes.length} จุด</summary><ul>${changes.map(c=>`<li><span class="change-action">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div>${esc(valueText(c.after??c.before,c.path))}</div></div></li>`).join('')}</ul><small>ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน</small></details>`:setupCardMarkup({spec:after,title:after.name,status:historicalChanges?'ข้อเสนอในบทสนทนา':'ร่าง · ยังไม่บันทึก',channels:`<details class="setup-card-changes"><summary>ดูสิ่งที่ปรับ ${changes.length} จุด</summary><ul>${changes.map(c => `<li><span class="change-action" data-kind="${esc(c.action)}">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div class="change-values">${c.action !== 'add' ? `<span class="change-before">${esc(valueText(c.before,c.path))}</span>` : ''}${c.action !== 'remove' ? `<span class="change-after">${c.action === 'change' ? '<span aria-hidden="true">→</span> ' : ''}${esc(valueText(c.after,c.path))}</span>` : ''}</div></div></li>`).join('')}</ul></details>`,note:historicalChanges?'ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน':'ตรวจร่างก่อนบันทึกและเปิดแจ้งเตือน',actions:historicalChanges?'':'<button type="button" class="secondary" data-revert-change>ย้อนการปรับ</button><button type="button" class="primary" data-review-setup>ตรวจเซตอัป</button>'},{esc,fullSummary});
+  card.querySelector('[data-review-setup]')?.addEventListener('click',()=>{setWorkbenchTab('split');showDesigner();$('#designer')?.scrollIntoView({block:'start',behavior:'smooth'});});
+  if (!historicalChanges) {
+    const target = JSON.stringify(after), conversation = state.conversation;
+    card.querySelector('[data-revert-change]').onclick = () => {
+      if (state.conversation !== conversation || JSON.stringify(state.draft) !== target) {
+        toast('มีการปรับเซตอัปต่อแล้ว ใช้ย้อนกลับในพื้นที่ออกแบบเพื่อไล่ทีละขั้น');
+        return;
+      }
+      state.draft = structuredClone(before);
+      state.undo.pop();
+      state.replay = null;
+      renderDesigner();
+      queueDraftSave();
+      card.querySelector('header h3').textContent = 'ย้อนการปรับครั้งนี้แล้ว';
+      card.querySelector('.setup-card-footnote').textContent = 'ร่างกลับไปก่อนการปรับครั้งนี้';
+      card.querySelector('.setup-card-conditions').innerHTML = '';
+      card.querySelector('[data-review-setup]').disabled = true;
+      card.querySelector('[data-revert-change]').disabled = true;
+    };
+  }
+  $('#messages').append(card);
+}
+let pageNavigationMotion;
+function animatePageNavigation(target) {
+  pageNavigationMotion?.cancel();
+  pageNavigationMotion = null;
+  if (!target || document.documentElement.dataset.boot === 'loading' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  pageNavigationMotion = target.animate(
+    [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
+    { duration: 320, easing: 'cubic-bezier(.22,1,.36,1)' }
+  );
+  pageNavigationMotion.id = 'snaap-page-navigation';
+}
+function navigate(view, load = true, replayMotion = false) {
+  if (view === "watch") {
+    notificationSection = "rules";
+    view = "notifications";
+    history.replaceState(null, "", "#notifications");
+  }
+  if (view === "billing") {
+    toast("เร็ว ๆ นี้");
+    view = "home";
+    history.replaceState(null, "", "#home");
+  }
+  if (!["home", "watch", "history", "notifications"].includes(view))
+    view = "home";
+  const target = $("#view-" + view);
+  const changed = target?.hidden;
+  $$(".view").forEach((el) => (el.hidden = el.id !== "view-" + view));
+  if (load && (changed || replayMotion)) animatePageNavigation(target);
+  $$(".nav-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.view === view);
+    if (el.dataset.view === view) el.setAttribute("aria-current", "page");
+    else el.removeAttribute("aria-current");
+  });
+  $("#page-name").textContent = {
+    home: "แชท",
+    watch: "รายการแจ้งเตือน",
+    history: "ข้อมูลของฉัน",
+    notifications: "การแจ้งเตือน",
+    billing: "บัญชีและแพ็กเกจ",
+  }[view];
+  $("#sidebar").classList.remove("is-open");
+  requestAnimationFrame(alignToast);
+  if (!load) return;
+  if (view === "watch") renderWatch();
+  if (view === "history") renderHistory();
+  if (view === "notifications") renderNotifications();
+  if (view === "billing") renderBilling();
+}
+function showDesigner() {
+  chatEmpty();
+  state.draft ??= initial();
+  $("#welcome").hidden = true;
+  $("#conversation").hidden = false;
+  workbench.hidden = false;
+  requestAnimationFrame(sizeWorkbench);
+  tabs.hidden = false;
+  newConversationButton.hidden=false;
+  renderDesigner();
+}
+let requestedWorkbenchMode;
+function setWorkbenchTab(mode) {
+  // Older saved sessions and setup entry points resolve to the combined view.
+  mode = mode === 'chat' ? 'chat' : 'split';
+  requestAnimationFrame(resizeChatInputs);
+  requestAnimationFrame(alignToast);
+  const changed = (requestedWorkbenchMode ?? workbench.dataset.tab) !== mode;
+  requestedWorkbenchMode = mode;
+  if (!changed && workbench.dataset.tab !== mode) return;
+  const applyMode = () => {
+    if (requestedWorkbenchMode !== mode) return;
+    workbench.dataset.tab = mode;
+    setupPaneNav.hidden = mode !== 'split';
+    followupText.placeholder = mode === 'split'
+      ? 'เล่าไอเดียเทรด แล้วออกแบบเซตอัปแบบเรียลไทม์ผ่านการพูดคุย…'
+      : 'เล่าไอเดียเทรดที่อยากลอง…';
+    syncChatPromptHint();
+    requestAnimationFrame(() => document.dispatchEvent(new Event("workbench-mode-changed")));
+  };
+  const animateMode = changed && document.documentElement.dataset.boot !== 'loading' && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (animateMode && document.startViewTransition) {
+    window.snaapModeTransition?.skipTransition();
+    window.snaapModeTransition = document.startViewTransition(applyMode);
+  } else {
+    applyMode();
+    if (animateMode) {
+      const target = mode === "chat" ? $("#conversation") : setupPane;
+      target.getAnimations().forEach(animation => animation.cancel());
+      target.animate([{opacity:0, transform:"translateX(14px)"},{opacity:1, transform:"none"}], {duration:360,easing:"cubic-bezier(.22,1,.36,1)"});
+    }
+  }
+  tabs
+    .querySelectorAll("button")
+    .forEach((button) =>
+      button.setAttribute("aria-pressed", String(button.dataset.tab === mode)),
+    );
+}
+function snapshot() {
+  state.editorNotice = null;
+  state.undo.push(structuredClone(state.draft));
+  if (state.undo.length > 30) state.undo.shift();
+  state.replay = null;
+}
+function draftDirty() {
+  return (
+    state.draft &&
+    JSON.stringify(state.draft) !==
+      (state.persistedDraft ?? JSON.stringify(state.saved?.spec ?? initial()))
+  );
+}
+let draftTimer, draftFlight, conversationFlight;
+let draftStatus = "";
+function showDraftStatus(text) {
+  draftStatus = text;
+  const label = panel.querySelector("[data-draft-status]");
+  if (label) {
+    label.textContent = text;
+    label.dataset.state =
+      text === "บันทึกร่างแล้ว"
+        ? "saved"
+        : text.includes("กำลัง")
+          ? "saving"
+          : "pending";
+  }
+}
+async function ensureConversation(title = state.draft?.name ?? "เซตอัพใหม่") {
+  if (state.conversation) return state.conversation;
+  conversationFlight ??= api("/conversations", "POST", {
+    title: title.slice(0, 100),
+  })
+    .then((c) => {
+      state.conversation = c.id;
+      state.conversationRows.unshift({ ...c, workspace_id:state.workspaceId, draft: null, draft_revision: 0 });
+      const option = new Option(c.title, c.id, true, true);
+      conversations.add(option);
+      conversationPicker.hidden = false;
+      return c.id;
+    })
+    .finally(() => {
+      conversationFlight = null;
+    });
+  return conversationFlight;
+}
+async function saveDraft() {
+  clearTimeout(draftTimer);
+  if (draftFlight) {
+    await draftFlight;
+    if (draftDirty()) return saveDraft();
+    return;
+  }
+  if (!draftDirty()) return;
+  draftFlight = (async () => {
+    showDraftStatus("กำลังบันทึกร่าง…");
+    try {
+      const id = await ensureConversation();
+      // Keep the exact sent value: edits made during the request need a later save.
+      const sent = JSON.stringify(state.draft);
+      const result = await api(`/conversations/${id}/draft`, "PUT", {
+        spec: JSON.parse(sent),
+        expectedRevision: state.draftRevision,
+      });
+      state.draftRevision = result.draft_revision;
+      state.persistedDraft = sent;
+      const row = state.conversationRows.find((x) => x.id === id);
+      if (row)
+        Object.assign(row, {
+          draft: JSON.parse(sent),
+          draft_revision: result.draft_revision,
+        });
+      showDraftStatus("บันทึกร่างแล้ว");
+      persistRecovery();
+    } catch (error) {
+      showDraftStatus(persistRecovery() ? "เก็บร่างในเครื่องแล้ว · ซิงก์ไม่สำเร็จ" : "ยังไม่บันทึก · " + error.message);
+      throw error;
+    }
+  })();
+  try {
+    await draftFlight;
+  } finally {
+    draftFlight = null;
+  }
+  if (draftDirty()) return saveDraft();
+}
+function queueDraftSave() {
+  persistRecovery();
+  document.dispatchEvent(new Event('setup-changed'));
+  const undoButton = panel.querySelector("[data-undo]");
+  if (undoButton) undoButton.disabled = state.undo.length === 0;
+  const summary = panel.querySelector(".draft-diff");
+  if (summary && state.draft) summary.textContent = fullSummary(state.draft);
+  if (!draftDirty()) {
+    clearTimeout(draftTimer);
+    if (!draftFlight)
+      showDraftStatus(state.persistedDraft ? "บันทึกร่างแล้ว" : "");
+    return;
+  }
+  clearTimeout(draftTimer);
+  showDraftStatus("รอบันทึกร่าง…");
+  draftTimer = setTimeout(() => {
+    saveDraft().catch(() => {});
+  }, 700);
+}
+async function leaveDraft() {
+  if (state.busy) {
+    toast("รอ snaap ตอบก่อนเปลี่ยนบทสนทนา");
+    return false;
+  }
+  try {
+    await saveDraft();
+    return true;
+  } catch {
+    if (persistRecovery()) return true;
+    return confirm(
+      "บันทึกร่างไม่สำเร็จ ต้องการทิ้งการแก้ไขแล้วเปลี่ยนหน้าหรือไม่?",
+    );
+  }
+}
+window.addEventListener("beforeunload", (event) => {
+  if (draftDirty() && !persistRecovery()) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+});
+function operandText(o) {
+  return o.kind === "CONSTANT"
+    ? String(o.value)
+    : o.kind === "ENTRY_RETURN"
+      ? "เปลี่ยนจากราคาสัญญาณเข้า (%)"
+      : o.kind === "PRICE"
+        ? `${display[o.field] ?? o.field} (${o.timeframe})`
+        : o.formula ? `${o.formula.title} (${o.timeframe})` : indicatorCatalog?.indicatorByName[o.name]
+          ? `${indicatorCatalog.indicatorByName[o.name].label} ${indicatorCatalog.indicatorByName[o.name].params.map(p=>`${p.key}=${p.key==='period'?o.period:o.params?.[p.key]??p.value}`).join(' · ')} (${o.timeframe})`
+          : `${o.name} ${o.period} (${o.timeframe})`;
+}
+function comparableSpec(value) {
+  if (Array.isArray(value)) return value.map(comparableSpec);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, comparableSpec(value[key])]),
+    );
+  return value;
+}
+function conditionText(c) {
+  if (c.kind === "GROUP")
+    return (
+      "(" +
+      c.children.map(conditionText).join(c.op === "AND" ? " และ " : " หรือ ") +
+      ")"
+    );
+  if (c.kind === "HOLD")
+    return `${conditionText(c.condition)} ต่อเนื่อง ${c.bars} แท่ง`;
+  return `${operandText(c.left)} ${{ CROSS_ABOVE: "ตัดขึ้นเหนือ", CROSS_BELOW: "ตัดลงต่ำกว่า" }[c.op] ?? c.op} ${operandText(c.right)}`;
+}
+const display = {
+  PRICE: "ราคา / วอลุ่ม",
+  INDICATOR: "อินดิเคเตอร์",
+  CONSTANT: "ตัวเลข",
+  ENTRY_RETURN: "การเปลี่ยนราคาตามฝั่ง (%)",
+  open: "ราคาเปิด",
+  high: "สูงสุด",
+  low: "ต่ำสุด",
+  close: "ราคาปิด",
+  volume: "วอลุ่ม",
+  CROSS_ABOVE: "ตัดขึ้นเหนือ",
+  CROSS_BELOW: "ตัดลงต่ำกว่า",
+  ">": "มากกว่า (>)",
+  ">=": "มากกว่าหรือเท่ากับ (≥)",
+  "<": "น้อยกว่า (<)",
+  "<=": "น้อยกว่าหรือเท่ากับ (≤)",
+  AND: "ครบทุกข้อ (AND)",
+  OR: "อย่างน้อยหนึ่งข้อ (OR)",
+};
+const options = (values, selected) =>
+  values
+    .map(
+      (x) =>
+        `<option value="${esc(x)}" ${x === selected ? "selected" : ""}>${esc(display[x] ?? x)}</option>`,
+    )
+    .join("");
+function operandUI(o, path, title) {
+  const select = (label, key, values, value) =>
+    `<label>${label}<select data-path="${path}.${key}">${options(values, value)}</select></label>`;
+  const number = (label, key, value, attributes = "") =>
+    `<label>${label}<input type="number" data-path="${path}.${key}" value="${value}" ${attributes}></label>`;
+  let fields = `<label>ชนิดค่า<select data-opkind="${path}">${options(["PRICE", "INDICATOR", "CONSTANT", "ENTRY_RETURN"], o.kind)}</select></label>`;
+  if (o.kind === "CONSTANT")
+    fields += number("ค่าที่เปรียบเทียบ", "value", o.value, 'step="any"');
+  if (o.kind === "PRICE")
+    fields += select(
+      "แหล่งราคา",
+      "field",
+      ["open", "high", "low", "close", "volume"],
+      o.field,
+    );
+  if (o.kind === "INDICATOR") {
+
+    if(o.formula)fields += `<p>สูตรนำเข้า: ${esc(o.formula.title)} · v${o.formula.version}</p>`;
+    fields += select(
+      "อินดิเคเตอร์",
+      "name",
+      [
+        ...(o.name === "CUSTOM" ? ["CUSTOM"] : []),
+        "EMA",
+        "SMA",
+        "RSI",
+        "MACD",
+        "MACD_SIGNAL",
+        "MACD_HIST",
+        "BB_UPPER",
+        "BB_LOWER",
+        "ATR",
+        "VOLUME_RATIO",
+        "WMA",
+        "RMA",
+        "VWMA",
+        "ROC",
+        "MOM",
+        "STDDEV",
+        "VARIANCE",
+        "HIGHEST",
+        "LOWEST",
+        "DONCHIAN_UPPER",
+        "DONCHIAN_LOWER",
+        "DONCHIAN_MID",
+        "STOCH_K",
+        "WILLIAMS_R",
+        "CCI",
+        "MFI",
+        "CMF",
+        "BB_MIDDLE",
+        "BB_WIDTH",
+        "BB_PERCENT",
+        "TR",
+        ...(indicatorCatalog?.extendedNames??[]),
+
+      ],
+      o.name,
+    );
+    const extended=indicatorCatalog?.indicatorByName[o.name];
+    if(extended)fields+=extended.params.map(p=>number(p.label,p.key==='period'?'period':`params.${p.key}`,p.key==='period'?o.period:o.params?.[p.key]??p.value,`min="${p.min}" max="${p.max}" step="${p.integer?1:.001}"`)).join('');
+    if(o.name!=="CUSTOM"&&!extended)fields += number(
+      "ระยะอินดิเคเตอร์ (แท่ง)",
+      "period",
+      o.period,
+      'min="2" max="500"',
+    );
+    if(extended?extended.source:!["ATR","VOLUME_RATIO","MFI","CMF","STOCH_K","WILLIAMS_R","DONCHIAN_UPPER","DONCHIAN_LOWER","DONCHIAN_MID","TR"].includes(o.name))fields += select(
+      "แหล่งค่าของอินดิเคเตอร์",
+      "source",
+      ["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"],
+      o.source ?? "close",
+    );
+
+    if (o.name.startsWith("MACD"))
+      fields +=
+        number("MACD slow (แท่ง)", "slow", o.slow ?? 26) +
+        number("MACD signal (แท่ง)", "signal", o.signal ?? 9);
+    if (o.name.startsWith("BB_"))
+      fields += number(
+        "ส่วนเบี่ยงเบนมาตรฐาน",
+        "deviation",
+        o.deviation ?? 2,
+        'step="0.1"',
+      );
+  }
+  if (["PRICE", "INDICATOR"].includes(o.kind))
+    fields += select("กรอบเวลา", "timeframe", tf, o.timeframe);
+  return `<div class="operand-block" role="group" aria-label="${title}"><div class="operand-heading"><p class="operand-title">${title}</p>${o.kind === "INDICATOR" ? `<button type="button" class="indicator-import-trigger" data-import-indicator="${path}">${uiIcon("file")}<span>นำเข้าสูตร / TradingView</span></button>` : ""}</div><div class="operand-fields${o.kind === "INDICATOR" ? " indicator-fields" : ""}">${fields}</div>${o.kind === "INDICATOR" ? `<div class="operand-reference"><a href="/indicator-guide.html" target="_blank" rel="noopener">สูตร หน่วย และข้อมูลที่ต้องใช้ ${uiIcon("arrowUpRight")}</a></div>` : ""}</div>`;
+}
+function conditionUI(c, path) {
+  if (c.kind === "GROUP")
+    return `<div class="condition-group"><select aria-label="เงื่อนไขกลุ่ม" data-path="${path}.op">${options(["AND", "OR"], c.op)}</select>${c.children.map((x, i) => `<details class="group-condition" data-condition-editor="${path}.children.${i}"><summary>ข้อ ${i + 1}<span>${esc(conditionText(x))}</span></summary><div>${conditionUI(x, `${path}.children.${i}`)}${c.children.length > 1 ? `<button class="text-button" data-remove="${path}.children.${i}">ลบข้อ ${i + 1}</button>` : ""}</div></details>`).join("")}<button class="text-button" data-add="${path}">เพิ่มเงื่อนไข</button></div>`;
+  if (c.kind === "HOLD")
+    return `<label>ต่อเนื่องกี่แท่ง<input type="number" min="1" max="30" data-path="${path}.bars" value="${c.bars}"></label>${conditionUI(c.condition, path + ".condition")}`;
+  return `<div class="condition-line">${operandUI(c.left, path + ".left", "ค่าที่ตรวจ")}<label class="comparison-field">การเปรียบเทียบ<select class="operator" data-path="${path}.op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], c.op)}</select></label>${operandUI(c.right, path + ".right", "เทียบกับ")}</div><div class="condition-tools"><button class="text-button" data-group="${path}">จัดกลุ่ม AND / OR</button><button class="text-button" data-hold="${path}">ต่อเนื่องหลายแท่ง</button></div>`;
+}
+const MAX_SETUP_CONDITIONS = 6;
+function setupConditionCount(spec) {
+  const count = c => !c ? 0 : c.kind === "GROUP" ? c.children.reduce((n, child) => n + count(child), 0) : c.kind === "HOLD" ? count(c.condition) : 1;
+  const branch = b => !b ? 0 : count(b.entry) + count(b.exit) + count(b.cancel) + (b.stages ?? []).reduce((n, stage) => n + count(stage.condition), 0);
+  return branch(spec) + branch(spec?.short);
+}
+function canAddSetupCondition() {
+  if (setupConditionCount(state.draft) < MAX_SETUP_CONDITIONS) return true;
+  toast("ครบ 6 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่");
+  return false;
+}
+function renderDesigner() {
+  if(state.draft?.side==='SHORT'&&state.draft.mirrorShort)state.draft=directionTools.selectDirections(state.draft,['SHORT']);
+  const openConditions = [
+    ...panel.querySelectorAll("[data-condition-editor][open]"),
+  ].map((el) => el.dataset.conditionEditor);
+  const openAdvanced = panel.querySelector("[data-advanced-options]")?.open;
+  const focused = document.activeElement;
+  const focusKey = panel.contains(focused)
+    ? [
+        "data-path",
+        "data-opkind",
+        "data-exchange",
+        "data-destination",
+        "data-pairs",
+      ].find((k) => focused.hasAttribute(k))
+    : null;
+  const focusValue = focusKey ? focused.getAttribute(focusKey) : null;
+  setWorkbenchTab(requestedWorkbenchMode ?? workbench.dataset.tab);
+  queueDraftSave();
+  const d = state.draft;
+  panel.innerHTML = `<div class="design-toolbar"><strong>ออกแบบเซตอัพ</strong><span class="saved-label">${state.saved ? "เวอร์ชัน " + state.saved.revision : "ร่างใหม่"}${state.saved && JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(d)) ? " · ยังไม่บันทึก" : ""}</span><button class="text-button" data-undo ${state.undo.length ? "" : "disabled"}>ย้อนกลับ</button></div><div class="design-body"><div id="editor-feedback" tabindex="-1" hidden></div><label>ชื่อเซตอัพ<input data-path="name" value="${esc(d.name)}" maxlength="100"></label><fieldset class="exchange-fieldset"><legend>เลือกกระดาน</legend><div class="exchange-choices">${names.map((x) => `<label><input type="radio" name="setup-exchange" data-exchange="${x}" ${d.exchange.includes(x) ? "checked" : ""}><span class="exchange-check" aria-hidden="true">${uiIcon("check")}</span><span>${x}</span></label>`).join("")}</div></fieldset><div class="field-grid"><label>ตลาด<select data-path="market">${options(["Spot", "Perpetual Futures"], d.market)}</select></label><label>รอบตรวจแท่งปิด<select data-path="timeframe">${options(tf, d.timeframe)}</select></label></div>${directionChoices(d)}<div class="pair-control"><span>คู่เทรด</span><button type="button" class="secondary" data-pair-picker>${esc(d.pairs.length>1?d.pairs.length+" คู่เทรด":d.pairs[0]??"เลือกคู่เทรด")} ▾</button><p class="field-note" data-pair-availability role="status"></p></div><section class="setup-section"><h3>1. ${d.market === "Spot" ? "เงื่อนไขเริ่มต้น" : d.side === "SHORT" ? "เงื่อนไข Short" : d.side ? "เงื่อนไข Long" : "เงื่อนไขเริ่มต้น"}</h3>${conditionUI(d.entry, "entry")}</section><details data-advanced-options ${openAdvanced || d.stages.length || d.exit || d.cancel || d.cooldownBars ? "open" : ""}><summary>เงื่อนไขเพิ่มเติม<span>รอยืนยัน · สัญญาณออก · ยกเลิก · พักสัญญาณ</span></summary><div class="advanced-options">${d.stages.map((s, i) => `<section class="setup-section"><h3>${i + 2}. รอยืนยัน</h3><label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="stages.${i}.withinBars" value="${s.withinBars}"></label>${conditionUI(s.condition, `stages.${i}.condition`)}<button class="text-button" data-remove="stages.${i}">ลบขั้นตอน</button></section>`).join("")}<button class="secondary" data-stage>เพิ่มขั้นตอนรอยืนยัน</button><section class="setup-section"><h3>สัญญาณออก / ยกเลิก</h3>${d.exit ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขสัญญาณออก</h4><button class="text-button" data-remove-optional="exit">ลบเงื่อนไขออก</button></div>${conditionUI(d.exit, "exit")}</div>` : '<button class="text-button" data-optional="exit">เพิ่มเงื่อนไขออก</button>'}${d.cancel ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขยกเลิก</h4><button class="text-button" data-remove-optional="cancel">ลบเงื่อนไขยกเลิก</button></div>${conditionUI(d.cancel, "cancel")}</div>` : '<button class="text-button" data-optional="cancel">เพิ่มเงื่อนไขยกเลิก</button>'}<p class="field-note">วงจรสัญญาณ ไม่ใช่ออเดอร์ที่ถือจริง</p></section><label>พักหลังสัญญาณ (แท่ง)<input type="number" min="0" max="1000" data-path="cooldownBars" value="${d.cooldownBars}"></label></div></details>${d.short?`<details class="setup-custom-short"><summary>เงื่อนไข Short</summary>${conditionUI(d.short.entry,"short.entry")}${d.short.stages.map((s,i)=>`<h4>รอยืนยัน ${i+1}</h4>${conditionUI(s.condition,`short.stages.${i}.condition`)}<label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="short.stages.${i}.withinBars" value="${s.withinBars}"></label>`).join("")}${d.short.exit?`<h4>สัญญาณออก Short</h4>${conditionUI(d.short.exit,"short.exit")}`:""}${d.short.cancel?`<h4>ยกเลิก Short</h4>${conditionUI(d.short.cancel,"short.cancel")}`:""}<label>พักสัญญาณ Short (แท่ง)<input type="number" min="0" max="1000" data-path="short.cooldownBars" value="${d.short.cooldownBars}"></label></details>`:""}<details open class="rule-review"><summary>สรุปเซตอัพ</summary><p class="draft-diff">${esc(fullSummary(d))}</p></details><fieldset class="destination-choices"><legend>แจ้งเตือนไปที่</legend><p>กล่องแจ้งเตือนในเว็บเสมอ</p>${state.destinations
+    .filter((x) => x.verified)
+    .map(
+      (x) =>
+        `<label><input type="checkbox" data-destination="${x.id}" ${d.destinations.includes(x.id) ? "checked" : ""}>${esc(x.name)}</label>`,
+    )
+    .join(
+      "",
+    )}</fieldset><div class="design-actions"><button class="primary" data-save>ตรวจและบันทึก</button><button class="secondary" data-replay>ดูผลบนกราฟ</button></div><p class="field-note">บันทึกก่อน แล้วเปิดใช้งานในแท็บเซตอัพที่ตั้งไว้</p><div id="replay-result"></div></div>`;
+  const conditionCount = setupConditionCount(d);
+  const limitLabel = document.createElement("p");
+  limitLabel.className = "field-note setup-condition-limit";
+  limitLabel.setAttribute("role", "status");
+  limitLabel.textContent = `เงื่อนไข ${conditionCount}/${MAX_SETUP_CONDITIONS} · รวมเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก`;
+  panel.querySelector(".design-toolbar").after(limitLabel);
+  if (conditionCount >= MAX_SETUP_CONDITIONS) panel.querySelectorAll("[data-add], [data-group], [data-stage], [data-optional]").forEach(button => {
+    button.disabled = true;
+    button.title = "ครบ 6 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
+  });
+  if (d.stages.length >= 5) panel.querySelector("[data-stage]").disabled = true;
+  const draftLabel = document.createElement("p");
+  draftLabel.className = "field-note";
+  draftLabel.dataset.draftStatus = "";
+  draftLabel.setAttribute("role", "status");
+  draftLabel.textContent = draftStatus;
+  panel.querySelector(".design-toolbar").after(draftLabel);
+  showDraftStatus(draftStatus);
+  panel
+    .querySelector(".design-toolbar strong")
+    .insertAdjacentHTML("afterbegin", uiIcon("sliders"));
+  panel.querySelectorAll("[data-condition-editor]").forEach((el) => {
+    el.open = openConditions.includes(el.dataset.conditionEditor);
+  });
+  if (state.editorNotice)
+    showEditorFeedback(
+      state.editorNotice.text,
+      state.editorNotice.success,
+      false,
+    );
+  if (focusKey)
+    [...panel.querySelectorAll(`[${focusKey}]`)]
+      .find((el) => el.getAttribute(focusKey) === focusValue)
+      ?.focus({ preventScroll: true });
+  document.dispatchEvent(new Event('setup-rendered'));
+  if (state.replay) {
+    panel.querySelector(".design-body").prepend($("#replay-result"));
+    renderReplay();
+  }
+}
+function showEditorFeedback(text, success = false, focus = true) {
+  state.editorNotice = { text, success };
+  const box = panel.querySelector("#editor-feedback");
+  if (!box) return;
+  box.hidden = false;
+  box.className = success ? "editor-feedback success" : "editor-feedback error";
+  box.setAttribute("role", success ? "status" : "alert");
+  box.replaceChildren();
+  const message = document.createElement("p");
+  message.textContent = text;
+  box.append(message);
+  if (success) {
+    const link = document.createElement("a");
+    link.href = "#watch";
+    link.textContent = "ไปดูเซตอัพที่ตั้งไว้";
+    box.append(link);
+  }
+  if (focus) {
+    box.focus();
+    box.scrollIntoView({ block: "center", behavior: "instant" });
+  }
+}
+function validateEditor() {
+  if (setupConditionCount(state.draft) > MAX_SETUP_CONDITIONS) {
+    showEditorFeedback("เซตอัปมีได้สูงสุด 6 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
+    return false;
+  }
+  panel
+    .querySelectorAll("[aria-invalid]")
+    .forEach((el) => el.removeAttribute("aria-invalid"));
+  let field, message;
+  if (!state.draft.name.trim()) {
+    field = panel.querySelector('[data-path="name"]');
+    message = "ตั้งชื่อเซตอัพก่อนบันทึก เช่น BTC เหนือ EMA 200";
+  } else if (!state.draft.exchange.length) {
+    field = panel.querySelector("[data-exchange]");
+    message = "เลือกอย่างน้อย 1 กระดาน";
+  } else if (state.draft.market !== "Spot" && !["LONG","SHORT","BOTH"].includes(state.draft.side)) {
+    field=panel.querySelector("[data-direction]");
+    message="เลือก Long, Short หรือทั้งคู่ก่อนบันทึก";
+  } else if (!state.draft.pairs.length) {
+    field = panel.querySelector("[data-pair-picker]");
+    message = "ระบุคู่เทรด เช่น BTC/USDT";
+  } else {
+    field = [...panel.querySelectorAll('input[type="number"]')].find(
+      (el) => !el.value || !el.validity.valid,
+    );
+    if (field) message = "ตรวจค่าตัวเลขในช่องที่ทำเครื่องหมายไว้";
+  }
+  if (!message) return true;
+  showEditorFeedback(message);
+  field.setAttribute("aria-invalid", "true");
+  field.setAttribute("aria-describedby", "editor-feedback");
+  for (
+    let parent = field.parentElement;
+    parent && panel.contains(parent);
+    parent = parent.parentElement
+  ) {
+    if (parent.tagName === "DETAILS") parent.open = true;
+  }
+  field.focus();
+  return false;
+}
+function at(path) {
+  return path.split(".").reduce((o, k) => o[k], state.draft);
+}
+function set(path, value) {
+  const keys = path.split("."),
+    last = keys.pop();
+  keys.reduce((o, k) => o[k] ?? (o[k] = {}), state.draft)[last] = value;
+}
+function renderWatch() {
+  const notice = $("#view-watch .demo-notice");
+  if (notice)
+    notice.textContent = state.me?.requiresRuleSelection
+      ? "สิทธิ์ Pro หมดแล้ว กรุณาหยุดเซตอัพให้เหลือ 3 รายการ ระบบพักการตรวจจนกว่าจะเลือกครบ"
+      : "ประเมินแท่งปิดทุกนาที · ข้อมูลแต่ละกระดานตรวจแยกกัน";
+  const list = state.rules.filter(
+    (r) =>
+      state.filter === "all" ||
+      (state.filter === "active" ? r.active : !r.active),
+  );
+  $("#nav-count").textContent = state.rules.length;
+  $$("[data-filter]").forEach((el) => {
+    const active = el.dataset.filter === state.filter;
+    el.classList.toggle("active", active);
+    el.setAttribute("aria-pressed", String(active));
+  });
+  $("#watch-list").innerHTML = list.length
+    ? list
+        .map(
+          (r) =>
+            `<article class="watch-row"><div class="watch-row-heading"><div><h2>${esc(r.spec.name)}</h2><small>${esc(r.spec.exchange.join(" · "))} · ${esc(r.spec.pairs.join(", "))} · ${esc(directionLabel(r.spec.side,r.spec.market))}</small></div><span class="status paused">${r.quota_blocked ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ" : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน"}</span></div><p class="watch-rule-summary">${esc(setupEntrySummary(r.spec))}</p>${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}<div class="watch-row-footer"><button class="secondary" data-export-setup-code="${r.id}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="secondary" data-activate-rule="${r.id}">${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button><button class="secondary" data-open-rule="${r.id}">เปิดออกแบบ</button></div></article>`,
+        )
+        .join("")
+    : uiEmpty(
+        "bell",
+        state.filter === "all" ? "เริ่มจากเซตอัพแรกของคุณ" : "ไม่มีรายการในหมวดนี้",
+        state.filter === "all"
+          ? "ตั้งเงื่อนไข ตรวจบนกราฟ แล้วค่อยเปิดแจ้งเตือน"
+          : "เลือกทั้งหมดเพื่อดูเซตอัพที่บันทึกไว้",
+        '<button class="primary with-icon" data-action="new-rule">' +
+          uiIcon("plus") +
+          "ออกแบบเซตอัพ</button>",
+      );
+  $$(".watch-row .status").forEach((el) =>
+    {const active=el.textContent === "เปิดใช้งาน";el.classList.toggle("is-active",active);el.classList.toggle("paused",!active);},
+  );
+  const footnote = $("#view-watch .demo-footnote");
+  if (footnote)
+    footnote.textContent =
+      "ประเมินแท่งปิดทุกนาที · ดูสถานะข้อมูลและผลการส่งในหน้าการแจ้งเตือน";
+}
+async function refresh() {
+  state.rules = await api("/rules");
+  state.me = await api("/me");
+  paintWorkspacePicker();
+  if (!state.me.local) {
+    const name = state.me.email.split("@")[0];
+    $(".profile .avatar").textContent = name.slice(0, 1).toUpperCase();
+    $(".profile>span:not(.avatar)").innerHTML =
+      esc(name) + "<small>" + esc(state.me.plan) + "</small>";
+  }
+  if(!$('#auth-signout')){
+    const signout=document.createElement('button');signout.id='auth-signout';signout.className='auth-signout';signout.textContent='ออกจากระบบ';
+    signout.onclick=async()=>{
+      if(state.busy||state.uploading){toast('รอให้ข้อความหรือภาพเสร็จก่อนออกจากระบบ');return;}
+      signout.disabled=true;
+      try{persistRecovery();if(state.draft&&draftDirty())await saveDraft();await api('/auth/logout','POST',{});sessionStorage.setItem('snaap-signed-out','true');location.replace('/login.html');}
+      catch(error){toast(error.message);signout.disabled=false;}
+    };
+    $('.sidebar-bottom').append(signout);
+  }
+  $("#ai-mode option[value=deep]").disabled = true;
+  $("#ai-mode option[value=deep]").textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
+  $("#ai-mode").value = 'standard';
+  renderWatch();
+  const rows = await api("/conversations");
+  state.conversationRows = rows;
+  conversationPicker.hidden = rows.length === 0;
+  state.destinations = (await api("/destinations")).items;
+  conversations.innerHTML =
+    '<option value="">บทสนทนาที่บันทึก</option>' +
+    rows
+      .map(
+        (x) =>
+          `<option value="${x.id}" ${x.id === state.conversation ? "selected" : ""}>${esc(x.title)}</option>`,
+      )
+      .join("");
+}
+async function refreshContext() {
+  const previous = new Map(
+    [...sources.querySelectorAll("[data-source]")].map((x) => [
+      x.dataset.source,
+      x.checked,
+    ]),
+  );
+  const data = await api("/context", "POST", {});
+  state.sources = data.sources;
+  sources.querySelector(".source-list").innerHTML = data.sources.length
+    ? data.sources
+        .map(
+          (s) =>
+            `<label><input type="checkbox" data-source="${s.id}" data-kind="${s.type}" ${previous.get(s.id) === false ? "" : "checked"}>${esc(s.type)} · ${esc(s.name ?? s.facts.name ?? s.id.slice(0, 8))} · ${esc(new Date(s.asOf).toLocaleDateString("th-TH"))}</label>`,
+        )
+        .join("")
+    : "ยังไม่มีประวัติหรือเซตอัพที่บันทึกไว้";
+}
+async function chat(text) {
+  if (!text.trim() || state.busy) return;
+  if(state.uploading){toast('กำลังแนบภาพ รอให้พรีวิวปรากฏก่อนส่ง');return;}
+  if (!state.health?.ai) {
+    toast("AI ยังไม่พร้อมใช้งาน คุณตั้งเงื่อนไขเองได้");
+    return;
+  }
+  if(workbench.dataset.tab!=="split")setWorkbenchTab("chat");
+  showDesigner();
+  location.hash = "home";
+  message(text, true);
+  followingChat=true;
+  requestAnimationFrame(scrollChatToLatest);
+  $("#chat-input").value = "";
+  $("#followup-input").value = "";
+  resizeChatInputs();
+  state.busy = true;
+  const thinking = document.createElement("div");
+  thinking.className = "thinking-indicator";
+  thinking.setAttribute("role", "status");
+  thinking.setAttribute('aria-live','polite');
+  thinking.setAttribute('aria-atomic','true');
+  thinking.innerHTML =
+    '<div class="thinking-header"><span class="thinking-mark" aria-hidden="true">S</span><div><strong>Snaap</strong><span data-thinking-stage>กำลังเตรียมคำตอบ…</span></div><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></div><div class="thinking-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
+  const thinkingStage=thinking.querySelector('[data-thinking-stage]');
+  const setThinkingStage=text=>{thinkingStage.textContent=text;};
+  let thinkingWaitTimer;
+  $("#messages").append(thinking);
+  $$("#chat-form button[type=submit],.chat-send-button").forEach(
+    (b) => (b.disabled = true),
+  );
+  try {
+    await ensureConversation(text);
+    await saveDraft();
+    if(state.useMyData){setThinkingStage('กำลังเตรียมภาพและประวัติเทรด…');await refreshContext();await renderLabImageChoices();}
+    const checked = state.useMyData ? [...sources.querySelectorAll("input[data-source]:checked")] : [];
+    const selection = {
+      ruleIds: checked
+        .filter((x) => x.dataset.kind === "rule")
+        .map((x) => x.dataset.source),
+      importIds: state.useMyData ? undefined : [],
+    };
+    const submittedDraft = JSON.stringify(state.draft);
+    setThinkingStage(state.images.length || (state.useMyData && state.libraryImages.length)
+      ? 'กำลังวิเคราะห์ข้อความและภาพ…' : 'กำลังคิดคำตอบ…');
+    thinkingWaitTimer=setTimeout(()=>setThinkingStage('ยังประมวลผลอยู่ · กรุณารอสักครู่'),15000);
+    const result = await api(
+      `/conversations/${state.conversation}/turns`,
+      "POST",
+      {
+        text,
+        mode: $("#ai-mode").value,
+        selection,
+        draft: state.draft,
+        useMyData:state.useMyData,
+        imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))].slice(0,8),
+
+      },
+    );
+    clearTimeout(thinkingWaitTimer);
+    thinking.remove();
+    message(result.text);
+    if (result.draft) {
+      if (JSON.stringify(state.draft) !== submittedDraft) {
+        message('คุณแก้เซตอัพระหว่างรอคำตอบ ลองเทียบข้อเสนอก่อนใช้');
+        reviewProposal(result.draft);
+      } else {
+        const previousDraft = structuredClone(state.draft);
+        snapshot();
+        state.draft = result.draft;
+        state.replay = null;
+        renderDesigner();
+        queueDraftSave();
+        await showSetupChanges(previousDraft, state.draft);
+        if(matchMedia('(min-width: 1100px)').matches)setWorkbenchTab('split');
+      }
+    }
+    state.images = [];
+    state.crop = null;
+    renderImages();
+    await refresh();
+  } catch (error) {
+    message(error.message);
+    $("#followup-input").value = text;
+    resizeChatInputs();
+    toast(error.message);
+  } finally {
+    clearTimeout(thinkingWaitTimer);
+    state.busy = false;
+    thinking.remove();
+    $$("#chat-form button[type=submit],.chat-send-button").forEach(
+      (b) => (b.disabled = false),
+    );
+    await refresh().catch(() => {});
+  }
+}
+function renderImages() {
+  previews.innerHTML = state.images
+    .map(
+      (i) =>
+        `<span><img src="${i.url}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
+    )
+    .join("");
+}
+function renderReplay() {
+  const target = $("#replay-result");
+  if (!target) return;
+  const r = state.replay,
+    cs = r.candles.slice(-100);
+  if (!cs.length) {
+    target.textContent = "ไม่มีแท่งเทียน";
+    return;
+  }
+  const min = Math.min(...cs.map((c) => c.low)),
+    max = Math.max(...cs.map((c) => c.high)),
+    scale = (v) => 180 - ((v - min) / (max - min || 1)) * 150;
+  const svg = cs
+    .map((c, i) => {
+      const x = 60 + i * 5,
+        color = c.close >= c.open ? "#86b830" : "#cf625a";
+      return `<line x1="${x}" x2="${x}" y1="${scale(c.high)}" y2="${scale(c.low)}" stroke="${color}"/><rect x="${x - 1.7}" y="${Math.min(scale(c.open), scale(c.close))}" width="3.4" height="${Math.max(1, Math.abs(scale(c.open) - scale(c.close)))}" fill="${color}"/>`;
+    })
+    .join("");
+  target.innerHTML = `<h2>ผลทดสอบย้อนหลัง</h2><div class="chart-frame"><svg viewBox="0 0 600 220" role="img" aria-label="กราฟแท่งปิด ${esc(r.source.pair)}">${[min, (min + max) / 2, max].map((v) => `<line x1="55" x2="580" y1="${scale(v)}" y2="${scale(v)}" stroke="currentColor" opacity=".1"/><text x="5" y="${scale(v) + 4}" fill="currentColor" font-size="10">${Math.round(v)}</text>`).join("")}${svg}${r.events
+    .filter((e) => cs.some((c) => c.time === e.time))
+    .map(
+      (e) =>
+        `<circle cx="${60 + cs.findIndex((c) => c.time === e.time) * 5}" cy="${scale(e.referencePrice)}" r="4" fill="var(--lime)" stroke="var(--ink)"><title>${esc(e.kind)} · ${esc(signalDirection(e))} ${e.referencePrice}</title></circle>`,
+    )
+    .join(
+      "",
+    )}<text x="60" y="204" fill="currentColor" font-size="10">${new Date(cs[0].time).toLocaleDateString("th-TH")}</text><text x="580" y="204" text-anchor="end" fill="currentColor" font-size="10">${new Date(cs.at(-1).time).toLocaleString("th-TH")}</text></svg></div><p class="field-note">${esc(r.source.exchange)} · ${esc(r.source.pair)} · ${r.source.frame} · จุดสีเขียว = สัญญาณ</p><details class="replay-details"><summary>ตรวจเงื่อนไขและเหตุการณ์ (${r.events.length})</summary>${r.timeline ? `<label>ตรวจทีละแท่ง<input aria-label="แท่งที่ตรวจ" type="range" min="0" max="${r.timeline.length - 1}" value="${r.timeline.length - 1}" data-timeline></label><div id="bar-evidence">${barEvidence(r.timeline.at(-1))}</div>` : ""}<p class="field-note">${r.events.length} สัญญาณในช่วงข้อมูล · ไม่ใช่ผลตอบแทน</p>${r.events
+    .slice(-15)
+    .reverse()
+    .map(
+      (e) =>
+        `<div class="replay-event"><strong>${{ ENTRY: "สัญญาณเข้า", EXIT: "สัญญาณออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลารอ" }[e.kind] ?? esc(e.kind)}</strong> · ${esc(signalDirection(e))} · ${new Date(e.time).toLocaleString("th-TH")}<br>ราคาอ้างอิง ${e.referencePrice}<details><summary>ค่าที่ตรวจ</summary>${evidenceUI(e.evidence)}</details></div>`,
+    )
+    .join(
+      "",
+    )}<p class="field-note">${r.limitations.map(esc).join("<br>")}</p></details>`;
+}
+const billing = document.createElement("section");
+billing.id = "view-billing";
+billing.className = "view secondary-view";
+billing.hidden = true;
+$("#main").append(billing);
+function renderBilling() {
+  billing.innerHTML = `<div class="page-heading"><h1>บัญชีและแพ็กเกจ</h1></div><div class="runtime-card"><h2>${state.me?.plan ?? "ยังไม่ได้เข้าสู่ระบบ"}</h2><p>${esc(state.me?.email ?? "")} ${state.me?.local ? "· บัญชีพัฒนาบนเครื่อง" : ""}</p><p>เซตอัพที่เปิดพร้อมกัน ${state.me?.limits.activeRules ?? 0} รายการ · AI ปกติ ${state.me?.limits.standard ?? 0} ครั้ง/เดือน · โหมดละเอียดอยู่ระหว่างพัฒนา</p><button class="secondary" data-export>ส่งออกข้อมูล</button></div><div class="runtime-card"><h2>Pro · 199 บาท / เดือน</h2><p>20 เซตอัพ · AI ปกติ 100 ครั้ง · โหมดวิเคราะห์ละเอียดเร็ว ๆ นี้</p><p>${state.health?.billing ? "ระบบชำระเงินพร้อมตามการตั้งค่าเซิร์ฟเวอร์" : "ยังไม่ได้เชื่อม Stripe ไม่มีการเรียกเก็บเงิน"}</p><button class="primary" data-checkout="card" ${state.health?.billing ? "" : "disabled"}>สมัครด้วยบัตร</button> <button class="secondary" data-checkout="promptpay" ${state.health?.billing ? "" : "disabled"}>PromptPay · 30 วัน</button><p class="field-note">PromptPay จ่ายต่อรอบเอง บัตรต่ออายุรายเดือน</p><button class="text-button" data-portal ${state.health?.billing ? "" : "disabled"}>จัดการสมาชิก / ยกเลิกต่ออายุ</button></div>`;
+  const first = billing.querySelector(".runtime-card");
+  const limitText = first?.querySelectorAll("p")[1];
+  if (limitText) {
+    const metrics = document.createElement("div");
+    metrics.className = "plan-capabilities";
+    metrics.innerHTML = [
+      ["bell", state.me?.limits.activeRules ?? 0, "เซตอัพที่เปิดได้"],
+      ["spark", state.me?.limits.standard ?? 0, "AI / เดือน"],
+      ["layers", "เร็ว ๆ นี้", "วิเคราะห์ละเอียด · Pro"],
+    ]
+      .map(
+        ([icon, value, label]) =>
+          `<div>${uiIcon(icon)}<strong>${value}</strong><span>${label}</span></div>`,
+      )
+      .join("");
+    limitText.replaceWith(metrics);
+  }
+}
+let historyRenderVersion=0;
+async function renderHistory() {
+  const version=++historyRenderVersion;
+  const view = $("#view-history");
+  view.innerHTML='<p role="status">กำลังโหลดข้อมูลของฉัน…</p>';
+  try {
+    const imports = await api("/imports");
+    if(version!==historyRenderVersion)return;
+    view.innerHTML =
+      '<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div><div class="runtime-card history-file-card"><h2>นำเข้าจากไฟล์</h2><p>CSV / XLSX รูปแบบกลาง · ตรวจข้อมูลก่อนบันทึก</p><a class="secondary template-download" href="/assets/trade-import-template.csv" download>ดาวน์โหลดไฟล์ต้นแบบ CSV</a><details class="import-format"><summary>รูปแบบข้อมูลที่รองรับ</summary><p class="field-note">คอลัมน์: time, exchange, market, pair, side, price, quantity, fee, id<br>market: Spot / Futures · ไม่ระบุจะเป็น Spot · quantity: จำนวนเหรียญ · เวลาแบบ ISO · side: buy / sell</p></details><label>ชื่อเรียกชุดประวัติ <input id="account-scope" placeholder="เช่น ประวัติเทรดเดือนตุลาคม"><small class="field-note">ชื่อที่คุณตั้งไว้แยกชุดข้อมูล ไม่ใช่ชื่อบัญชีบนกระดาน</small></label><p class="field-note">รายการไม่มี trade ID จะเก็บทั้งหมด กรุณาตรวจไฟล์ซ้ำก่อนนำเข้า</p><input id="history-upload" type="file" accept=".csv,.xlsx"><div id="import-preview"></div></div>' +
+      imports
+        .map(
+          (i) =>
+            `<div class="runtime-card history-import-entry" data-import-connection="${esc(i.account_scope??'')}"><div class="history-api-header"><h2>${esc(i.name)}</h2><span data-history-api-actions></span></div><p>${i.count} รายการ · ${new Date(i.created_at).toLocaleString("th-TH")}</p></div>`,
+        )
+        .join("");
+    await renderConnections();
+    if(version!==historyRenderVersion)return;
+    await renderTradingLab();
+    if(version!==historyRenderVersion)return;
+    const imageLibrary=view.querySelector('.trading-lab-images');
+    imageLibrary?.after(view.querySelector('#history-connections'));
+    const fileImport=view.querySelector('#account-scope')?.closest('.runtime-card');
+    if(fileImport){
+      const disclosure=document.createElement('details');disclosure.className='history-file-details';
+      const summary=document.createElement('summary');summary.textContent='เลือกไฟล์ CSV / XLSX หรือดูรูปแบบที่รองรับ';disclosure.append(summary);
+      [...fileImport.children].filter(child=>child.tagName!=='H2').forEach(child=>disclosure.append(child));
+      fileImport.append(disclosure);
+    }
+    const upload = $("#history-upload");
+    const fileLabel = document.createElement("label");
+    fileLabel.className = "file-drop";
+    fileLabel.innerHTML =
+      uiIcon("upload") +
+      "<span><strong>เลือกไฟล์ประวัติ</strong><small>CSV หรือ XLSX · ตรวจข้อมูลก่อนนำเข้า</small></span>";
+    upload.before(fileLabel);
+    fileLabel.append(upload);
+    upload.setAttribute("aria-label", "เลือกไฟล์ประวัติ CSV หรือ XLSX");
+  } catch (e) {
+    toast(e.message);
+  }
+}
+function showActivation(rule) {
+  const dialog = document.createElement("dialog");
+  dialog.setAttribute("aria-labelledby", "activation-title");
+  dialog.className = "runtime-dialog";
+  dialog.innerHTML = `<h2 id="activation-title">เริ่มแจ้งเตือนเซตอัพนี้?</h2><p>${esc(rule.spec.name)} · เวอร์ชัน ${rule.revision}</p><p>${esc(rule.spec.exchange.join(", "))} · ${esc(rule.spec.pairs.join(", "))}</p><p class="draft-diff">${esc(fullSummary(rule.spec))}</p><p>เริ่มตรวจตั้งแต่ยืนยัน ใช้แท่งปิด สัญญาณเข้า–ออกไม่ใช่คำสั่งซื้อขาย</p><p>ปลายทาง: กล่องแจ้งเตือน${rule.spec.destinations.map((id) => " · " + esc(state.destinations.find((x) => x.id === id)?.name ?? "ไม่พบช่องทาง")).join("")}</p><div class="design-actions"><button class="primary" data-confirm>ยืนยันเปิดใช้งาน</button><button class="secondary" data-cancel autofocus>ยังไม่เปิดใช้งาน</button></div>`;
+  document.body.append(dialog);
+  dialog.showModal();
+  dialog.querySelector("[data-cancel]").onclick = () => dialog.close();
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.querySelector("[data-confirm]").onclick = async () => {
+    try {
+      await api(`/rules/${rule.id}/activation`, "POST", {
+        active: true,
+        expectedRevision: rule.revision,
+        confirmation: "ACTIVATE",
+      });
+      dialog.close();
+      await refresh();
+      toast("เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป");
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+}
+document.addEventListener("submit", async (e) => {
+  if (e.target.id !== "channel-form") return;
+  e.preventDefault();
+  const channelSubmit=e.target.querySelector('button[type="submit"],button.primary');
+  if(channelSubmit?.disabled)return;
+  if(channelSubmit)channelSubmit.disabled=true;
+  try {
+    const data = Object.fromEntries(new FormData(e.target));
+    if (!data.url) delete data.url;
+    const result = await api("/destinations", "POST", data);
+    $("#channel-instruction").textContent = result.instruction;
+    if(result.verified){e.target.reset();await refresh();await renderNotifications();toast('เชื่อมช่องทางแล้ว · เลือกใช้ในเซตอัปได้เลย');}
+  } catch (error) {
+    toast(error.message);
+  } finally {if(channelSubmit?.isConnected)channelSubmit.disabled=false;}
+});
+document.addEventListener("click", async (e) => {
+  const button = e.target.closest("[data-disconnect]");
+  if (!button) return;
+  try {
+    await api("/destinations/" + button.dataset.disconnect, "DELETE");
+    await renderNotifications();
+  } catch (error) {
+    toast(error.message);
+  }
+});
+panel.addEventListener("input", (e) => {
+  const t = e.target;
+  if (
+    t.tagName !== "INPUT" ||
+    (!t.dataset.path && !t.hasAttribute("data-pairs"))
+  )
+    return;
+  if (!t.dataset.editing) {
+    snapshot();
+    t.dataset.editing = "true";
+  }
+  if (t.dataset.path)
+    set(t.dataset.path, t.type === "number" ? Number(t.value) : t.value);
+  else
+    state.draft.pairs = t.value
+      .toUpperCase()
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  queueDraftSave();
+});
+panel.addEventListener("change", (e) => {
+  const t = e.target;
+  if (
+    !t.dataset.path &&
+    !t.dataset.opkind &&
+    !t.dataset.exchange &&
+    !t.dataset.destination &&
+    !t.dataset.direction &&
+    !t.hasAttribute("data-mirror-short") &&
+    !t.hasAttribute("data-pairs")
+  )
+    return;
+  if (!t.dataset.editing) snapshot();
+  if(t.dataset.direction){
+    const selected=[...panel.querySelectorAll('[data-direction]:checked')].map(x=>x.dataset.direction);
+    state.draft=directionTools.selectDirections(state.draft,selected);
+    state.replay=null;
+  } else if(t.hasAttribute('data-mirror-short')){
+    const nextDraft=directionTools.setShortMirroring(state.draft,t.checked);
+    if (setupConditionCount(nextDraft) > MAX_SETUP_CONDITIONS) {
+      toast("ตั้ง Long และ Short แยกกันได้รวมสูงสุด 6 เงื่อนไข ลดเงื่อนไขก่อนแยกฝั่ง");
+      renderDesigner();
+      return;
+    }
+    state.draft=nextDraft;
+    state.replay=null;
+  } else if (t.dataset.opkind) {
+    const kind = t.value;
+    set(
+      t.dataset.opkind,
+      kind === "CONSTANT"
+        ? constant(30)
+        : kind === "ENTRY_RETURN"
+          ? { kind }
+          : kind === "PRICE"
+            ? price()
+            : {
+                kind,
+                name: "RSI",
+                period: 14,
+                timeframe: state.draft.timeframe,
+              },
+    );
+  } else if (t.dataset.path) {
+    set(t.dataset.path, t.type === "number" ? Number(t.value) : t.value);
+    if(t.dataset.path==='market'){
+      state.draft.side=t.value==='Spot'?'SPOT':undefined;
+      delete state.draft.short;delete state.draft.mirrorShort;state.replay=null;
+    }
+    if(t.dataset.path.endsWith(".name") && t.value!=="CUSTOM"){
+      const parent=t.dataset.path.slice(0,-5);set(parent+".formula",undefined);set(parent+".params",undefined);
+      const definition=indicatorCatalog?.indicatorByName[t.value];
+      if(definition)set(parent+'.period',definition.params.find(p=>p.key==='period')?.value??14);
+    }
+  }
+  else if (t.dataset.destination)
+    state.draft.destinations = [
+      ...panel.querySelectorAll("[data-destination]:checked"),
+    ].map((x) => x.dataset.destination);
+  else if (t.dataset.exchange)
+    state.draft.exchange = [t.dataset.exchange];
+  else
+    state.draft.pairs = t.value
+      .toUpperCase()
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  queueDraftSave();
+  if (t.tagName === "SELECT" || t.type === "checkbox" || t.type === "radio") renderDesigner();
+});
+document.addEventListener("submit", (e) => {
+  if (["chat-form", "followup-form"].includes(e.target.id)) {
+    e.preventDefault();
+    chat(
+      e.target.id === "chat-form"
+        ? $("#chat-input").value
+        : $("#followup-input").value,
+    );
+  }
+});
+$("#chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    $("#chat-form").requestSubmit();
+  }
+});
+document.addEventListener("change", async (e) => {
+  try {
+    if (e.target.id === "image-upload") {
+      const file = e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      if (state.images.length >= 3) return toast("แนบได้ครั้งละ 3 ภาพ");
+      const form = new FormData();
+      form.append("file", file);
+      if(state.busy||state.uploading)return toast('รอให้ข้อความหรือภาพก่อนหน้าเสร็จก่อน');
+      state.uploading=true;
+      const workspaceAtUpload=state.workspaceId,conversationAtUpload=state.conversation;
+      previews.setAttribute('aria-busy','true');
+      const progress=document.createElement('p');progress.setAttribute('role','status');progress.textContent='กำลังแนบภาพ…';previews.append(progress);
+      try{
+        await ensureConversation('บทสนทนาภาพ');
+        const uploadConversation=state.conversation;
+        const image=await api(`/images?purpose=chat&conversationId=${uploadConversation}`,"POST",form);
+        if(state.workspaceId!==workspaceAtUpload||state.conversation!==uploadConversation){toast('ภาพไม่ได้แนบเข้าบทสนทนาที่เพิ่งเปลี่ยน');return;}
+        state.crop=null;state.images.push(image);renderImages();
+      }finally{state.uploading=false;previews.removeAttribute('aria-busy');progress.remove();}
+    }
+    if (e.target.id === "history-upload") {
+      const file = e.target.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append("file", file);
+      const p = await api("/imports/preview", "POST", form);
+      state.importPreview = p;
+      $("#import-preview").innerHTML =
+        `<p>${p.rows.length} แถวพร้อมนำเข้า / ${p.total} แถว · ขาดค่าธรรมเนียม ${p.feeMissing} แถว</p>${p.errors.map((x) => `<p>แถว ${x.row}: ตรวจ ${esc(x.fields.join(", "))}</p>`).join("")}<div class="data-table"><table><thead><tr><th>เวลา</th><th>ตลาด</th><th>คู่</th><th>ซื้อ/ขาย</th><th>ราคา</th><th>จำนวน</th><th>ค่าธรรมเนียม</th></tr></thead><tbody>${p.rows
+          .slice(0, 10)
+          .map(
+            (x) =>
+              `<tr><td>${esc(x.time)}</td><td>${esc(x.market??'Spot')}</td><td>${esc(x.pair)}</td><td>${esc(x.side)}</td><td>${x.price}</td><td>${x.quantity}</td><td>${x.fee ?? "ไม่ระบุ"}</td></tr>`,
+          )
+          .join(
+            "",
+          )}</tbody></table></div><p class="field-note">แสดง ${Math.min(10, p.rows.length)} แถวแรก</p><button class="primary" data-confirm-import ${p.errors.length ? "disabled" : ""}>ยืนยันนำเข้า</button>`;
+    }
+  } catch (error) {
+    toast(error.message);
+  }
+});
+async function loadChatHistory(){
+    let chatPage = await api(`/conversations/${state.conversation}/messages`);
+    const paintPage = async (rows) => { for (const m of rows) {
+      if(m.ui_card?.type!=='preset')message(m.content, m.role === "user");
+      if(m.ui_card?.type==='preset')(await presetsReady).renderCard(m);
+      if (m.setup_changes?.length) await showSetupChanges(null, null, m.setup_changes);
+      if (m.sources?.some((s) => !s.available))
+        message("ข้อมูลอ้างอิงบางส่วนถูกลบแล้ว ข้อสรุปเดิมอาจใช้ต่อไม่ได้");
+      for (const source of m.sources ?? [])
+        if (source.type === "image" && source.available) {
+          const img = document.createElement("img");
+          img.src = "/api/v1/images/" + source.id;
+          img.alt = "ภาพในบทสนทนา";
+          img.className = "chat-saved-image";
+          $("#messages").append(img);
+        }
+    }};
+    await paintPage(chatPage);
+    requestAnimationFrame(scrollChatToLatest);
+    if (chatPage.length === 200) {
+      const older = document.createElement("button");
+      older.className="text-button"; older.textContent="โหลดข้อความก่อนหน้า";
+      $("#messages").prepend(older);
+      const conversationId=state.conversation;
+      older.onclick=async()=>{
+        older.disabled=true;
+        const priorHeight=messagePane.scrollHeight,priorTop=messagePane.scrollTop;
+        followingChat=false;
+        try {
+          const page=await api(`/conversations/${conversationId}/messages?before=${chatPage[0].id}`);
+          if(state.conversation!==conversationId)return;
+          const existing=[...$("#messages").childNodes].filter(n=>n!==older);
+          $("#messages").replaceChildren();await paintPage(page);existing.forEach(n=>$("#messages").append(n));
+          messagePane.scrollTop=priorTop+messagePane.scrollHeight-priorHeight;
+          chatPage=page;if(page.length===200)$("#messages").prepend(older);
+        }catch(error){toast(error.message);}finally{older.disabled=false;}
+      };
+    }
+}
+conversations.addEventListener("change", async () => {
+  if (!conversations.value) return;
+  const selected = conversations.value;
+  if (!(await leaveDraft())) {
+    conversations.value = state.conversation ?? "";
+    return;
+  }
+  try {
+    state.conversationRows = await api("/conversations");
+    state.conversation = selected;
+    const stored = state.conversationRows.find(
+      (x) => x.id === state.conversation,
+    );
+    state.draft = stored?.draft ?? initial();
+    state.persistedDraft = JSON.stringify(state.draft);
+    showDraftStatus(stored?.draft ? "บันทึกร่างแล้ว" : "");
+    state.undo = [];
+    state.replay = null;
+    state.images = [];
+    state.crop = null;
+    renderImages();
+    state.saved = null;
+    state.editorNotice = null;
+    setWorkbenchTab("chat");
+    state.draftRevision = stored?.draft_revision ?? 0;
+    $("#messages").replaceChildren();
+    showDesigner();
+    await loadChatHistory();
+  } catch (error) {
+    toast(error.message);
+  }
+});
+document.addEventListener("click", async (e) => {
+  const t = e.target.closest("button,a");
+  if (!t) return;
+  if (t.classList.contains("nav-item")) $("#sidebar").classList.remove("is-open");
+  try {
+    if (t.classList.contains("nav-item") && t.dataset.view !== "home" && location.hash === "#" + t.dataset.view) {
+      e.preventDefault();
+      navigate(t.dataset.view, true, true);
+      return;
+    }
+    if (t.classList.contains("nav-item") && t.dataset.view === "home") {
+      e.preventDefault();
+      setWorkbenchTab("chat");
+      showDesigner();
+      navigate("home", true, true);
+      location.hash = "home";
+      persistRecovery();
+      return;
+    }
+    if (t.hasAttribute("data-attach-image")) {
+      showDesigner();
+      setWorkbenchTab("chat");
+      $("#image-upload").click();
+      return;
+    }
+    if (t.dataset.action === "menu")
+      return $("#sidebar").classList.toggle("is-open");
+    if (t.dataset.action === "billing") {
+      toast("เร็ว ๆ นี้");
+      return;
+    }
+    if (t.dataset.action === "history") {
+      location.hash = "history";
+      return;
+    }
+    if (t.dataset.action === "new" || t.dataset.action === "new-rule") {
+      if (!(await leaveDraft())) return;
+      state.conversation = null;
+      conversations.value = "";
+      $('#chat-input').value='';
+      $('#followup-input').value='';
+      requestAnimationFrame(resizeChatInputs);
+      state.draftRevision = 0;
+      state.persistedDraft = null;
+      showDraftStatus("");
+      state.images = [];
+      state.crop = null;
+      renderImages();
+      state.saved = null;
+      state.draft = initial();
+      state.replay = null;
+      state.undo = [];
+      $("#messages").replaceChildren();
+      state.editorNotice = null;
+      setWorkbenchTab(t.dataset.action === "new-rule" ? "design" : "chat");
+      showDesigner();
+      location.hash = "home";
+      await refreshContext();
+      return;
+    }
+    if (t.dataset.action === "advanced" || t.dataset.action === "sample-rule") {
+      showDesigner();
+      location.hash = "home";
+      setWorkbenchTab("design");
+      return;
+    }
+    if (t.dataset.prompt) {
+      await chat(t.dataset.prompt);
+      return;
+    }
+    if (t.dataset.tab) {
+      setWorkbenchTab(t.dataset.tab);
+      return;
+    }
+    if (t.dataset.filter) {
+      state.filter = t.dataset.filter;
+      $$("[data-filter]").forEach((x) => x.classList.toggle("active", x === t));
+      renderWatch();
+      return;
+    }
+    if (t.dataset.activateRule) {
+      const r = state.rules.find((x) => x.id === t.dataset.activateRule);
+      if (r.active) {
+        await api(`/rules/${r.id}/activation`, "POST", {
+          active: false,
+          expectedRevision: r.revision,
+          confirmation: "PAUSE",
+        });
+        await refresh();
+      } else showActivation(r);
+      return;
+    }
+    if (t.dataset.openRule) {
+      if (!(await leaveDraft())) return;
+      const r = state.rules.find((r) => r.id === t.dataset.openRule);
+      state.conversation = null;
+      conversations.value = "";
+      state.draftRevision = 0;
+      state.persistedDraft = JSON.stringify(r.spec);
+      showDraftStatus("");
+      state.images = [];
+      state.crop = null;
+      renderImages();
+      $("#messages").replaceChildren();
+      state.editorNotice = null;
+      state.saved = r;
+      state.draft = structuredClone(r.spec);
+      state.undo = [];
+      state.replay = null;
+      showDesigner();
+      location.hash = "home";
+      setWorkbenchTab("design");
+      return;
+    }
+    if (t.hasAttribute("data-context")) {
+      await setMyData(!state.useMyData);
+      return;
+    }
+    if (t.dataset.removeImage) {
+      state.crop = null;
+      state.images = state.images.filter((x) => x.id !== t.dataset.removeImage);
+      renderImages();
+      return;
+    }
+    if (t.hasAttribute("data-undo")) {
+      if (state.undo.length) {
+        state.draft = state.undo.pop();
+        state.replay = null;
+        renderDesigner();
+        queueDraftSave();
+      }
+      return;
+    }
+    if (t.dataset.group) {
+      if (!canAddSetupCondition()) return;
+      snapshot();
+      set(t.dataset.group, {
+        kind: "GROUP",
+        op: "AND",
+        children: [at(t.dataset.group), cmp()],
+      });
+      renderDesigner();
+      return;
+    }
+    if (t.dataset.hold) {
+      snapshot();
+      set(t.dataset.hold, {
+        kind: "HOLD",
+        bars: 2,
+        condition: at(t.dataset.hold),
+      });
+      renderDesigner();
+      return;
+    }
+    if (t.dataset.add) {
+      if (!canAddSetupCondition()) return;
+      snapshot();
+      at(t.dataset.add).children.push(cmp());
+      renderDesigner();
+      return;
+    }
+    if (t.dataset.remove) {
+      snapshot();
+      const keys = t.dataset.remove.split("."),
+        i = Number(keys.pop());
+      at(keys.join(".")).splice(i, 1);
+      renderDesigner();
+      return;
+    }
+    if (t.hasAttribute("data-stage")) {
+      if (!canAddSetupCondition() || state.draft.stages.length >= 5) return;
+      snapshot();
+      state.draft.stages.push({ condition: cmp(), withinBars: 3 });
+      renderDesigner();
+      return;
+    }
+    if (t.dataset.removeOptional) {
+      snapshot();
+      delete state.draft[t.dataset.removeOptional];
+      renderDesigner();
+      return;
+    }
+    if (t.dataset.optional) {
+      if (!canAddSetupCondition()) return;
+      snapshot();
+      state.draft[t.dataset.optional] = cmp();
+      renderDesigner();
+      return;
+    }
+    if (t.hasAttribute("data-save")) {
+      if (!validateEditor()) return;
+      t.disabled = true;
+      await saveDraft();
+      await api("/strategies/validate", "POST", state.draft);
+      const saved = state.saved
+        ? await api("/rules/" + state.saved.id, "PUT", {
+            expectedRevision: state.saved.revision,
+            spec: state.draft,
+            conversationId:state.conversation??undefined,
+          })
+        : await api("/rules", "POST", state.conversation?{spec:state.draft,conversationId:state.conversation}:state.draft);
+      state.saved = saved;
+      state.images=[];state.crop=null;renderImages();
+      await refresh();
+      renderDesigner();
+      showEditorFeedback(
+        saved.active
+          ? "บันทึกเวอร์ชันใหม่แล้ว เซตอัพยังเปิดใช้งานอยู่"
+          : "บันทึกเซตอัพแล้ว ยังไม่เปิดแจ้งเตือน เปิดใช้งานได้ในหน้าเซตอัพที่ตั้งไว้",
+        true,
+      );
+      return;
+    }
+    if (t.hasAttribute("data-replay")) {
+      if (!validateEditor()) return;
+      document.dispatchEvent(new Event('studio-refresh'));
+      document.querySelector('.setup-studio').scrollIntoView({block:'start',behavior:'smooth'});
+      return;
+    }
+    if (t.hasAttribute("data-confirm-import")) {
+      t.disabled = true;
+      const p = state.importPreview;
+      const r = await api("/imports", "POST", {
+        name: p.name,
+        rows: p.rows,
+        accountScope: $("#account-scope").value,
+      });
+      toast(`บันทึก ${r.inserted} รายการ · ซ้ำ ${r.duplicates}`);
+      await renderHistory();
+      return;
+    }
+    if (t.dataset.checkout) {
+      const r = await api("/billing/checkout", "POST", {
+        method: t.dataset.checkout,
+      });
+      location.href = r.url;
+      return;
+    }
+    if (t.hasAttribute("data-portal")) {
+      location.href = (await api("/billing/portal", "POST", {})).url;
+      return;
+    }
+    if (t.hasAttribute("data-export")) {
+      const data = await api("/export");
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "snaap-export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch (error) {
+    toast(error.message);
+    if (panel.contains(t)) {
+      renderDesigner();
+      showEditorFeedback(error.message);
+    }
+  }
+});
+window.addEventListener("hashchange", () => navigate(location.hash.slice(1)));
+let recoveryReady = false, recoveryFingerprint = '';
+function recoveryKey() {
+  return state.me?.id && state.workspaceId ? `snaap-draft-v1:${state.me.id}:${state.workspaceId}` : null;
+}
+function persistRecovery() {
+  const key=recoveryKey();
+  if(!key || !recoveryReady)return false;
+  try {
+    // Deliberately whitelist drafting fields. Never store API credentials or file bytes.
+    const snapshot={version:1,conversation:state.conversation,draft:state.draft,
+      savedId:state.saved?.id??null,draftRevision:state.draftRevision,persistedDraft:state.persistedDraft,
+      chatText:$('#chat-input').value,followupText:$('#followup-input').value,
+      tab:requestedWorkbenchMode??workbench.dataset.tab,designerOpen:!workbench.hidden,useMyData:state.useMyData,
+      aiMode:$('#ai-mode').value};
+    const fingerprint=key+JSON.stringify(snapshot);
+    if(fingerprint!==recoveryFingerprint){
+      localStorage.setItem(key,JSON.stringify({...snapshot,updatedAt:Date.now()}));
+      recoveryFingerprint=fingerprint;
+    }
+    return true;
+  } catch { return false; }
+}
+async function restoreRecovery() {
+  recoveryReady=false;
+  let stored;
+  try{stored=JSON.parse(localStorage.getItem(recoveryKey())??'null');}catch{}
+  if(stored?.version===1){
+    $('#chat-input').value=typeof stored.chatText==='string'?stored.chatText.slice(0,1600):'';
+    $('#followup-input').value=typeof stored.followupText==='string'?stored.followupText.slice(0,1600):'';
+    $('#chat-input').dispatchEvent(new Event('input',{bubbles:true}));
+    const row=state.conversationRows.find(r=>r.id===stored.conversation);
+    state.conversation=row?.id??null;
+    conversations.value=state.conversation??'';
+    state.draft=stored.draft?.schemaVersion===2?stored.draft:null;
+    state.draftRevision=row?stored.draftRevision??0:0;
+    state.persistedDraft=row?stored.persistedDraft:null;
+    state.saved=state.rules.find(r=>r.id===stored.savedId)??null;
+    $('#ai-mode').value='standard';
+    if(stored.designerOpen&&state.draft){
+      setWorkbenchTab(['chat','design','split'].includes(stored.tab)?stored.tab:'chat');
+      showDesigner();
+      if(state.conversation){
+        try{
+          await loadChatHistory();
+        }catch{}
+      }
+    }
+    if(stored.useMyData){try{await setMyData(true);}catch{}}
+  }
+  recoveryReady=true;
+  if(state.draft)queueDraftSave();
+}
+document.addEventListener('input',event=>{
+  if(['chat-input','followup-input'].includes(event.target.id))persistRecovery();
+});
+document.addEventListener('change',event=>{
+  if(event.target.id==='ai-mode')persistRecovery();
+});
+window.addEventListener('pagehide',persistRecovery);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistRecovery();});
+window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().catch(()=>{});});
+// Also checkpoint programmatic updates such as cleared text after sending a message.
+setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
+async function boot() {
+  await directionToolsReady;
+  await indicatorCatalogReady;
+  $("#nav-count").textContent = "";
+  navigate(location.hash.slice(1) || "home", false);
+  try {
+    state.health = await api("/health");
+    try{state.me=await api('/me');}
+    catch(error){
+      if(error.statusCode!==401)throw error;
+      location.replace('/login.html');return;
+    }
+    sessionStorage.removeItem('snaap-signed-out');
+    await initWorkspaces();
+    await refresh();
+    await restoreRecovery();
+    await refreshContext();
+    status.textContent = `${state.me?.local ? "บัญชีทดสอบ · " : ""}${state.health.ai ? "AI พร้อมเชื่อมต่อ" : "ยังไม่เชื่อม AI · ตั้งเงื่อนไขและดูกราฟได้"}`;
+  } catch (error) {
+    status.hidden = false;
+    if(error.statusCode===401){location.replace('/login.html?error=expired');return;}
+    status.textContent = error.message;
+  }
+  navigate(location.hash.slice(1) || "home");
+  if(workbench.hidden){showDesigner();setWorkbenchTab('chat');}
+  // Allow restored geometry and fonts to settle before the first visible frame.
+  if (document.fonts) await Promise.race([
+    document.fonts.ready,
+    new Promise(resolve => setTimeout(resolve, 250)),
+  ]);
+  requestAnimationFrame(() => {
+    sizeWorkbench();
+    document.querySelectorAll('#messages .message').forEach(message => message.classList.add('boot-restored'));
+    window.SnaapBoot?.finish();
+  });
+  refreshContext().catch(() => {});
+}
+boot();
+
+function evidenceUI(e) {
+  if (!e) return "";
+  const label = { TRUE: "ผ่าน", FALSE: "ไม่ผ่าน", UNKNOWN: "ข้อมูลไม่พอ" };
+  return `<div class="evidence-row"><strong>${label[e.result] ?? "รอ"}</strong>${e.left !== undefined ? " · " + Number(e.left).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.right !== undefined ? " เทียบกับ " + Number(e.right).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.reason ? " · " + esc(e.reason) : ""}${e.children ? e.children.map(evidenceUI).join("") : ""}</div>`;
+}
+function barEvidence(bar) {
+  if(bar?.branches)return bar.branches.map(b=>`<h4>${esc(directionLabel(b.side,b.side==='SPOT'?'Spot':'Perpetual Futures'))}</h4>`+barEvidence({...b,time:bar.time})).join('');
+  return bar
+    ? `<p>${new Date(bar.time).toLocaleString("th-TH")}${bar.waitingStage >= 0 ? " · รอขั้นตอน " + (bar.waitingStage + 2) : ""}${bar.activeSignal ? " · วงจรสัญญาณเข้าเปิดอยู่" : ""}</p><p>เงื่อนไขเริ่มต้น</p>${evidenceUI(bar.entry)}${bar.stages.map((s, i) => "<p>ขั้นตอน " + (i + 2) + "</p>" + evidenceUI(s)).join("")}${bar.exit ? "<p>สัญญาณออก</p>" + evidenceUI(bar.exit) : ""}`
+    : "";
+}
+panel.addEventListener("input", (e) => {
+  if (e.target.hasAttribute("data-timeline"))
+    $("#bar-evidence").innerHTML = barEvidence(
+      state.replay.timeline[Number(e.target.value)],
+    );
+});
+
+function setupEntrySummary(d){
+ if(d.market==='Spot'||!['LONG','SHORT','BOTH'].includes(d.side))return conditionText(d.entry);
+ const short=d.mirrorShort?directionTools.mirrorBranch(d):d.short;
+ if(d.side==='BOTH'&&short)return 'Long: '+conditionText(d.entry)+' · Short: '+conditionText(short.entry);
+ return (d.side==='SHORT'?'Short: ':'Long: ')+conditionText(d.side==='SHORT'&&short?short.entry:d.entry);
+}
+function fullSummary(d) {
+  const summary=branchSummary(d);
+  if(d.market==='Spot')return 'Spot (ซื้อ)\n'+summary;
+  if(d.mirrorShort){
+    const short=branchSummary(directionTools.mirrorBranch(d));
+    return d.side==='BOTH'?'Long (ซื้อ)\n'+summary+'\n\nShort (ขาย · สลับฝั่ง)\n'+short:'Short (ขาย · สลับฝั่ง)\n'+short;
+  }
+  if(d.side==='BOTH'&&d.short)return 'Long (ซื้อ)\n'+summary+'\n\nShort (ขาย)\n'+branchSummary(d.short);
+  return directionLabel(d.side,d.market)+'\n'+summary;
+}
+function branchSummary(d) {
+  return (
+    conditionText(d.entry) +
+    d.stages
+      .map(
+        (s) =>
+          "\n→ ภายใน " + s.withinBars + " แท่ง: " + conditionText(s.condition),
+      )
+      .join("") +
+    (d.exit ? "\nออก: " + conditionText(d.exit) : "") +
+    (d.cancel ? "\nยกเลิก: " + conditionText(d.cancel) : "") +
+    "\nพัก " +
+    d.cooldownBars +
+    " แท่ง"
+  );
+}
+function reviewProposal(draft) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "runtime-dialog";
+  dialog.innerHTML = `<h2>ตรวจร่างที่ snaap เสนอ</h2><h3>ร่างปัจจุบัน</h3><p><strong>${esc(state.draft.name)}</strong> · ${esc(state.draft.exchange.join(', '))} · ${esc(state.draft.pairs.join(', '))}</p><p class="draft-diff">${esc(fullSummary(state.draft))}</p><h3>ข้อเสนอ</h3><p><strong>${esc(draft.name)}</strong> · ${esc(draft.exchange.join(", "))} · ${esc(draft.pairs.join(", "))}</p><p class="draft-diff">${esc(fullSummary(draft))}</p><p class="field-note">ใช้ร่างนี้จะแทนที่ร่างปัจจุบัน รวมชื่อและเงื่อนไขที่คุณแก้ระหว่างรอ</p><div class="design-actions"><button class="primary" data-apply>ใช้ร่างนี้</button><button class="secondary" data-keep>ใช้ร่างเดิม</button></div>`;
+  document.body.append(dialog);
+  dialog.showModal();
+  dialog.querySelector("[data-apply]").onclick = () => {
+    const previousDraft = structuredClone(state.draft);
+    snapshot();
+    state.draft = draft;
+    state.replay = null;
+    renderDesigner();
+    queueDraftSave();
+    showSetupChanges(previousDraft, state.draft);
+    dialog.close();
+  };
+  dialog.querySelector("[data-keep]").onclick = () => dialog.close();
+  dialog.onclose = () => dialog.remove();
+}

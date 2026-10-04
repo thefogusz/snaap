@@ -1,0 +1,26 @@
+<!doctype html><html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>สูตรอินดิเคเตอร์ · SNAAP</title><style>body{font:16px/1.7 system-ui,sans-serif;max-width:900px;margin:40px auto;padding:20px;background:#161619;color:#f4f4f5}a{color:#d2f849}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:12px;border-bottom:1px solid #45454a}code{overflow-wrap:anywhere}h1{line-height:1.3}</style><h1>สูตรที่ SNAAP ใช้</h1><p>คำนวณจากแท่งปิดของกระดานและคู่ที่เลือก กราฟและแจ้งเตือนใช้ตัวคำนวณเดียวกัน ค่าจากแหล่งอื่นอาจต่างกันจากข้อมูลต้นทาง วิธีตั้งต้น และพารามิเตอร์ ไม่ใช่การรับรองว่าเลขตรงทุกแพลตฟอร์ม</p><p>n = ระยะ, x = แหล่งราคาที่เลือก, H/L/C/V = สูงสุด/ต่ำสุด/ปิด/วอลุ่ม, mean = ค่าเฉลี่ย ทุกช่วงรวมแท่งปัจจุบันที่ปิดแล้ว ไม่มีการเลื่อนค่าไปอนาคต</p><table><tr><th>ชื่อ</th><th>สูตร / ข้อตกลง</th></tr>
+<tr><td>SMA / EMA / RMA</td><td>SMA = mean(x,n); EMA เริ่มด้วย SMA(n), α=2/(n+1); RMA เริ่มด้วย SMA(n), α=1/n</td></tr>
+<tr><td>WMA / VWMA</td><td>WMA ถ่วงน้ำหนักเก่า→ใหม่ 1…n; VWMA = Σ(xV)/ΣV</td></tr>
+<tr><td>RSI</td><td>Wilder average ของกำไร/ขาดทุน เริ่มจาก n การเปลี่ยนแปลง ใช้ n+1 แท่ง; 100−100/(1+up/down); flat=50</td></tr>
+<tr><td>MACD / SIGNAL / HIST</td><td>EMA(fast)−EMA(slow); signal = seeded EMA ของผลต่าง; histogram = MACD−signal</td></tr>
+<tr><td>BB_UPPER / LOWER / MIDDLE</td><td>mean(x,n) ± deviation×population standard deviation; middle=mean</td></tr>
+<tr><td>BB_WIDTH / BB_PERCENT</td><td>Width = 100×(upper−lower)/middle หน่วย %; Percent = (x−lower)/(upper−lower) หน่วยสัดส่วน เช่น 0.5</td></tr>
+<tr><td>ATR / TR</td><td>TR=max(H−L, |H−Cก่อนหน้า|, |L−Cก่อนหน้า|); ATR ใช้ Wilder smoothing; TR ไม่ smooth แต่ยังรอ warmup n ตามช่องระยะ</td></tr>
+<tr><td>VOLUME_RATIO</td><td>วอลุ่มปัจจุบัน / ค่าเฉลี่ยวอลุ่ม n แท่งก่อนหน้า ไม่รวมปัจจุบัน</td></tr>
+<tr><td>ROC / MOM</td><td>ROC=100×(x/xย้อนหลังn−1) หน่วย %; MOM=x−xย้อนหลังn; ใช้ n+1 แท่ง</td></tr>
+<tr><td>STDDEV / VARIANCE</td><td>Population variance=Σ(x−mean)²/n; standard deviation=√variance</td></tr>
+<tr><td>HIGHEST / LOWEST</td><td>max/min ของแหล่ง x ใน n แท่ง</td></tr>
+<tr><td>DONCHIAN_UPPER / LOWER / MID</td><td>max(H,n), min(L,n), (upper+lower)/2 รวมแท่งปิดปัจจุบัน</td></tr>
+<tr><td>STOCH_K / WILLIAMS_R</td><td>Raw %K=100×(C−lowestL)/(highestH−lowestL), ไม่ smooth K/D; %R=−100×(highestH−C)/(highestH−lowestL)</td></tr>
+<tr><td>CCI</td><td>(x−mean(x,n))/(0.015×mean(|x−mean|)); เลือก hlc3 หากต้องการ typical price ค่าแหล่งราคาที่เลือกต้องตรงกับแพลตฟอร์มที่เทียบ</td></tr>
+<tr><td>MFI</td><td>Typical price=(H+L+C)/3; flow=typical×V แบ่งบวก/ลบตาม typical เทียบแท่งก่อนหน้า; 100×sumPositive/(sumPositive+sumNegative) ใน n การเปลี่ยนแปลง</td></tr>
+<tr><td>CMF</td><td>Σ(((2C−H−L)/(H−L))×V)/ΣV ใน n แท่ง; H=L ให้ contribution=0</td></tr>
+<tr><td>CUSTOM v1</td><td>offset + Σ(weight×indicator(period)); สูงสุด 8 terms รองรับ SMA/EMA/WMA/RMA/RSI/ATR/ROC/MOM/STDDEV แต่ละ term ใช้กรอบเวลาเดียวกับ operand; ATR ใช้ OHLC จริง</td></tr></table>
+<h2>ข้อมูลไม่พอไม่ใช่ค่า 0</h2><p>Warmup ไม่ครบ ข้อมูลขาด ราคาล้าสมัย หรือสูตรหารด้วยศูนย์ จะคืน “ข้อมูลไม่พอ” และเว้นกราฟไว้ ไม่แทนด้วยศูนย์เพื่อให้เกิดสัญญาณ สูตรที่สะสม เช่น EMA/RSI ขึ้นกับจุดเริ่มต้นของข้อมูล จึงควรเทียบด้วยชุดแท่งเดียวกัน</p>
+<h2>นำเข้าสูตร</h2><p>เลือกอินดิเคเตอร์ในเงื่อนไข → “นำเข้าอินดิเคเตอร์ / TradingView” → เลือก JSON → ตรวจกราฟ → บันทึก → ยืนยันเปิดติดตาม สูตรแนบไปกับเวอร์ชันเซตอัป ไม่รันคำสั่งหรือเชื่อมเน็ตจากไฟล์</p><p><a href="/assets/indicator-example.json" download>ตัวอย่าง EMA 12 − EMA 26</a></p><p>ยังไม่รองรับรัน Pine/JavaScript/Python, สูตร recursive ตามอำเภอใจ, ADX/Supertrend/Ichimoku/Volume Profile ใน import v1 อย่าเปลี่ยนชื่อไฟล์ Pine เป็น JSON เพราะไม่ใช่รูปแบบเดียวกัน</p>
+<h2>TradingView</h2><p>Open-source ที่คุณมีสิทธิ์ใช้: ตรวจสูตรและแปลงเฉพาะส่วนที่รองรับ Protected/Invite-only ไม่สามารถดึงโค้ดมานำเข้าได้ ไม่มีการแปลง Pine อัตโนมัติในรุ่นนี้</p><p><a href="https://www.tradingview.com/support/solutions/43000482573-what-are-the-different-types-of-published-scripts/">ประเภทสคริปต์</a> · <a href="https://www.tradingview.com/support/solutions/43000502001-commodity-channel-index-cci/">CCI</a> · <a href="https://www.tradingview.com/support/solutions/43000501974-chaikin-money-flow-cmf/">CMF</a></p><section id="extended-guide"><h2>ชุดอินดิเคเตอร์เพิ่มเติม</h2><p>เส้นในตระกูลเดียวกันแยกเป็นตัวเลือกเพื่อใช้ในเงื่อนไข แต่ละแถวระบุความหมาย หน่วย และค่าตั้งต้น ปรับให้ตรงกับกราฟที่คุณใช้ก่อนเทียบผล</p><p>VWAP Session ใช้วัน UTC; Ichimoku Cloud ใช้เมฆที่ตรงกับเวลาแท่งตรวจ; OBV และดัชนีสะสมขึ้นกับประวัติที่โหลด ยังไม่ได้รับรองว่าทุกค่าตรงทุกกระดาน</p><table><thead><tr><th>ตัวเลือก</th><th>ความหมาย / หน่วย</th><th>ค่าตั้งต้น</th></tr></thead><tbody id="extended-indicator-rows"></tbody></table></section>
+<script type="module">
+import {extendedIndicators} from './indicator-catalog.js';
+const target=document.getElementById('extended-indicator-rows');
+for(const d of extendedIndicators){const row=document.createElement('tr');for(const text of [d.label+' ('+d.name+')',d.description+' · '+d.unit,d.params.map(p=>p.label+' = '+p.value).join(', ')||'ไม่มีพารามิเตอร์เพิ่มเติม']){const cell=document.createElement('td');cell.textContent=text;row.append(cell);}target.append(row);}
+</script></html>

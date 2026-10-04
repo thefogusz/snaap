@@ -1,0 +1,13 @@
+.startup-status { display:none; }
+html[data-boot="loading"] .app { visibility:hidden; pointer-events:none; }
+html[data-boot="loading"] .startup-status {
+  position:fixed; inset:0; z-index:200;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; background:var(--bg); color:var(--muted); font-size:14px;
+}
+.startup-status strong { color:var(--ink); font-size:28px; letter-spacing:-1px; }
+.startup-status strong span { color:var(--lime); }
+/* Suppress automatic CSS entrances during recovery. Navigation owns its motion. */
+.app .view:not([hidden]),
+.message.boot-restored,
+html[data-boot="loading"] .message { animation:none; }

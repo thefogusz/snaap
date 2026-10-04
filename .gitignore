@@ -1,0 +1,15 @@
+.sites-runtime/
+node_modules/
+.env*
+!.env.example
+*.tar.gz
+qa/
+.local/
+coverage/
+.playwright-cli/
+.openai/
+*.log
+*.pem
+*.key
+*.p12
+*.pfx

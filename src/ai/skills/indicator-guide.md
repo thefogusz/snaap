@@ -1,0 +1,11 @@
+# Indicator selection for Snaap v1
+
+The runtime also supplies a shared extended indicator catalog. Its names and parameter definitions are authoritative and include ADX/DMI, stochastic K/D, Stochastic RSI, KDJ, OBV, VWAP, Supertrend, Ichimoku, PSAR and other studies. Put primary period in operand.period and other numeric settings in operand.params. Do not infer that a library implementation is numerically identical to every exchange chart. Ichimoku cloud values are aligned causally at the evaluated time; no future-price Chikou conditions. Session VWAP uses UTC days. Volume Profile, order flow, funding and arbitrary Pine remain unsupported inputs, not aliases for supported indicators.
+
+Use when the user wants indicator suggestions, comparisons or a setup idea. Match the observable behavior they want to detect before choosing a metric.
+
+Choose complementary roles: trend context (EMA/SMA), event or momentum (RSI/MACD/ROC), variability (ATR/Bollinger width), participation (VOLUME_RATIO/MFI/CMF). These are descriptive lenses, not independent votes or proven predictors. EMA, MACD and ROC may overlap; stacking them does not establish higher confidence. RSI can stay extreme in a trend. ATR measures magnitude, not direction. A volume ratio depends on its baseline and units. Verify actual source and periods when comparing chart platforms.
+
+Offer two small candidate designs with a measurable trigger, optional filter, expected benefit and a failure mode. Explain why each fits the stated intent. Mark every suggested period/threshold as a starting proposal, preserve supplied choices, and avoid a universal best setting. Do not declare a market trending or ranging without selected data that supports it. Define any regime criterion before comparing results.
+
+Example: for "ย่อแล้วเด้ง", contrast RSI returning above a threshold with price returning above a moving average; discuss how waiting for recovery differs from detecting an already-low RSI. Do not assign defaults as the user's preferences. Unsupported price-action, divergence, order-flow or funding conditions remain conceptual until the engine can represent them. Once a design is chosen, use the runtime rule contract and propose_strategy.

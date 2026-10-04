@@ -1,0 +1,54 @@
+{
+  "name": "snaap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --import tsx scripts/dev.ts",
+    "start": "node --env-file-if-exists=.env --import tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "check:publication": "tsx scripts/check-publication.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:integration": "tsx scripts/integration.ts",
+    "test:load": "tsx scripts/load.ts",
+    "test:backup": "tsx scripts/backup-check.ts",
+    "test:soak": "tsx scripts/soak.ts",
+    "test:harness": "tsx scripts/harness-contract-check.ts",
+    "eval:prepare": "tsx scripts/eval-cases.ts",
+    "eval:agent": "node --env-file-if-exists=.env --import tsx scripts/evaluate-agent.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/multipart": "^10.1.2",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.5",
+    "@ixjb94/indicators": "1.2.6",
+    "ccxt": "^4.5.85",
+    "csv-parse": "^7.0.3",
+    "fastify": "^5.12.5",
+    "jose": "^6.2.12",
+    "lightweight-charts": "5.2.0",
+    "openai": "^7.27.0",
+    "pg": "^8.23.1",
+    "pg-boss": "^12.36.0",
+    "protobufjs": "^7.6.6",
+    "read-excel-file": "^9.3.10",
+    "sharp": "^0.35.5",
+    "stripe": "^23.0.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "prettier": "^3.9.9",
+    "technicalindicators": "3.1.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

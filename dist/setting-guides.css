@@ -1,0 +1,40 @@
+.setting-guide-trigger{display:inline-flex!important;align-items:center;justify-content:center;width:26px;height:26px!important;min-height:26px!important;min-width:26px;margin:0 0 0 4px;padding:4px!important;vertical-align:middle;border:0!important;border-radius:50%;background:transparent!important;color:var(--muted,#9799a2);cursor:help;transition:color .18s;box-shadow:none!important;outline:none!important}
+.setting-guide-trigger svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
+.setting-guide-trigger:hover,.setting-guide-trigger:focus-visible,.setting-guide-trigger[aria-describedby]{color:var(--accent-ink,#9ebe24);background:transparent!important;outline:none!important;box-shadow:none!important}
+.setting-guide-trigger:focus-visible svg{stroke-width:2.2}
+.design-panel .guide-label{display:flex;align-items:center;gap:4px;min-height:26px;line-height:1.5;width:fit-content}
+.design-panel .guide-label>.setting-guide-trigger{margin:0;flex-shrink:0}
+.design-panel label:has(>.guide-label){gap:10px!important;padding:0}
+.setting-guide{position:fixed;z-index:10050;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;padding:20px;border:1px solid var(--line,#37383d);border-radius:18px;color:var(--ink,#ededf0);background:var(--white,#202124);box-shadow:0 16px 60px #0005;animation:guide-enter .18s ease-out;font-family:inherit;line-height:1.7;pointer-events:auto}
+.setting-guide .guide-eyebrow{font-size:12px;color:var(--muted,#9799a2);margin-bottom:6px}
+.setting-guide>strong{font-size:18px;font-weight:650}.setting-guide>p{font-size:15px;margin:10px 0 16px}.setting-guide .guide-note{margin:16px 0 0;padding-top:14px;border-top:1px solid var(--line,#37383d);font-size:14px;color:var(--muted,#aaaeb7)}
+.guide-chart{background:#171b20;color:#e4e8ef;border:1px solid rgba(120,130,140,.14);border-radius:12px;overflow:hidden;padding:12px}.guide-chart svg{display:block;width:100%;height:auto}.guide-chart-key{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:13px;color:#c9f14a;line-height:1.5;padding:0 4px 6px}.guide-chart-key>span{width:20px;border-top:2px dashed currentColor}.guide-chart-caption{text-align:center;font-size:13px;line-height:1.6;padding:8px 4px 2px;border-top:1px solid #ffffff12}
+.guide-candle{animation:guide-candle .65s ease-out both;animation-delay:var(--delay);transform-box:fill-box;transform-origin:bottom}.guide-signal{animation:guide-signal 3.5s ease-out both}
+@keyframes guide-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@keyframes guide-candle{from{opacity:0;transform:scaleY(.35)}to{opacity:1;transform:scaleY(1)}}@keyframes guide-signal{0%,35%{opacity:0}50%{opacity:1;stroke-width:3}100%{opacity:1;stroke-width:2}}
+.guide-action{display:inline-flex;align-items:center;flex-wrap:wrap;gap:0}.guide-average{stroke-dasharray:340;animation:guide-line 1.5s ease-out both}@keyframes guide-line{from{stroke-dashoffset:340}to{stroke-dashoffset:0}}
+@media(prefers-reduced-motion:reduce){.setting-guide,.guide-candle,.guide-signal,.guide-average{animation:none!important}.setting-guide-trigger{transition:none}}
+@media(pointer:coarse){.setting-guide-trigger{width:32px;height:32px!important;min-height:32px!important;min-width:32px}}
+.design-panel label:has(>.guide-label){display:grid;grid-template-columns:minmax(0,1fr)}
+.design-panel label:has(>.guide-label)>.snaap-select,.design-panel label:has(>.guide-label)>input{margin-top:0!important;width:100%}
+.guide-steps{display:grid;gap:10px}.guide-step{padding:10px;border:1px solid #ffffff16;border-radius:8px;background:#ffffff05;animation:guide-enter .3s ease-out both;animation-delay:var(--delay)}.guide-step small{display:block;font-size:12px;line-height:1.5;color:#bfc6ce;margin-bottom:5px}.guide-step strong{display:block;font-size:14px;line-height:1.6;font-weight:600;color:#edf0f4;overflow-wrap:anywhere}.guide-example-row{display:flex;gap:6px;margin-bottom:10px}.guide-example-row>.guide-step{flex:1;min-width:0;padding:8px}.guide-example-row:has(>.guide-step:nth-child(4)){flex-wrap:wrap}.guide-example-row:has(>.guide-step:nth-child(4))>.guide-step{flex-basis:28%}.guide-value-selected{border:1px solid #c9f14a!important;border-radius:6px;padding:4px;color:#c9f14a}.guide-chart .guide-chart-caption{margin-top:10px}.guide-chart svg+.guide-example-row{margin-top:6px}
+@media(prefers-reduced-motion:reduce){.guide-step{animation:none!important}}
+.operand-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px}.operand-heading>.operand-title{margin:0}.operand-heading>.guide-action{margin-left:auto;gap:4px}.indicator-import-trigger{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--white);font-size:12px;line-height:1.5;color:var(--ink);cursor:pointer}.indicator-import-trigger:hover{background:var(--pale)}.indicator-import-trigger>.icon{width:15px;height:15px}.operand-heading .setting-guide-trigger{flex-shrink:0}
+.operand-reference{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}.operand-reference a{display:inline-flex;align-items:center;gap:6px;font-size:12px;line-height:1.6;color:var(--muted)}.operand-reference a:hover{color:var(--ink)}.operand-reference .icon{width:14px;height:14px}
+.guide-calculation{margin-top:12px}.guide-calculation summary{cursor:pointer;font-size:13px;line-height:1.6;color:#cdd2dc;padding:8px 0}.guide-calculation[open] summary{margin-bottom:8px}
+.guide-formula-note{padding-top:12px;margin-top:10px;border-top:1px solid #ffffff16;font-size:13px;line-height:1.7;color:#bcc4d0}
+.design-body .operand-fields.indicator-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.indicator-fields>label:first-child,.indicator-fields>p{grid-column:1/-1}
+.indicator-fields>label:last-child:nth-child(even){grid-column:1/-1}
+@media(max-width:600px){.design-body .operand-fields.indicator-fields{grid-template-columns:minmax(0,1fr)}.indicator-fields>label{grid-column:auto}}
+
+/* Field help belongs to the caption; picker styles must not stretch it. */
+.design-panel .pair-control > span { display:inline-flex; align-items:center; gap:4px; width:fit-content; line-height:1.5; }
+.design-panel .pair-control > span > .setting-guide-trigger { margin:0; flex:none; }
+.setup-direction .direction-mirror-row { display:flex; align-items:center; gap:4px; margin-top:14px; min-width:0; }
+.setup-direction .direction-mirror-row > .direction-mirror {
+ display:grid; grid-template-columns:16px minmax(0,1fr); align-items:center; gap:9px;
+ margin:0; padding:0; font-size:13px; line-height:1.6; min-width:0;
+}
+.setup-direction .direction-mirror input { width:16px; height:16px; min-height:0; margin:0; padding:0; }
+.setup-direction .direction-mirror span { min-width:0; }
+.setup-direction .direction-mirror-row > .setting-guide-trigger { margin:0; flex:none; }

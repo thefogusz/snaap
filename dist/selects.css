@@ -1,0 +1,137 @@
+.snaap-select {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  margin-top: 5px;
+}
+select.snaap-select-native {
+  display: none !important;
+}
+.snaap-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  transition:
+    border-color 160ms,
+    background 160ms;
+}
+.snaap-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snaap-select-chevron {
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  margin: -4px 3px 0 0;
+  transition: transform 160ms;
+}
+.snaap-select-trigger[aria-expanded="true"] {
+  border-color: var(--muted, var(--secondary));
+}
+.snaap-select-trigger[aria-expanded="true"] .snaap-select-chevron {
+  transform: rotate(225deg);
+  margin-top: 3px;
+}
+.snaap-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.snaap-select-menu {
+  position: fixed;
+  z-index: 2000;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  background: var(--white, var(--surface));
+  color: var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 14px 40px #0003;
+  animation: select-appear 150ms ease-out;
+}
+.snaap-select-option {
+  position: relative;
+  padding: 11px 32px 11px 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.5;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.snaap-select-search {
+ position:sticky; top:0; z-index:1; width:100%; box-sizing:border-box;
+ margin-bottom:6px; padding:10px 12px; border:1px solid var(--line);
+ border-radius:8px; background:var(--white); color:var(--ink); font:inherit;
+ font-size:14px;
+}
+.snaap-select-option[aria-selected="true"] {
+  font-weight: 600;
+}
+.snaap-select-option[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 17px;
+  width: 5px;
+  height: 9px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.snaap-select-option:not([aria-disabled="true"]):hover,
+.snaap-select-option.is-highlighted:not([aria-disabled="true"]) {
+  background: var(--pale, var(--soft));
+}
+.snaap-select-option[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.chat-composer .chat-tools .snaap-select {
+  width: auto;
+  max-width: 210px;
+  margin: 0;
+}
+.chat-composer .chat-tools .snaap-select-trigger {
+  background: transparent;
+  border: 0;
+  border-radius: 20px;
+  font-size: 13px;
+}
+@keyframes select-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snaap-select-menu {
+    animation: none;
+  }
+  .snaap-select-trigger,
+  .snaap-select-chevron {
+    transition: none;
+  }
+}

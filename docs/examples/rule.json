@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "name": "ราคาย่อตัวในขาขึ้น",
+  "targets": [
+    {"exchange":"BINANCE","marketType":"SPOT","instrumentIds":["example-binance-spot-btc-usdt"]},
+    {"exchange":"BYBIT","marketType":"SPOT","instrumentIds":["example-bybit-spot-btc-usdt"]}
+  ],
+  "timeframe": "1h",
+  "priceSource": "LAST_TRADE",
+  "evaluationMode": "CLOSED_CANDLE",
+  "trigger": {
+    "kind": "CROSS",
+    "direction": "ABOVE",
+    "left": {"kind":"INDICATOR","name":"RSI","period":14,"source":"CLOSE"},
+    "right": {"kind":"CONSTANT","value":30}
+  },
+  "filters": {
+    "kind": "GROUP",
+    "op": "AND",
+    "children": [
+      {"kind":"COMPARE","op":"GT","left":{"kind":"PRICE","field":"CLOSE"},"right":{"kind":"INDICATOR","name":"EMA","period":200,"source":"CLOSE"}},
+      {"kind":"COMPARE","op":"GT","left":{"kind":"VOLUME_RATIO","lookback":20,"baseline":"PREVIOUS_CLOSED","unit":"BASE"},"right":{"kind":"CONSTANT","value":1.5}}
+    ]
+  },
+  "notification": {
+    "destinationIds": ["example-telegram-destination"],
+    "initialSnapshot": false,
+    "cooldownSeconds": 0,
+    "maxAgeSeconds": 300
+  }
+}

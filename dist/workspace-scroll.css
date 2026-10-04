@@ -1,0 +1,122 @@
+.setup-pane { min-width:0; display:grid; gap:20px; }
+.setup-pane-nav { display:flex; flex-direction:row; flex-shrink:0; align-items:center; gap:8px; margin-right:12px; }
+.setup-pane-nav[hidden] { display:none; }
+.setup-pane-nav button { padding:8px 12px; border-radius:8px; min-height:36px; font-size:12px; white-space:nowrap; background:var(--white); border:1px solid var(--line); }
+.workbench[data-tab="chat"] .setup-pane { display:none; }
+.mobile-design-tabs .split-view-button { display:inline-flex; }
+@media(max-width:1099px) {
+ .workbench[data-tab="split"] #conversation { display:flex; grid-row:1; }
+ .workbench[data-tab="split"] .setup-pane { grid-row:2; }
+}
+.workbench[data-tab="design"] #conversation { display:none; }
+.workbench .setup-pane .setup-studio,
+.workbench .setup-pane .design-panel { grid-column:auto; grid-row:auto; }
+.workbench[data-tab="design"] .setup-pane .setup-studio {
+ position:relative;
+ top:auto;
+ max-height:none;
+ overflow:hidden;
+}
+.workbench-toolbar { position:relative; z-index:5; isolation:isolate; }
+.chat-latest { position:absolute; bottom:210px; left:50%; transform:translateX(-50%); z-index:3; padding:9px 15px; border:1px solid var(--line); border-radius:24px; background:var(--white); box-shadow:0 4px 16px #0002; font-size:12px; white-space:nowrap; }
+.setup-change-card { padding:14px 16px; border-radius:14px; border-left:3px solid var(--lime); }
+.setup-change-card header strong { font-size:14px; }
+.setup-change-card header>span { padding:3px 8px; border-radius:20px; background:var(--pale); font-size:11px; }
+.setup-change-card li { grid-template-columns:48px minmax(0,1fr); padding:10px 0; }
+.setup-change-card .change-values { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:4px; }
+.setup-change-card .change-before,.setup-change-card .change-after { padding:4px 8px; border-radius:6px; background:var(--bg); overflow-wrap:anywhere; }
+.setup-change-card .change-after { color:var(--ink); background:var(--pale); }
+.setup-change-card footer { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+.setup-change-card footer button { padding:6px 10px; min-height:32px; font-size:12px; }
+@media(min-width:1100px) {
+ .workbench[data-tab="split"] .chat-tools { display:flex; flex-wrap:nowrap; gap:8px; }
+ .workbench[data-tab="split"] .chat-tools [data-attach-image] { padding:8px; }
+ .workbench[data-tab="split"] .chat-tools [data-attach-image] span:last-child { display:none; }
+ .workbench[data-tab="split"] .chat-tools .my-data-toggle { font-size:11px; margin-left:auto; }
+ .workbench[data-tab="split"] .chat-tools .chat-send-button { flex-shrink:0; }
+}
+@media(min-width:1100px) {
+  body:has(#view-home:not([hidden]) .workbench:not([hidden])) { overflow:hidden; }
+  body:has(#view-home:not([hidden]) .workbench:not([hidden])) .main-shell { height:100dvh; overflow:hidden; }
+  body:has(#view-home:not([hidden]) .workbench:not([hidden])) .topbar { flex-shrink:0; }
+  body:has(#view-home:not([hidden]) .workbench:not([hidden])) #main { flex:1; min-height:0; overflow:hidden; }
+  #view-home:has(.workbench:not([hidden])) { height:100%; display:flex; flex-direction:column; padding-bottom:20px; }
+  #view-home:has(.workbench:not([hidden])) .workbench-toolbar { flex-shrink:0; }
+  .workbench:not([hidden]) { height:var(--workbench-height,75dvh); min-height:0; overflow:hidden; align-items:stretch; }
+  #view-home .workbench:not([hidden]) { flex:1; height:auto; }
+  .workbench[data-tab="split"] { grid-template-columns:minmax(320px,.85fr) minmax(0,1.35fr); }
+  .workbench[data-tab="design"] { grid-template-columns:minmax(0,1fr); }
+  .workbench .setup-pane { overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; display:block; min-height:0; border:1px solid var(--line); border-radius:20px; clip-path:inset(0 round 20px); box-sizing:border-box; }
+  .workbench .setup-pane > .setup-studio,
+  .workbench .setup-pane > .design-panel { border:0; border-radius:0; box-shadow:none; }
+  .workbench .setup-pane .design-toolbar { border-radius:0; }
+  .setup-pane .setup-studio { margin-bottom:20px; }
+  .workbench[data-tab="split"] #conversation,.workbench[data-tab="chat"] #conversation { position:relative; top:auto; grid-column:auto; grid-row:auto; display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; }
+  .workbench #messages { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding-right:10px; padding-bottom:20px; }
+  .workbench .chat-composer { flex:none; margin-top:12px; max-height:45%; overflow:auto; }
+  .workbench .design-toolbar { position:sticky; top:0; z-index:2; background:var(--white); }
+}
+@media(max-width:1099px) {
+ body:has(#view-home:not([hidden]) .workbench[data-tab="chat"]:not([hidden])) { overflow:hidden; }
+ body:has(#view-home:not([hidden]) .workbench[data-tab="chat"]:not([hidden])) .main-shell { height:100dvh; overflow:hidden; }
+ body:has(#view-home:not([hidden]) .workbench[data-tab="chat"]:not([hidden])) .topbar { flex-shrink:0; }
+ body:has(#view-home:not([hidden]) .workbench[data-tab="chat"]:not([hidden])) #main { flex:1; min-height:0; overflow:hidden; }
+ #view-home:has(.workbench[data-tab="chat"]:not([hidden])) { height:100%; display:flex; flex-direction:column; padding-top:20px; padding-bottom:12px; }
+ .workbench[data-tab="chat"] { flex:1; min-height:0; overflow:hidden; }
+ .workbench[data-tab="chat"] #conversation { position:relative; display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; }
+ .workbench[data-tab="chat"] #messages { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding-bottom:16px; }
+ .workbench[data-tab="chat"] .chat-composer { flex:none; max-height:45%; overflow:auto; margin-top:12px; }
+ .workbench[data-tab="design"] #conversation { display:none; }
+ .setup-change-card footer button { min-height:44px; }
+}
+@media(max-width:650px) {
+ .workbench-toolbar .conversation-actions { flex-wrap:wrap; justify-content:flex-end; }
+ .setup-pane-nav { gap:6px; margin-right:6px; }
+ .setup-pane-nav button { padding:8px 10px; white-space:nowrap; }
+}
+@media(prefers-reduced-motion:reduce) { .setup-change-card { animation:none; } }
+
+/* Keep the greeting and first composer together until a conversation starts. */
+#main.workspace-switching{position:relative}
+#main.workspace-switching>.view{visibility:hidden}
+.workspace-switch-progress{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;min-height:240px;background:var(--bg);color:var(--muted);font-size:13px;z-index:5}
+.workspace-switch-progress:before{content:'';width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent-ink);border-radius:50%;animation:workspace-loading .8s linear infinite}
+@keyframes workspace-loading{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.workspace-switch-progress:before{animation:none}}
+.workbench:is([data-tab="chat"],[data-tab="split"]) #conversation:has(#messages .chat-empty):not(:has(#messages .message)) {
+ justify-content:safe center;
+ /* Place the first interaction above the geometric centre of the pane. */
+ box-sizing:border-box;
+ padding-block:16px calc(clamp(72px,18dvh,180px) + 80px);
+ overflow-y:auto;
+ gap:24px;
+}
+.workbench:is([data-tab="chat"],[data-tab="split"]) #conversation:has(#messages .chat-empty):not(:has(#messages .message)) #messages {
+ flex:0 0 auto;
+ overflow:visible;
+ padding:0;
+}
+.workbench #conversation:not(:has(#messages .message)) .chat-empty { padding:0; }
+.workbench #conversation:has(#messages .chat-empty):not(:has(#messages .message)) .chat-composer {
+ margin-top:0;
+ max-height:none;
+}
+@media(max-height:600px) {
+ .workbench:is([data-tab="chat"],[data-tab="split"]) #conversation:has(#messages .chat-empty):not(:has(#messages .message)) {
+  padding-block:12px 36px;
+  gap:16px;
+ }
+}
+
+/* Shared element transitions keep the chat anchored while the studio enters. */
+#conversation { view-transition-name:snaap-conversation; }
+.setup-pane { view-transition-name:snaap-setup; }
+::view-transition-group(snaap-conversation),
+::view-transition-group(snaap-setup) { animation-duration:360ms; animation-timing-function:cubic-bezier(.22,1,.36,1); }
+::view-transition-old(root), ::view-transition-new(root) { animation:none; }
+::view-transition-new(snaap-setup) { animation:snaap-studio-enter 360ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes snaap-studio-enter { from { opacity:0; transform:translateX(18px); } to { opacity:1; transform:translateX(0); } }
+.workbench .studio-canvas { height:clamp(320px,52dvh,560px); min-width:0; }
+@media(prefers-reduced-motion:reduce) {
+ ::view-transition-group(snaap-conversation), ::view-transition-group(snaap-setup), ::view-transition-new(snaap-setup) { animation:none; }
+}

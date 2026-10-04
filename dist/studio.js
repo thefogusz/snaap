@@ -1,0 +1,397 @@
+"use strict";
+(() => {
+  const studio = document.createElement("section");
+  studio.className = "setup-studio";
+  studio.setAttribute("aria-label", "กราฟจำลองเซตอัพ");
+  studio.innerHTML = `<header><div><strong data-chart-title>กราฟเซตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><details class="chart-evidence"><summary>เหตุผลของสัญญาณ · คลิกแท่งบนกราฟเพื่อดู</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
+  setupPane.insertBefore(studio, panel);
+  const status = studio.querySelector("[data-chart-status]");
+  const canvas = studio.querySelector(".studio-canvas");
+  const scrub = studio.querySelector("[data-scrub]");
+  let chartPair=null;
+  const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector("header").append(chartPickerWrap);
+  chartPicker.onchange=()=>{chartPair=chartPicker.value;update(true);};
+  let chart,
+    candles,
+    markers,
+    lines = [],
+    result,
+    key = "",
+    timer,
+    playTimer,
+    generation = 0,
+    at = 0;
+  let colors = ["#aa87ff", "#32a9df", "#e8ab42", "#ee79bb", "#4cbda5"];
+  function stop() {
+    clearInterval(playTimer);
+    playTimer = null;
+    studio.querySelector("[data-play]").textContent = "เล่นย้อนหลัง";
+  }
+  function clear() {
+    stop();
+    result = null;
+    if (chart) {
+      chart.remove();
+      chart = null;
+    }
+    lines = [];
+    canvas.replaceChildren();
+    studio.querySelector(".chart-legend").replaceChildren();
+    studio.querySelector("[data-chart-evidence]").replaceChildren();
+    studio
+      .querySelectorAll(".replay-controls button,.replay-controls input")
+      .forEach((e) => (e.disabled = true));
+  }
+  function fitFrame() {
+    if (!chart || !result || canvas.clientWidth < 1) return;
+    const visibleBars = Math.min(at + 1, Math.max(40, Math.min(160, Math.floor(canvas.clientWidth / 6))));
+    chart.timeScale().setVisibleLogicalRange({ from: Math.max(-1, at - visibleBars + 1), to: at + Math.max(2, Math.round(visibleBars * .035)) });
+  }
+  let wasVisible = false;
+  new ResizeObserver(() => {
+    const visible = canvas.clientWidth > 0 && canvas.clientHeight > 0;
+    if (visible && !wasVisible) requestAnimationFrame(fitFrame);
+    wasVisible = visible;
+  }).observe(canvas);
+  document.addEventListener("workbench-mode-changed", () => {
+    if (workbench.dataset.tab !== "split") return;
+    requestAnimationFrame(() => { if (chart) fitFrame(); else update(); });
+  });
+  function draw(limit, fit = false) {
+    if (!result || !chart) return;
+    at = Math.max(0, Math.min(limit, result.candles.length - 1));
+    scrub.value = at;
+    const cut = result.candles[at].time;
+    candles.setData(
+      result.candles
+        .slice(0, at + 1)
+        .map((c) => ({ ...c, time: c.time / 1000 })),
+    );
+    lines.forEach(({ series, points }) =>
+      series.setData(
+        points
+          .filter((p) => p.time <= cut)
+          .map((p) =>
+            p.value === null
+              ? { time: p.time / 1000 }
+              : { time: p.time / 1000, value: p.value },
+          ),
+      ),
+    );
+    markers.setMarkers(
+      result.events
+        .filter((e) => e.time <= cut)
+        .map((e) => ({
+          time: e.time / 1000,
+          position: (e.kind === "ENTRY") !== (e.side === "SHORT") ? "belowBar" : "aboveBar",
+          color: document.documentElement.dataset.theme === "dark" ? (e.kind === "ENTRY" ? "#35ba8a" : "#f18088") : (e.kind === "ENTRY" ? "#137b55" : "#bc3546"),
+          shape: (e.kind === "ENTRY") !== (e.side === "SHORT") ? "arrowUp" : "arrowDown",
+          text: {
+            ENTRY: "เข้า",
+            EXIT: "ออก",
+            CANCEL: "ยกเลิก",
+            EXPIRED: "หมดเวลา",
+          }[e.kind] + " · " + ({SPOT:"Spot",LONG:"Long",SHORT:"Short"}[e.side] ?? "ไม่ระบุฝั่ง"),
+        })),
+    );
+    const bar = result.timeline[at];
+    studio.querySelector("[data-chart-evidence]").innerHTML =
+      barEvidence(bar) +
+      (bar.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+    if (fit) fitFrame();
+  }
+  function render(data) {
+    const oldRange = chart?.timeScale().getVisibleLogicalRange();
+    const selectedTime = result?.candles[at]?.time;
+    const paused = result && at < result.candles.length - 1;
+    clear();
+    result = data;
+    const dark = document.documentElement.dataset.theme === "dark";
+    colors = dark ? ["#aa87ff", "#32a9df", "#e8ab42", "#ee79bb", "#4cbda5"] : ['#7549c4','#087aa6','#916400','#ad3576','#16725e'];
+    const ink = getComputedStyle(studio).color;
+    const bg = getComputedStyle(studio).backgroundColor;
+    chart = LightweightCharts.createChart(canvas, {
+      autoSize: true,
+      layout: {
+        background: { type: "solid", color: bg },
+        textColor: ink,
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: dark ? "#29292f" : "#eeeeee" },
+        horzLines: { color: dark ? "#29292f" : "#eeeeee" },
+      },
+      timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 3, lockVisibleTimeRangeOnResize: true },
+      rightPriceScale: { borderVisible: false },
+    });
+    const lastPrice = data.candles.at(-1)?.close ?? 1;
+    const precision = lastPrice >= 10 ? 2 : lastPrice >= 1 ? 4 : 8;
+    candles = chart.addSeries(LightweightCharts.CandlestickSeries, {
+      upColor: dark ? "#35ba8a" : '#168063',
+      downColor: dark ? "#eb7480" : '#c13d51',
+      wickUpColor: dark ? "#35ba8a" : '#168063',
+      wickDownColor: dark ? "#eb7480" : '#c13d51',
+      borderVisible: false,
+      priceFormat: { type: "price", precision, minMove: 10 ** -precision },
+    });
+    markers = LightweightCharts.createSeriesMarkers(candles, []);
+    let pane = 0;
+    lines = data.overlays.map((o, i) => {
+      const overlay = window.SnaapIndicatorCatalog?.indicatorByName[o.operand.name]?.overlay ?? ["EMA", "SMA", "BB_UPPER", "BB_LOWER","WMA","RMA","VWMA","HIGHEST","LOWEST","DONCHIAN_UPPER","DONCHIAN_LOWER","DONCHIAN_MID","BB_MIDDLE"].includes(
+        o.operand.name,
+      );
+      const title = operandText(o.operand);
+      const series = chart.addSeries(
+        LightweightCharts.LineSeries,
+        {
+          color: colors[i % colors.length],
+          lineWidth: 2,
+          title,
+          priceFormat: {type:'price',precision:overlay?precision:2,minMove:overlay?10**-precision:.01},
+          priceLineVisible: false,
+          lastValueVisible: false,
+        },
+        overlay ? 0 : ++pane,
+      );
+      if (!overlay) chart.panes()[pane].setHeight(110);
+      return { series, points: o.points };
+    });
+    studio.querySelector(".chart-legend").innerHTML = data.overlays
+      .map(
+        (o, i) =>
+          `<span style="color:${colors[i % colors.length]}">${esc(operandText(o.operand))}</span>`,
+      )
+      .join("");
+    studio
+      .querySelectorAll(".replay-controls button,.replay-controls input")
+      .forEach((e) => (e.disabled = false));
+    scrub.max = Math.max(0, data.candles.length - 1);
+    const selectedIndex = paused ? data.candles.findIndex(b=>b.time===selectedTime) : -1;
+    draw(selectedIndex >= 0 ? selectedIndex : data.candles.length - 1, !oldRange);
+    if (oldRange) chart.timeScale().setVisibleLogicalRange(oldRange);
+    chart.subscribeClick((p) => {
+      if (!p.time) return;
+      const index = data.timeline.findIndex((b) => b.time / 1000 === p.time);
+      if (index < 0) return;
+      const bar = data.timeline[index];
+      studio.querySelector("[data-chart-evidence]").innerHTML =
+        barEvidence(bar) +
+        (bar.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+      studio.querySelector(".chart-evidence").open = true;
+    });
+    status.textContent = `${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
+  }
+  async function update(force = false) {
+    if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;
+    if(!state.draft.pairs.includes(chartPair))chartPair=state.draft.pairs[0];
+    chartPickerWrap.hidden=state.draft.pairs.length<2;
+    chartPicker.innerHTML=state.draft.pairs.map(pair=>`<option value="${esc(pair)}">${esc(pair)}</option>`).join("");chartPicker.value=chartPair;
+    const next = JSON.stringify({...state.draft,pairs:[chartPair]});
+    const draftAtRequest=JSON.stringify(state.draft);
+    if (!force && next === key && result) return;
+    key = next;
+    const token = ++generation;
+    stop();
+    studio.querySelector("[data-chart-title]").textContent =
+      `${state.draft.exchange.join(", ")} · ${chartPair} · ${state.draft.timeframe} · ${directionLabel(state.draft.side,state.draft.market)}`;
+    if (state.draft.exchange.length !== 1 || !state.draft.pairs.length) {
+      status.textContent = "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ";
+      return;
+    }
+    status.textContent = "กำลังคำนวณกราฟและสัญญาณ…";
+    try {
+      const data = await api("/preview", "POST", {spec:JSON.parse(next)});
+      if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==JSON.parse(next).pairs[0]) return;
+      render(data);
+    } catch (e) {
+      if (token === generation) {
+        status.textContent = e.message;
+        key = "";
+      }
+    }
+  }
+  function schedule() {
+    if (JSON.stringify({...state.draft,pairs:[chartPair]}) === key && result) return;
+    generation++;
+    stop();
+    studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
+    clearTimeout(timer);
+    status.textContent = "เซตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…";
+    canvas.style.opacity = ".35";
+    timer = setTimeout(() => {
+      canvas.style.opacity = "1";
+      update();
+    }, 450);
+  }
+  document.addEventListener("setup-rendered", schedule);
+  document.addEventListener('studio-refresh',()=>update(true));
+  document.addEventListener("setup-changed", schedule);
+  studio.querySelector("[data-chart-refresh]").onclick = () => update(true);
+  scrub.oninput = () => {
+    stop();
+    draw(Number(scrub.value));
+  };
+  studio.querySelector("[data-step]").onclick = () => {
+    stop();
+    draw(at + 1);
+  };
+  studio.querySelector("[data-latest]").onclick = () => {
+    stop();
+    draw(result.candles.length - 1, true);
+  };
+  studio.querySelector("[data-play]").onclick = () => {
+    if (playTimer) {
+      stop();
+      return;
+    }
+    if (at >= result.candles.length - 1)
+      draw(Math.min(40, result.candles.length - 1), true);
+    studio.querySelector("[data-play]").textContent = "หยุด";
+    playTimer = setInterval(() => {
+      draw(at + 1);
+      if (at >= result.candles.length - 1) stop();
+    }, 350);
+  };
+  setInterval(() => {
+    if (
+      !document.hidden &&
+      !workbench.hidden &&
+      workbench.dataset.tab !== "chat" &&
+      !playTimer && (!result || at === result.candles.length - 1)
+    )
+      update(true);
+  }, 30000);
+  new MutationObserver(() => {
+    if (result) render(result);
+  }).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+
+  let availabilityGeneration = 0;
+  async function checkPairAvailability() {
+    const token = ++availabilityGeneration;
+    if (!state.draft) return;
+    const exchange = state.draft.exchange[0], market = state.draft.market;
+    const pairs = [...state.draft.pairs];
+    const hint = panel.querySelector("[data-pair-availability]");
+    if (!hint) return;
+    hint.textContent = `กำลังตรวจคู่เทรดบน ${exchange} · ${market}…`;
+    try {
+      const data = await api(`/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(market)}`);
+      if (token !== availabilityGeneration || !hint.isConnected) return;
+      const available = new Set(data.items.filter(m => m.supported).map(m => m.symbol));
+      const missing = pairs.filter(pair => !available.has(pair));
+      hint.textContent = missing.length
+        ? `${missing.join(", ")} ไม่มีหรือยังไม่รองรับบน ${exchange} · ${market} กรุณาเลือกคู่เทรดใหม่`
+        : `คู่เทรดพร้อมใช้บน ${exchange} · ${market}`;
+      hint.style.color = missing.length ? "#f2bb70" : "";
+    } catch (error) {
+      if (token === availabilityGeneration && hint.isConnected) hint.textContent = error.message;
+    }
+  }
+  document.addEventListener("setup-rendered", checkPairAvailability);
+  checkPairAvailability();
+
+  document.addEventListener("click", async (e) => {
+    if (!e.target.closest("[data-pair-picker]")) return;
+    if (!state.draft) return;
+    const exchange = state.draft.exchange[0], market = state.draft.market;
+    const source = `${exchange} / ${market}`;
+    const sourceMatches = () => state.draft&&state.draft.exchange.length === 1 && state.draft.exchange[0] === exchange && state.draft.market === market;
+    const dialog = document.createElement("dialog");
+    dialog.className = "conversation-dialog instrument-dialog";
+    dialog.setAttribute("aria-labelledby", "instrument-dialog-title");
+    let mode=state.draft.pairs.length>1?'multiple':'single',selected=new Set(state.draft.pairs),catalog=[];
+    dialog.innerHTML = `<header><h2 id="instrument-dialog-title">เลือกคู่เทรด</h2><button type="button" aria-label="ปิด">${uiIcon("close")}</button></header><p>${esc(source)} · ใช้เงื่อนไขเดียวกัน แยกสัญญาณแต่ละคู่</p><div class="pair-selection-modes" role="group" aria-label="วิธีเลือกคู่เทรด"><button type="button" data-pair-mode="single">คู่เดียว</button><button type="button" data-pair-mode="multiple">หลายคู่</button><button type="button" data-pair-mode="all">ทั้งหมด</button></div><div class="pair-catalog-tools"><input type="search" aria-label="ค้นหาคู่เทรด" placeholder="ค้นหา BTC, ETH หรือชื่อคู่เทรด"><button type="button" class="secondary" data-refresh-catalog>ซิงก์ล่าสุด</button></div><p data-catalog-status role="status">กำลังโหลดจากกระดาน…</p><div class="instrument-list"></div><footer class="pair-selection-footer"><span data-selection-count></span><button type="button" class="text-button" data-clear-pairs>ล้างที่เลือก</button><button type="button" class="primary" data-apply-pairs disabled>ใช้คู่ที่เลือก</button></footer><p class="pair-selection-note">เลือกทั้งหมดจากรายการตอนนี้ · คู่มากขึ้นใช้เวลาเตรียมข้อมูลมากขึ้น</p>`;
+    document.body.append(dialog);
+    dialog.showModal();
+    dialog.querySelector("header button").onclick = () => dialog.close();
+    dialog.onclose = () => {
+      dialog.remove();
+      panel.querySelector("[data-pair-picker]")?.focus();
+    };
+    const refreshButton = dialog.querySelector("[data-refresh-catalog]");
+    let loading = false,paint=()=>{};
+    const apply=dialog.querySelector('[data-apply-pairs]');
+    function selectionUI(){
+      dialog.querySelectorAll('[data-pair-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pairMode===mode)));
+      dialog.querySelector('[data-selection-count]').textContent=`เลือก ${selected.size.toLocaleString('th-TH')} คู่`;
+      apply.disabled=loading||!catalog.length||!selected.size;
+    }
+    dialog.querySelectorAll('[data-pair-mode]').forEach(b=>b.onclick=()=>{
+      mode=b.dataset.pairMode;
+      if(mode==='single')selected=new Set([...selected].slice(0,1));
+      if(mode==='all')selected=new Set(catalog.map(m=>m.symbol));
+      paint();selectionUI();
+    });
+    dialog.querySelector('[data-clear-pairs]').onclick=()=>{selected.clear();mode='multiple';paint();selectionUI();};
+    apply.onclick=()=>{
+      if(!selected.size||loading)return;
+      if(!sourceMatches()){dialog.querySelector('[data-catalog-status]').textContent='ตลาดเปลี่ยนแล้ว กรุณาเลือกใหม่';return;}
+      snapshot();state.draft.pairs=[...selected];state.replay=null;renderDesigner();queueDraftSave();dialog.close();
+    };
+    selectionUI();
+    refreshButton.onclick = () => load(true);
+    async function load(refresh = false) {
+      if (loading) return;
+      loading = true; refreshButton.disabled = true;selectionUI();
+      dialog.querySelector("input").oninput = null;
+      dialog.querySelector(".instrument-list").innerHTML = "";
+      dialog.querySelector("[data-catalog-status]").textContent = "กำลังซิงก์จากกระดาน…";
+      try {
+        const data = await api(
+          `/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(market)}&refresh=${refresh}`,
+        );
+        if (!dialog.open) return;
+        catalog=data.items.filter(m=>m.supported);
+        const available=new Set(catalog.map(m=>m.symbol));selected=new Set([...selected].filter(pair=>available.has(pair)));
+        if(mode==='all')selected=new Set(available);
+        paint = () => {
+          const q = dialog.querySelector("input").value.toUpperCase().trim();
+          const normalize = (value) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+          const matches = data.items.filter((m) => m.supported && normalize(m.symbol).includes(normalize(q)));
+          dialog.querySelector("[data-catalog-status]").textContent =
+            `${matches.length} คู่ · ${source} · ซิงก์ ${new Date(data.at).toLocaleTimeString("th-TH")} · แคชไม่เกิน 5 นาที`;
+          dialog.querySelector(".instrument-list").innerHTML =
+            matches
+              .slice(0, 100)
+              .map(
+                (m) =>
+                  `<button type="button" data-symbol="${esc(m.symbol)}" aria-pressed="${selected.has(m.symbol)}"><strong>${esc(m.symbol)}</strong><span>${selected.has(m.symbol)?"✓ เลือกแล้ว":"เลือก"}</span></button>`,
+              )
+              .join("") +
+            (matches.length > 100
+              ? "<p>แสดง 100 คู่แรก · พิมพ์เพิ่มเพื่อค้นหา</p>"
+              : (matches.length ? "" : "<p>ไม่พบคู่เทรดที่ตรงกับคำค้นในตลาดนี้</p>"));
+        };
+        dialog.querySelector("input").oninput = paint;
+        paint();selectionUI();
+      } catch (err) {
+        dialog.querySelector("[data-catalog-status]").textContent = err.message;
+        const retry = document.createElement("button");
+        retry.className = "secondary";
+        retry.textContent = "ลองใหม่";
+        retry.onclick = () => {
+          retry.remove();
+          load();
+        };
+        dialog.querySelector(".instrument-list").append(retry);
+      } finally { loading = false; refreshButton.disabled = false;selectionUI(); }
+    }
+    dialog.querySelector(".instrument-list").onclick = (e) => {
+      const b = e.target.closest("[data-symbol]");
+      if (!b || b.disabled) return;
+      if (!sourceMatches()) {
+        dialog.querySelector(".instrument-list").innerHTML = "";
+        dialog.querySelector("[data-catalog-status]").textContent = "กระดานหรือตลาดเปลี่ยนแล้ว กรุณาปิดและเลือกคู่เทรดใหม่";
+        return;
+      }
+      const pair=b.dataset.symbol;
+      if(mode==='single')selected=new Set([pair]);
+      else {if(mode==='all')mode='multiple';if(selected.has(pair))selected.delete(pair);else selected.add(pair);}
+      paint();selectionUI();
+    };
+    load();
+  });
+})();
