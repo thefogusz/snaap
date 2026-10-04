@@ -88,7 +88,7 @@ export async function registerFiles(app: FastifyInstance, db: pg.Pool) {
   await app.register(multipart, {
     limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 8 },
   });
-  const root = path.resolve(".local/assets");
+  const root = path.resolve(process.env.ASSET_STORAGE_PATH ?? ".local/assets");
   await mkdir(root, { recursive: true });
   await flushImageCleanup(db);
   app.get("/api/v1/images", async (req) =>

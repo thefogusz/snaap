@@ -87,7 +87,12 @@ export async function buildApp(
       .header("X-Frame-Options", "DENY")
       .header("Referrer-Policy", "same-origin")
       .header("Cache-Control", "no-store");
-    if (req.headers.host !== allowedHost)
+    const railwayHealthcheck =
+      !!process.env.RAILWAY_PROJECT_ID &&
+      req.headers.host === "healthcheck.railway.app" &&
+      req.method === "GET" &&
+      req.url === "/api/v1/health";
+    if (req.headers.host !== allowedHost && !railwayHealthcheck)
       throw new ApiError(403, "HOST", "ไม่อนุญาต host นี้");
     if (req.headers.origin && req.headers.origin !== origin)
       throw new ApiError(403, "ORIGIN", "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
