@@ -389,7 +389,9 @@ function chatEmpty() {
 const badge = $(".prototype-badge");
 badge.textContent = "บัญชี / แพ็กเกจ";
 badge.dataset.action = "billing";
-$(".profile").dataset.action = "billing";
+$(".profile").dataset.action = "signout";
+$(".profile").title = "ออกจากระบบ";
+$(".profile .icon").outerHTML = uiIcon("exit", "icon");
 async function api(url, method = "GET", body) {
   const headers = { "x-snaap-client": "web" };
   if(state.workspaceId)headers['x-snaap-workspace']=state.workspaceId;
@@ -1613,6 +1615,10 @@ document.addEventListener("click", async (e) => {
     }
     if (t.dataset.action === "menu")
       return $("#sidebar").classList.toggle("is-open");
+    if (t.dataset.action === "signout") {
+      $("#auth-signout")?.click();
+      return;
+    }
     if (t.dataset.action === "billing") {
       toast("เร็ว ๆ นี้");
       return;
