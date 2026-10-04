@@ -46,7 +46,8 @@
 .preset-leverage-guide{margin-top:14px;font-size:12px;color:#b9bec7;border-top:1px solid #30343a;padding-top:12px}
 .preset-picker .preset-leverage-guide summary{cursor:pointer;color:#d2d7df;font-size:12px;line-height:1.5;padding:0;min-height:0}.preset-leverage-guide p{font-size:12px;line-height:1.65;margin:8px 0}.preset-leverage-guide a{color:#c5dc90;font-size:11px}
 .preset-next-hint{font-size:12px;color:#c3c9d3;margin:12px 0 0}.preset-disclaimer{font-size:10px;line-height:1.6;margin-top:6px;color:#949ba7}
-.preset-chat-card p.preset-profile-intro{color:#d2d7df;margin-bottom:14px}.preset-chat-card .preset-method{margin:10px 0}.preset-chat-card .preset-method summary{font-size:12px;color:#b8c39d;padding:0;min-height:0}.preset-method p{font-size:12px;margin:8px 0}
+.preset-chat-card p.preset-profile-intro{color:#d2d7df;margin-bottom:14px}.preset-chat-card .preset-method{margin:10px 0;border:0}.preset-chat-card .preset-method summary{font-size:12px;color:#b8c39d;padding:4px 0;min-height:28px}.preset-method p{font-size:12px;margin:8px 0}
+.preset-wizard footer{border-top:0;padding-top:0;margin-top:20px}
 @media(max-width:640px){.preset-picker{padding:16px}.preset-option{padding:12px}.preset-option strong{font-size:14px}.preset-card-top{align-items:flex-start;flex-direction:column;gap:4px}.preset-option>span.preset-audience{font-size:12px}.preset-option>span.preset-caution{font-size:10px}.preset-level{font-size:10px}}
 @media(max-width:390px){.preset-grid-cards{grid-template-columns:1fr}.preset-card-top{flex-direction:row}}
 
