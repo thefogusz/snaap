@@ -414,10 +414,6 @@
         badge.textContent = summary.unread;
         badge.className = "badge badge-danger";
         badge.hidden = false;
-      } else if (summary.unread > 0) {
-        badge.textContent = summary.unread;
-        badge.className = "badge badge-pro";
-        badge.hidden = false;
       } else {
         badge.hidden = true;
       }
@@ -528,6 +524,9 @@
     } catch (err) {
       console.error("Load users error", err);
       showToast("โหลดรายชื่อผู้ใช้ไม่สำเร็จ");
+      if (!state.users.length)
+        $("#users-tbody").innerHTML =
+          '<tr><td colspan="6" class="empty-state">โหลดรายชื่อไม่สำเร็จ กดรีเฟรชเพื่อลองอีกครั้ง</td></tr>';
     }
   }
 
@@ -586,7 +585,7 @@
           </td>
           <td>
             <div>Std: <strong>${u.ai_standard_used}</strong> / ${u.is_pro ? 100 : 20}</div>
-            <div style="font-size:11px;color:var(--tertiary);">Deep: <strong>${u.ai_deep_used}</strong> / ${u.is_pro ? 10 : 0}</div>
+            <div style="font-size:11px;color:var(--tertiary);">Deep: <strong>${u.ai_deep_used}</strong> · อยู่ระหว่างพัฒนา</div>
           </td>
           <td>${formatDate(u.created_at)}</td>
           <td style="text-align: right;">
@@ -711,6 +710,7 @@
   }
 
   function closeModal() {
+    if (state.planSaving) return;
     $("#plan-modal").hidden = true;
     state.modalTrigger?.focus();
   }
@@ -788,18 +788,30 @@
       }
     });
     $$(".modal-option-btn").forEach((button) =>
-      button.addEventListener("click", () =>
-        action(button, async () => {
+      button.addEventListener("click", async () => {
+        if (state.planSaving) return;
+        state.planSaving = true;
+        $$("#plan-modal button").forEach((b) => (b.disabled = true));
+        $("#plan-modal").setAttribute("aria-busy", "true");
+        try {
           await apiFetch(`/api/v1/admin/users/${state.selectedUserId}/plan`, {
             method: "POST",
             body: JSON.stringify({ plan: button.dataset.plan }),
           });
+          state.planSaving = false;
           closeModal();
           showToast("อัปเดตแพ็กเกจแล้ว");
           await loadUsers();
           await loadOverview();
-        }),
-      ),
+        } catch (err) {
+          showToast(err.message || "อัปเดตแพ็กเกจไม่สำเร็จ กรุณาลองใหม่");
+        } finally {
+          state.planSaving = false;
+          $$("#plan-modal button").forEach((b) => (b.disabled = false));
+          $("#plan-modal").removeAttribute("aria-busy");
+          if (!$("#plan-modal").hidden) button.focus();
+        }
+      }),
     );
     $("#btn-modal-close").addEventListener("click", closeModal);
     $("#plan-modal").setAttribute("role", "dialog");

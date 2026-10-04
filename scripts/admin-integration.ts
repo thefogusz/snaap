@@ -102,9 +102,17 @@ try {
   assert.equal(first.summary.todaySignups, 67);
   assert.equal(first.events.length, 10);
   assert.ok(first.nextCursor);
-  const cursorEvent=first.events.at(-1).id;
-  const originalTime=(await db.query('SELECT updated_at::text AS time FROM admin_events WHERE id=$1',[cursorEvent])).rows[0].time;
-  await db.query("UPDATE admin_events SET updated_at=now()+interval '1 minute' WHERE id=$1",[cursorEvent]);
+  const cursorEvent = first.events.at(-1).id;
+  const originalTime = (
+    await db.query(
+      "SELECT updated_at::text AS time FROM admin_events WHERE id=$1",
+      [cursorEvent],
+    )
+  ).rows[0].time;
+  await db.query(
+    "UPDATE admin_events SET updated_at=now()+interval '1 minute' WHERE id=$1",
+    [cursorEvent],
+  );
   const second = (
     await app.inject({
       url: `/api/v1/admin/activity?limit=10&category=signup&before=${first.nextCursor}`,
@@ -116,11 +124,34 @@ try {
       (e: any) => !first.events.some((f: any) => e.id === f.id),
     ),
   );
-  await db.query('UPDATE admin_events SET updated_at=$2 WHERE id=$1',[cursorEvent,originalTime]);
+  await db.query("UPDATE admin_events SET updated_at=$2 WHERE id=$1", [
+    cursorEvent,
+    originalTime,
+  ]);
   const rule = randomUUID();
   await db.query(
     "INSERT INTO rules(id,owner_id,active,spec) VALUES($1,$2,true,$3)",
-    [rule, user, JSON.stringify({ name: "<img src=x onerror=alert(1)>" })],
+    [
+      rule,
+      user,
+      JSON.stringify({
+        schemaVersion: 2,
+        name: "<img src=x onerror=alert(1)>",
+        exchange: ["Binance"],
+        market: "Spot",
+        pairs: ["BTC/USDT"],
+        timeframe: "15m",
+        entry: {
+          kind: "COMPARE",
+          op: ">",
+          left: { kind: "PRICE", field: "close", timeframe: "15m" },
+          right: { kind: "CONSTANT", value: 100 },
+        },
+        stages: [],
+        cooldownBars: 0,
+        destinations: [],
+      }),
+    ],
   );
   await db.query(
     "INSERT INTO monitor_status VALUES($1,'Binance','BTC/USDT','READY',now())",

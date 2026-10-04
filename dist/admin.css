@@ -5,7 +5,7 @@
   --surface-alt: #f1f3ee;
   --ink: #191a1d;
   --secondary: #43464e;
-  --tertiary: #767982;
+  --tertiary: #646770;
   --line: #d9dcd4;
   --line-strong: #c2c6bb;
   --soft: #eff1eb;
@@ -33,7 +33,7 @@ html[data-theme="dark"] {
   --surface-alt: #24242a;
   --ink: #f6f6f8;
   --secondary: #c1c2cb;
-  --tertiary: #878894;
+  --tertiary: #9b9daa;
   --line: #38383f;
   --line-strong: #4e4e58;
   --soft: #27272e;
@@ -124,7 +124,7 @@ button, input, select {
   letter-spacing: -1.5px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
 }
 
 .admin-pill {
@@ -267,6 +267,11 @@ button, input, select {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 56px;
+  align-content: flex-start;
+  align-items: flex-start;
   margin-bottom: 8px;
 }
 
@@ -544,6 +549,8 @@ button, input, select {
   border-radius: var(--radius-lg);
   max-width: 480px;
   width: 100%;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   box-shadow: var(--shadow-md);
   padding: 24px;
 }
@@ -577,7 +584,11 @@ button, input, select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
+
+.modal-option-btn .badge { flex-shrink:0; }
+.modal-option-btn:disabled { opacity:.55; cursor:wait; }
 
 .modal-option-btn:hover {
   background: var(--soft);
@@ -789,6 +800,8 @@ button, input, select {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .admin-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; }
+  .admin-tabs .tab-btn { white-space:normal; padding:12px 8px; text-align:left; }
   .admin-header-inner {
     padding: 12px 16px;
   }

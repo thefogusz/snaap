@@ -4,6 +4,8 @@ Open `/admin.html` from the account menu. Access requires a database `admin` rol
 
 The dashboard includes user and plan management, AI quota management, service diagnostics, an operational inbox, and an audit trail. User search and event filters run on the server and support pagination.
 
+Dashboard reads, refreshes, incident capture, acknowledgments and user-management actions do not call an LLM or consume model tokens. The AI usage and estimated cost cards show existing usage records; starting an AI conversation in the ordinary workbench uses its normal quota and provider tokens. Deep mode remains unavailable; a lifetime Pro grant removes expiry, not monthly quotas.
+
 ## Operational inbox
 
 - The overview shows today's registrations and payments, incidents including recoveries, unread events, and the parts of the system with open incidents. Calendar days and displayed dates use `Asia/Bangkok`.

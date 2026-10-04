@@ -19,6 +19,7 @@ async function dashboard() {
           this.listeners[event] = handler;
         },
         setAttribute() {},
+        removeAttribute() {},
         focus() {},
       });
     return nodes.get(id);
@@ -26,6 +27,11 @@ async function dashboard() {
   const tabs = ["overview", "activity", "users", "diagnostics"].map((tab) =>
     Object.assign(node(`tab-${tab}`), { dataset: { tab } }),
   );
+  const plans = ["free", "pro_month", "pro_lifetime"].map((plan) =>
+    Object.assign(node(`plan-${plan}`), { dataset: { plan } }),
+  );
+  const mutations: string[] = [];
+  let releaseMutation: (() => void) | undefined;
   let init: Function = () => {},
     poll: Function = () => {},
     offline = false;
@@ -140,7 +146,12 @@ async function dashboard() {
       document: {
         querySelector: node,
         querySelectorAll: (selector: string) =>
-          selector === ".tab-btn" ? tabs : [],
+          selector === ".tab-btn"
+            ? tabs
+            : selector === ".modal-option-btn" ||
+                selector === "#plan-modal button"
+              ? plans
+              : [],
         addEventListener: (_: string, handler: Function) => {
           init = handler;
         },
@@ -157,8 +168,15 @@ async function dashboard() {
       setInterval: (handler: Function) => {
         poll = handler;
       },
-      fetch: async (url: string) => {
+      fetch: async (url: string, options: any) => {
         if (offline) throw new Error("offline");
+        if (options.method === "POST") {
+          mutations.push(url);
+          await new Promise<void>((resolve) => {
+            releaseMutation = resolve;
+          });
+          return { status: 200, ok: true, json: async () => ({}) };
+        }
         return {
           status: 200,
           ok: true,
@@ -180,6 +198,9 @@ async function dashboard() {
     toasts,
     event,
     poll,
+    plans,
+    mutations,
+    releaseMutation: () => releaseMutation?.(),
     setOffline: () => {
       offline = true;
     },
@@ -212,6 +233,30 @@ test("admin dashboard escapes stored HTML in overview, feed, users, diagnostics 
       `${selector} must not create an executable element`,
     );
   }
+});
+
+test("plan changes prevent conflicting repeated clicks and keep the modal open until saved", async () => {
+  const page = await dashboard();
+  page.node("#plan-modal").hidden = false;
+  const saving = page.plans[0].listeners.click();
+  await page.flush();
+  await page.plans[1].listeners.click();
+  page.node("#btn-modal-close").listeners.click();
+  assert.equal(page.mutations.length, 1);
+  assert.ok(page.plans.every((button) => button.disabled));
+  assert.equal(page.node("#plan-modal").hidden, false);
+  page.releaseMutation();
+  await saving;
+  assert.equal(page.node("#plan-modal").hidden, true);
+  assert.ok(page.plans.every((button) => !button.disabled));
+});
+
+test("failed first user load offers a visible retry instead of an endless loading row", async () => {
+  const page = await dashboard();
+  page.setOffline();
+  page.tabs[2].listeners.click();
+  await page.flush();
+  assert.ok(page.node("#users-tbody").innerHTML.includes("กดรีเฟรช"));
 });
 
 test("admin polling announces new versions once and retains a visible stale-data warning offline", async () => {

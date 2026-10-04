@@ -1123,7 +1123,7 @@ async function refresh({ reuseMe = false } = {}) {
     const banner=document.createElement('div');
     banner.id='admin-impersonation-banner';
     banner.setAttribute('role','status');
-    banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;padding:12px;background:#fef3d6;color:#543600;display:flex;gap:16px;justify-content:center;align-items:center;flex-wrap:wrap';
+    banner.style.cssText='position:sticky;top:0;z-index:9999;padding:12px;background:#fef3d6;color:#543600;display:flex;gap:16px;justify-content:center;align-items:center;flex-wrap:wrap';
     const message=document.createElement('span');
     message.textContent='โหมดช่วยตรวจสอบบัญชีผู้ใช้ · เซสชันนี้มีอายุ 15 นาที';
     const restore=document.createElement('button');
@@ -1139,6 +1139,9 @@ async function refresh({ reuseMe = false } = {}) {
     });
     banner.append(message,restore);
     document.body.prepend(banner);
+    new ResizeObserver(() => {
+      document.body.style.setProperty('--admin-banner-height', `${banner.getBoundingClientRect().height}px`);
+    }).observe(banner);
   }
   $("#ai-mode option[value=deep]").disabled = true;
   $("#ai-mode option[value=deep]").textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
