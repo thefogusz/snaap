@@ -235,9 +235,11 @@ export function renderSignal(
             : "⚪";
   const text = [
     `${testLabel}Snaap · ${clean(heading, 35)}`,
-    `${appearance.layout === "minimal" ? marker + " " : ""}${title} · ${event}`,
+    `${appearance.layout === "minimal" || kind === "TELEGRAM" ? marker + " " : ""}${title} · ${event}`,
     ...fields.map((x) => `${x.label}: ${x.value}`),
-    ...(url && appearance.layout === "card" ? [url] : []),
+    ...(url && appearance.layout === "card" && kind !== "TELEGRAM"
+      ? [url]
+      : []),
     ...(signature ? [signature] : []),
   ].join("\n");
   let payload: any;

@@ -87,3 +87,32 @@ test("shared appearance reaches Discord, Telegram and custom webhook presentatio
   );
   assert.equal(webhook.event.referencePrice, 68420.5);
 });
+
+test("Telegram photo captions use the same clean signal text as text mode", () => {
+  const signal = { ...demoSignal(), test: false };
+  for (const side of ["LONG", "SHORT"]) {
+    const item = { ...signal, event: { ...signal.event, side } };
+    const card = renderSignal(
+      "TELEGRAM",
+      item,
+      appearanceSchema.parse({
+        layout: "card",
+        showCreator: true,
+        creatorName: "Gus",
+      }),
+      "https://snaap.example",
+    );
+    const plain = renderSignal(
+      "TELEGRAM",
+      item,
+      appearanceSchema.parse({
+        layout: "minimal",
+        showCreator: true,
+        creatorName: "Gus",
+      }),
+      "https://snaap.example",
+    );
+    assert.equal(card.text, plain.text);
+    assert.match(card.text, side === "LONG" ? /🟢/ : /🔴/);
+  }
+});
