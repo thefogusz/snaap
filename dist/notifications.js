@@ -97,7 +97,7 @@ function paintNotifications() {
       .map(([kind, info]) => {
         const available = channels.available[kind];
         const count=channels.items.filter(x=>x.kind===kind&&x.verified).length;
-        return `<article class="channel-option" data-kind="${kind}"><div class="channel-card-top"><span class="channel-mark ${info.logo ? "channel-brand" : ""}" aria-hidden="true">${info.logo ? `<img src="${info.logo}" alt="" width="44" height="44">` : uiIcon(info.icon)}</span><span class="channel-availability" data-ready="${available}">${count?`เชื่อมแล้ว ${count} ช่องทาง`:available?'พร้อมเชื่อมต่อ':'ยังไม่เปิดใช้งาน'}</span></div><h3>${info.name}</h3><p>${info.detail}</p><button type="button" class="${kind==='DISCORD'&&available?'primary':'secondary'}" data-connect-channel="${kind}" >${available?'เชื่อมต่อ / คู่มือ':'ดูคู่มือ'}</button></article>`;
+        return `<article class="channel-option" data-kind="${kind}"><div class="channel-card-top"><span class="channel-mark ${info.logo ? "channel-brand" : ""}" aria-hidden="true">${info.logo ? `<img src="${info.logo}" alt="" width="44" height="44">` : uiIcon(info.icon)}</span><span class="channel-availability" data-ready="${available}">${count?`เชื่อมแล้ว ${count} ช่องทาง`:available?'พร้อมเชื่อมต่อ':'ยังไม่เปิดใช้งาน'}</span></div><h3>${info.name}</h3><p>${info.detail}</p><button type="button" class="${kind==='DISCORD'&&available?'primary':'secondary'}" data-connect-channel="${kind}" >เชื่อมต่อ</button></article>`;
 
       })
       .join(
