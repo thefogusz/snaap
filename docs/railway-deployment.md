@@ -45,7 +45,7 @@ There is no public test account or login bypass. Without OAuth configuration, th
 
 - Google Cloud project: `Snaap` (`jovial-analyst-510613-d8`).
 - Web OAuth client: `Snaap Production`; only the production callback above is registered.
-- Publishing status: Testing. One owner account was registered as a Google test user during setup. Snaap now accepts public Google signup without an email allowlist.
+- Publishing status: **In production** (confirmed in Google Auth Platform on 2026-10-04). Snaap accepts public Google signup without an email allowlist. Branding links point to `https://snaap.me` and `https://snaap.me/privacy.html`.
 - Declared scopes: `openid` and `https://www.googleapis.com/auth/userinfo.email`.
 - Client ID and Client Secret are stored in Railway Variables. The local backup `.local/deployment/google-oauth-production.json` is ignored by Git; do not publish it.
 - Configuration is not proof of a successful sign-in. Verify Google consent, callback and the authenticated workspace after HTTPS is available.

@@ -4,7 +4,7 @@
 
 1. เปิด [Google Cloud Console](https://console.cloud.google.com/) แล้วสร้างหรือเลือกโปรเจกต์ Snaap
 2. ไปที่ **Google Auth Platform** → **Branding** ตั้งชื่อแอป `Snaap` และอีเมลติดต่อ
-3. ใน **Audience** เลือก External เพื่อให้บัญชี Google ทั่วไปเข้าได้ Snaap ขอเฉพาะสิทธิ์พื้นฐาน `openid email` จึงไม่ต้องเพิ่มผู้ใช้ทีละอีเมล แม้สถานะ Google ยังเป็น Testing
+3. ใน **Audience** เลือก External แล้ว Publish app เป็น **In production** สำหรับเว็บจริง Snaap ขอเฉพาะสิทธิ์พื้นฐาน `openid email` และไม่ต้องเพิ่มผู้ใช้ทีละอีเมล
 4. ใน **Data Access** ใช้แค่ `openid` และ `https://www.googleapis.com/auth/userinfo.email` ไม่ต้องเพิ่ม Gmail, Drive หรือสิทธิ์อื่น
 5. ใน **Clients** → **Create client** เลือก **Web application**
 6. เพิ่ม **Authorized redirect URI** นี้ให้ตรงทุกตัวอักษร:
