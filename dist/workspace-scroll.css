@@ -1,4 +1,7 @@
 .setup-pane { min-width:0; display:grid; gap:20px; }
+body:has(#admin-impersonation-banner) .sidebar { top:var(--admin-banner-height,50px); }
+body:has(#admin-impersonation-banner) .app { min-height:calc(100svh - var(--admin-banner-height,50px)); }
+body:has(#admin-impersonation-banner):has(#view-home:not([hidden]) .workbench:not([hidden])) .main-shell { height:calc(100dvh - var(--admin-banner-height,50px)); }
 .setup-pane-nav { display:flex; flex-direction:row; flex-shrink:0; align-items:center; gap:8px; margin-right:12px; }
 .setup-pane-nav[hidden] { display:none; }
 .setup-pane-nav button { padding:8px 12px; border-radius:8px; min-height:36px; font-size:12px; white-space:nowrap; background:var(--white); border:1px solid var(--line); }

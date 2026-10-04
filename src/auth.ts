@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
+import { ADMIN_EMAIL } from "./admin-access.js";
 
 const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -16,8 +17,6 @@ const callbackQuery = z.object({
   code: z.string().min(1).max(4096).optional(),
   error: z.string().max(100).optional(),
 });
-const fail = (reply: FastifyReply, reason: string) =>
-  reply.redirect(`/login.html?error=${reason}`);
 
 export function registerGoogle(
   app: FastifyInstance,
@@ -36,6 +35,15 @@ export function registerGoogle(
     maxAge: 600,
   };
   app.get("/api/v1/auth/google", async (req, reply) => {
+    const purpose = z
+      .object({ admin: z.literal("1").optional() })
+      .parse(req.query).admin
+      ? "admin"
+      : "public";
+    const fail = (reply: FastifyReply, reason: string) =>
+      reply.redirect(
+        `${purpose === "admin" ? "/admin/login" : "/login.html"}?error=${reason}`,
+      );
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
       return fail(reply, "not_configured");
     const state = randomBytes(32).toString("hex");
@@ -44,10 +52,11 @@ export function registerGoogle(
     // Server-side expiry and atomic consumption prevent callback replay.
     await db.query("DELETE FROM oauth_attempts WHERE expires_at<=now()");
     await db.query(
-      "INSERT INTO oauth_attempts(state_hash,verifier_hash,nonce,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')",
-      [digest(state), digest(verifier), nonce],
+      "INSERT INTO oauth_attempts(state_hash,verifier_hash,nonce,expires_at,purpose) VALUES($1,$2,$3,now()+interval '10 minutes',$4)",
+      [digest(state), digest(verifier), nonce, purpose],
     );
     reply.setCookie("snaap_oauth", `${state}.${verifier}`, cookieOptions);
+    reply.setCookie("snaap_oauth_purpose", purpose, cookieOptions);
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.search = new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID,
@@ -63,10 +72,16 @@ export function registerGoogle(
     return reply.redirect(url.href);
   });
   app.get("/api/v1/auth/google/callback", async (req, reply) => {
+    let adminFlow = req.cookies.snaap_oauth_purpose === "admin";
+    const fail = (reply: FastifyReply, reason: string) =>
+      reply.redirect(
+        `${adminFlow ? "/admin/login" : "/login.html"}?error=${reason}`,
+      );
     reply.header("Referrer-Policy", "no-referrer");
     const parsed = callbackQuery.safeParse(req.query);
     const saved = req.cookies.snaap_oauth?.split(".");
     reply.clearCookie("snaap_oauth", { path: cookieOptions.path });
+    reply.clearCookie("snaap_oauth_purpose", { path: cookieOptions.path });
     if (
       !parsed.success ||
       saved?.length !== 2 ||
@@ -78,10 +93,11 @@ export function registerGoogle(
     const query = parsed.data;
     try {
       const attempt = await db.query(
-        "DELETE FROM oauth_attempts WHERE state_hash=$1 AND verifier_hash=$2 AND expires_at>now() RETURNING nonce",
+        "DELETE FROM oauth_attempts WHERE state_hash=$1 AND verifier_hash=$2 AND expires_at>now() RETURNING nonce,purpose",
         [digest(query.state), digest(saved[1]!)],
       );
       if (!attempt.rowCount) return fail(reply, "expired");
+      adminFlow = attempt.rows[0].purpose === "admin";
       if (query.error)
         return fail(
           reply,
@@ -135,6 +151,8 @@ export function registerGoogle(
           payload.azp !== process.env.GOOGLE_CLIENT_ID)
       )
         return fail(reply, "failed");
+      if (adminFlow && payload.email.toLowerCase() !== ADMIN_EMAIL)
+        return fail(reply, "admin_denied");
       // Public signup: every verified Google identity gets its own account.
       // Identify accounts by Google's stable sub; never merge accounts by email.
       const row = await db.query(
@@ -146,7 +164,7 @@ export function registerGoogle(
           digest(req.cookies.snaap_session),
         ]);
       await session(row.rows[0].id, reply);
-      return reply.redirect("/#home");
+      return reply.redirect(adminFlow ? "/admin" : "/#home");
     } catch {
       // Never expose authorization codes, tokens, provider replies or DB errors.
       return fail(reply, "failed");

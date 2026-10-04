@@ -209,6 +209,7 @@ export async function startMonitor(
   };
   boss.on("error", () => console.error("Queue operation failed"));
   await boss.start();
+  await db.query("INSERT INTO service_heartbeats(service,checked_at) VALUES('monitor',now()) ON CONFLICT(service) DO UPDATE SET checked_at=now()");
   await boss.createQueue("scan");
   await boss.createQueue("evaluate", {
     retryLimit: 3,
@@ -311,6 +312,7 @@ export async function startMonitor(
       )
     ).rows;
     await enqueueDeliveries(pendingDeliveries.map((row) => row.id));
+    await db.query("INSERT INTO service_heartbeats(service,checked_at) VALUES('monitor',now()) ON CONFLICT(service) DO UPDATE SET checked_at=now()");
     console.info(
       JSON.stringify({
         event: "monitor_scan",

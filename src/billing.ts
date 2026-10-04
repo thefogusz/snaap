@@ -288,6 +288,8 @@ async function rebuildEntitlement(c: pg.PoolClient, owner: string) {
     }
     expiry = Math.max(expiry ?? 0, end);
   }
+  const manual = (await c.query("SELECT pro_until FROM manual_entitlements WHERE owner_id=$1", [owner])).rows[0];
+  if (manual?.pro_until) expiry = Math.max(expiry ?? 0, new Date(manual.pro_until).getTime());
   await c.query("UPDATE entitlements SET pro_until=$2 WHERE owner_id=$1", [
     owner,
     expiry === null ? null : new Date(expiry),
