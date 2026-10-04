@@ -135,12 +135,7 @@ export function registerGoogle(
           payload.azp !== process.env.GOOGLE_CLIENT_ID)
       )
         return fail(reply, "failed");
-      const invited = (process.env.INVITED_EMAILS ?? "")
-        .split(",")
-        .map((x) => x.trim().toLowerCase())
-        .filter(Boolean);
-      if (!invited.includes(payload.email.toLowerCase()))
-        return fail(reply, "invite_required");
+      // Public signup: every verified Google identity gets its own account.
       // Identify accounts by Google's stable sub; never merge accounts by email.
       const row = await db.query(
         "INSERT INTO users(id,google_sub,email) VALUES($1,$2,$3) ON CONFLICT(google_sub) DO UPDATE SET email=excluded.email RETURNING id",

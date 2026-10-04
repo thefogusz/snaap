@@ -35,8 +35,9 @@ Follow [Google setup](google-auth-setup.md), using these production values:
 
 - Authorized JavaScript origin, if requested: `https://snaap.me`
 - Authorized redirect URI: `https://snaap.me/api/v1/auth/google/callback`
-- Railway variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `INVITED_EMAILS`
-- Add the permitted email addresses to Google Test users while the OAuth app is in Testing.
+- Railway variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+- Public signup accepts every verified Google identity. `INVITED_EMAILS` is no longer used.
+- With only `openid email` scopes, Google permits users outside the Test users list even in Testing; see [Google's basic identity scope exception](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview).
 
 There is no public test account or login bypass. Without OAuth configuration, the login page can be deployed but users cannot enter the app.
 
@@ -44,7 +45,7 @@ There is no public test account or login bypass. Without OAuth configuration, th
 
 - Google Cloud project: `Snaap` (`jovial-analyst-510613-d8`).
 - Web OAuth client: `Snaap Production`; only the production callback above is registered.
-- Publishing status: Testing. One owner account is registered as a Google test user and in Railway `INVITED_EMAILS`.
+- Publishing status: Testing. One owner account was registered as a Google test user during setup. Snaap now accepts public Google signup without an email allowlist.
 - Declared scopes: `openid` and `https://www.googleapis.com/auth/userinfo.email`.
 - Client ID and Client Secret are stored in Railway Variables. The local backup `.local/deployment/google-oauth-production.json` is ignored by Git; do not publish it.
 - Configuration is not proof of a successful sign-in. Verify Google consent, callback and the authenticated workspace after HTTPS is available.

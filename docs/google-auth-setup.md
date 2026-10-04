@@ -4,7 +4,7 @@
 
 1. เปิด [Google Cloud Console](https://console.cloud.google.com/) แล้วสร้างหรือเลือกโปรเจกต์ Snaap
 2. ไปที่ **Google Auth Platform** → **Branding** ตั้งชื่อแอป `Snaap` และอีเมลติดต่อ
-3. ใน **Audience** เลือก External หากต้องการใช้บัญชี Google ทั่วไป ช่วงพัฒนาใช้ Testing และเพิ่มอีเมลตัวเองใน Test users
+3. ใน **Audience** เลือก External เพื่อให้บัญชี Google ทั่วไปเข้าได้ Snaap ขอเฉพาะสิทธิ์พื้นฐาน `openid email` จึงไม่ต้องเพิ่มผู้ใช้ทีละอีเมล แม้สถานะ Google ยังเป็น Testing
 4. ใน **Data Access** ใช้แค่ `openid` และ `https://www.googleapis.com/auth/userinfo.email` ไม่ต้องเพิ่ม Gmail, Drive หรือสิทธิ์อื่น
 5. ใน **Clients** → **Create client** เลือก **Web application**
 6. เพิ่ม **Authorized redirect URI** นี้ให้ตรงทุกตัวอักษร:
@@ -25,10 +25,11 @@
 APP_ORIGIN=http://127.0.0.1:4173
 GOOGLE_CLIENT_ID=ใส่-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=ใส่-client-secret
-INVITED_EMAILS=อีเมลของคุณ@gmail.com
 ```
 
-`INVITED_EMAILS` เป็นรายชื่อที่ Snaap อนุญาตให้เข้าได้ คั่นด้วยจุลภาคสำหรับหลายบัญชี ถ้าว่างจะไม่มีบัญชี Google เข้าได้ ส่วน Test users เป็นการอนุญาตฝั่ง Google ต้องตั้งทั้งสองแห่งขณะใช้ Testing
+Snaap เปิดสมัครให้ทุกบัญชี Google ที่ยืนยันอีเมลแล้ว ระบบสร้างบัญชีแยกตาม Google subject ID โดยอัตโนมัติ ไม่ใช้ `INVITED_EMAILS` อีกต่อไป ค่าที่ค้างอยู่บนเซิร์ฟเวอร์ไม่มีผลต่อการเข้าสู่ระบบ
+
+Google ยกเว้นข้อจำกัดรายชื่อ Test users สำหรับแอปที่ขอเฉพาะสิทธิ์พื้นฐาน `openid email profile` ตาม [เอกสาร Google](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview) หากเพิ่มสิทธิ์อื่นในอนาคตต้องตรวจข้อกำหนดอีกครั้ง
 
 หยุดแล้วเปิด `npm run dev` ใหม่ จากนั้นเปิด:
 
@@ -36,7 +37,7 @@ INVITED_EMAILS=อีเมลของคุณ@gmail.com
 http://127.0.0.1:4173/login.html
 ```
 
-ก่อนเข้าใช้งานจะแสดงป๊อปอัปกลางจอแนะนำ Snaap กด **เข้าสู่ระบบด้วย Google** เลือกบัญชีแล้วกลับสู่หน้าแชท ปุ่ม **ออกจากระบบ** อยู่ใต้ข้อมูลบัญชีในแถบซ้าย
+ก่อนเข้าใช้งานจะแสดงป๊อปอัปกลางจอแนะนำ Snaap กด **เข้าสู่ระบบด้วย Google** เลือกบัญชีแล้วกลับสู่หน้าแชท กดชื่อบัญชีในแถบซ้ายเพื่อเปิดเมนู **ออกจากระบบ**
 
 หากยังไม่ได้ตั้งค่า Google ปุ่มจะแสดงแต่ยังใช้งานไม่ได้ ในโหมดพัฒนาบนเครื่องยังมีปุ่มบัญชีทดสอบแยกไว้ ไม่มีการเข้าสู่บัญชีทดสอบอัตโนมัติสำหรับผู้ที่ยังไม่ล็อกอิน
 
@@ -55,7 +56,7 @@ http://127.0.0.1:4173/login.html
 
 ตั้ง `APP_ORIGIN` เป็นโดเมน HTTPS จริง เช่น `https://app.example.com` และเพิ่ม redirect URI `https://app.example.com/api/v1/auth/google/callback` ใน Google Client ของเว็บจริง ใช้ `npm start` พร้อม DATABASE_URL โหมดนี้ไม่มีปุ่มหรือเส้นทางบัญชีทดสอบที่ใช้งานได้
 
-ตั้งหน้า consent พร้อมอีเมลติดต่อ โดเมน และนโยบายความเป็นส่วนตัวตามข้อกำหนด Google ก่อนเผยแพร่ คงรายชื่อ INVITED_EMAILS ไว้จนกว่าจะตั้งใจเปิดสมัครสำหรับทุกคน
+ตั้งหน้า consent พร้อมอีเมลติดต่อ โดเมน และนโยบายความเป็นส่วนตัวตามข้อกำหนด Google ก่อนเผยแพร่ การเปิดสมัครทั่วไปยังต้องผ่านการตรวจ Google ID token, PKCE, state และ nonce เหมือนเดิม
 
 ## แก้ปัญหาที่พบบ่อย
 
@@ -63,10 +64,10 @@ http://127.0.0.1:4173/login.html
 |---|---|
 | Google Login ยังไม่พร้อม | ใส่ Client ID/Secret แล้วรีสตาร์ตเซิร์ฟเวอร์ |
 | redirect_uri_mismatch | ตรวจ origin, port, path และ http/https ให้ตรงใน Google Console |
-| บัญชียังไม่ได้รับเชิญ | เพิ่มอีเมลใน INVITED_EMAILS และรีสตาร์ต |
-| Google ปฏิเสธช่วง Testing | เพิ่มบัญชีใน Test users ของ Google |
+| บัญชียังไม่ได้รับเชิญจากเวอร์ชันเดิม | อัปเดตเซิร์ฟเวอร์เป็นเวอร์ชันเปิดสมัครทั่วไป แล้วเริ่มล็อกอินใหม่ |
+| Google ปฏิเสธช่วง Testing | ตรวจว่า Audience เป็น External และขอแค่ `openid email`; หากเพิ่มสิทธิ์อื่น ให้ทำตามข้อกำหนด Test users / การเผยแพร่ของ Google |
 | การเข้าสู่ระบบหมดอายุ | เริ่มใหม่จากหน้า login อย่าเปิด callback เดิมหรือสลับหลายแท็บพร้อมกัน |
 
 ## สถานะการส่งมอบ
 
-ระบบและหน้าล็อกอินเตรียมไว้แล้ว ยังไม่ได้ยืนยันการเข้าสู่ระบบกับ Google จริง เพราะยังไม่มี OAuth Client ID/Secret การตรวจตั้งค่าพร้อมจาก `/health` ไม่ใช่หลักฐานว่า flow Google สำเร็จ
+Google Login ของเจ้าของระบบผ่านการตรวจบน production แล้วเมื่อ 4 ต.ค. 2569 เวอร์ชันเปิดสมัครทั่วไปเอาข้อจำกัดรายชื่ออีเมลออก โดยยังตรวจบัญชี Google ตามเดิม การตรวจตั้งค่าพร้อมจาก `/health` ไม่ใช่หลักฐานว่าบัญชีใหม่เข้าสู่ระบบสำเร็จ ต้องตรวจด้วยการล็อกอินจริงของผู้ใช้ใหม่
