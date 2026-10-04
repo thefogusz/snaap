@@ -1,0 +1,51 @@
+# Snaap notification channels
+
+## User workflow
+
+Open **การแจ้งเตือน → ช่องทาง → เชื่อมต่อ / คู่มือ** (or **ดูคู่มือ** when the provider is not configured). Channel Studio has three steps: guide, connection, appearance. Guides and sample previews work before operator credentials are configured. A preview does not send anything.
+
+1. Follow the channel-specific guide. Discord connection sends one clearly disclosed TEST message. Telegram and LINE require a one-time `/start` challenge in the recipient's private chat. Webhook connection POSTs a verification challenge and requires its exact text back.
+2. Check the binding status for Telegram/LINE; challenges expire after ten minutes. A disconnected or expired challenge cannot reconnect the destination. Add a new destination to reconnect.
+3. Customize card/minimal layout, accent, Thai/English, heading, reference price, setup, time and ID. Pair, direction, event, Snaap attribution and the no-order-executed note remain visible. Save then send a test. Tests use the saved appearance; drafts only affect the preview.
+4. Select the verified destination in each setup and save the setup's channels before activation. Connecting a destination alone does not subscribe every setup.
+
+Saved appearance belongs to the destination, so two destinations on the same provider can look different. Existing Telegram destinations default to minimal text. LINE defaults to a Flex bubble, Discord to an embed. Telegram's card option sends a small Snaap PNG with a caption using multipart upload, so it works without public image hosting. Its three brand accents have matching PNG variants. Minimal messages use no bot HTML/Markdown markup; Discord escapes formatting and disables mentions.
+
+## Operator setup
+
+Keep credentials in `.env`/your deployment secret store; never in chat or browser code. Restart the server after changing environment configuration. `npm run dev` stays on loopback with its existing private PostgreSQL; this change does not deploy or create a tunnel.
+
+| Channel | Required configuration | Receive mode |
+| --- | --- | --- |
+| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (without @) | Dev defaults to long polling. Production defaults to webhook and also requires `TELEGRAM_WEBHOOK_SECRET`. Explicitly set `TELEGRAM_RECEIVE_MODE=polling` or `webhook` to override. |
+| LINE | `LINE_CHANNEL_SECRET`, `LINE_ACCESS_TOKEN`; set `LINE_OA_URL` to an add-friend link | Register `${APP_ORIGIN}/api/v1/hooks/line` in LINE Developers, verify it, and enable Use webhook. A public HTTPS runtime is required for real inbound LINE events. |
+| Discord | `DATA_ENCRYPTION_KEY` | User provides an incoming webhook from their text channel; no bot token or Nitro subscription is required. |
+| Webhook | `DATA_ENCRYPTION_KEY`, `WEBHOOK_ALLOWED_HOSTS` | Operator-reviewed exact public HTTPS hostnames only. Private networks, IP literals, redirects and arbitrary hosts remain rejected. |
+
+Use a separate Telegram bot for development. Polling checks for an existing webhook and stops rather than deleting it or taking over production. Only one receiver process may poll a bot. The cursor is durable and namespaced by a hash of the bot token; challenge binding is atomic and one-time. Webhook mode must be registered with Telegram's `setWebhook`, including the matching `secret_token`; the application does not change provider webhook settings on its own.
+
+`DATA_ENCRYPTION_KEY` is the existing 32-byte hex key. Back it up separately. Discord URLs and newly connected Webhook URLs/signing secrets are encrypted and scoped to owner plus destination ID. List/preview routes never return credentials. New Webhook signing secrets are shown only in the connection response: store them before closing the guide. Losing one requires a new connection. Legacy Webhook destinations still use `WEBHOOK_SIGNING_SECRET`.
+
+### Branding and return links
+
+When `APP_ORIGIN` is a public HTTPS origin, LINE/Discord cards include the hosted Snaap brand image and a return link to the notification page. Telegram includes a return button; minimal text includes the URL. With loopback/HTTP origins, the UI and renderer omit unusable external return links and hosted LINE/Discord images. LINE's colored branded header and Discord's Snaap footer still work. The preview explicitly describes this limitation. Verify the public PNG returns HTTP 200 without authentication before sending live cards. The banner's market line is brand artwork, not a price chart or trading evidence.
+
+### LINE cost guardrails
+
+The operator owns the shared OA. Default limits are **30 sends per user per Bangkok calendar month**, **250 sends across the application per month**, including tests. Override `LINE_MONTHLY_USER_LIMIT` and `LINE_MONTHLY_TOTAL_LIMIT` only after checking the OA's actual plan, regional limits, and other senders using that account. Zero blocks sends. These limits control Snaap's traffic; they do not control broadcasts or other applications sending through the same OA, and do not guarantee the account's billing outcome. No paid broadcast or OA package upgrade is enabled by this code.
+
+Reservations commit before provider I/O, serialize through a database advisory lock, and retain failed/ambiguous requests conservatively. A retry retains its request UUID and quota reservation within the same month; crossing the month boundary reserves a slot again. LINE retries retain `X-Line-Retry-Key`; 409 counts as accepted only with `x-line-accepted-request-id`. Provider quota/rate-limit failures leave the signal in the web inbox. An accepted API request is not proof the user received/read it.
+
+## Custom Webhook receiver
+
+Download [the self-contained Node.js example](../dist/assets/snaap-webhook-example.mjs) from the in-app guide. It listens on loopback; deploy it behind your own HTTPS proxy and allowlist that domain in Snaap. It handles challenge verification before a signing secret exists. Set `SNAAP_WEBHOOK_SECRET` on the receiver to the one-time secret returned by Snaap, then send a test.
+
+Signal payloads retain `id`, `event`, `pair`, `exchange`, and `revision`, and add `type: snaap.signal`, `version: 1`, `test`, and `presentation` (rendered text, appearance, brand, and optional public image/link). Appearance never removes evidence from `event`.
+
+Check `x-snaap-signature-v1` as lowercase hex HMAC-SHA256(secret, `x-snaap-timestamp + "." + rawBody`) using constant-time comparison; reject timestamps outside a five-minute window. Match `x-snaap-id` to body ID and persist events with a unique ID before acknowledging HTTP 2xx. The example's in-memory dedup set is bounded and illustrative; replace it with durable storage for production. The legacy `x-snaap-signature` (HMAC over raw body only) is also sent for existing receivers. At-least-once retries require receiver deduplication.
+
+## Verification
+
+Run `npm run typecheck`, `npm test`, `npm run test:notifications`, and `npm run test:integration`. The notification integration check creates and cleans up only isolated local test accounts and makes no external provider calls. Unit transport fixtures verify LINE Flex/retry headers, Telegram text/multipart image requests and absence of paid-broadcast parameters. Browser checks cover guides, live preview controls, unavailable-channel UX and responsive layout. Real provider credentials, Telegram polling delivery, LINE webhook delivery and actual Discord/Webhook destinations still require explicit end-to-end verification with configured test accounts.
+
+Official format and delivery references: [Telegram Bot API](https://core.telegram.org/bots/api), [LINE Flex Messages](https://developers.line.biz/en/docs/messaging-api/using-flex-messages/), [LINE retry semantics](https://developers.line.biz/en/docs/messaging-api/retrying-api-request/), [Discord incoming webhooks](https://docs.discord.com/developers/resources/webhook).

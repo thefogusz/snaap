@@ -120,16 +120,10 @@ export function initPresets(ctx){
     const data=await api('/destinations');if(!current())return;
     const existing=node.querySelector('.preset-channel-connect');if(existing){existing.remove();return;}
     const box=document.createElement('div');box.className='preset-channel-connect';
-    const available=Object.keys(data.available).filter(k=>data.available[k]);
-    box.innerHTML=available.length?`<form><label>ช่องทาง<select name="kind">${available.map(k=>`<option value="${k}">${k==='WEBHOOK'?'Webhook':k==='DISCORD'?'Discord':k==='TELEGRAM'?'Telegram':'LINE'}</option>`).join('')}</select></label><label>ชื่อช่องทาง<input name="name" required maxlength="80" placeholder="เช่น แจ้งเตือนส่วนตัว"></label><label data-url hidden>HTTPS URL<input name="url" type="url" placeholder="https://"></label><button class="secondary" type="submit">เชื่อมต่อ</button></form><p role="status" data-instruction></p><button class="text-button" type="button" data-refresh-channel>ตรวจสถานะการเชื่อมต่อ</button>`:'<p>ช่องทางภายนอกยังไม่เปิดให้เชื่อมต่อ รับสัญญาณในเว็บได้ทันที</p>';
+    box.innerHTML=`<p>เลือกช่องทางเพื่อดูคู่มือและปรับหน้าตาสัญญาณ</p><div class="channel-row-actions">${Object.keys(data.available).map(kind=>`<button class="secondary" type="button" data-preset-channel-guide="${kind}">${kind==='TELEGRAM'?'Telegram':kind==='WEBHOOK'?'Webhook':kind==='DISCORD'?'Discord':'LINE'}</button>`).join('')}</div><button class="text-button" type="button" data-refresh-channel>ตรวจสถานะการเชื่อมต่อ</button>`;
     node.querySelector('.preset-destinations').append(box);
-    const form=box.querySelector('form');
-    if(form){
-     const select=form.querySelector('select'),urlLabel=form.querySelector('[data-url]');
-     const update=()=>{urlLabel.hidden=!['WEBHOOK','DISCORD'].includes(select.value);form.elements.url.required=['WEBHOOK','DISCORD'].includes(select.value);form.elements.url.type=select.value==='DISCORD'?'password':'url';form.querySelector('button[type=submit]').textContent=select.value==='DISCORD'?'เชื่อมและส่งข้อความทดสอบ':'เชื่อมต่อ';};update();select.onchange=update;
-     form.onsubmit=async e=>{e.preventDefault();if(!current()||working)return;working=true;const b=form.querySelector('button');b.disabled=true;try{const input={kind:select.value,name:form.elements.name.value};if(['WEBHOOK','DISCORD'].includes(input.kind))input.url=form.elements.url.value;const result=await api('/destinations','POST',input);if(!current())return;box.querySelector('[data-instruction]').textContent=result.instruction;form.hidden=true;}catch(e){box.querySelector('[data-instruction]').textContent=e.message;}finally{working=false;b.disabled=false;}};
-     box.querySelector('[data-refresh-channel]').onclick=()=>run(async()=>{await refresh();});
-    }
+    box.querySelectorAll('[data-preset-channel-guide]').forEach(button=>button.onclick=()=>window.SnaapChannels.open(button.dataset.presetChannelGuide,undefined,data));
+    box.querySelector('[data-refresh-channel]').onclick=()=>run(async()=>{await refresh();});
    },false);
    node.querySelector('[data-preset-save]')?.addEventListener('click',()=>run(async()=>{
     const destinations=[...node.querySelectorAll('[data-channel]:checked')].map(n=>n.dataset.channel);
