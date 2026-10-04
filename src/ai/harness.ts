@@ -203,7 +203,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       const used = Number(
         (
           await c.query(
-            "SELECT count(*) AS n FROM usage_ledger WHERE owner_id=$1 AND mode=$2 AND status IN ('RESERVED','COMPLETED') AND created_at>=date_trunc('month',now())",
+            "SELECT count(*) AS n FROM usage_ledger WHERE owner_id=$1 AND mode=$2 AND status IN ('RESERVED','COMPLETED') AND NOT quota_waived AND created_at>=date_trunc('month',now())",
             [req.userId, input.mode],
           )
         ).rows[0].n,

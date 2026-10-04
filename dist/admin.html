@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snaap — ระบบผู้ดูแล (Admin Console)</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/snaap-favicon.svg?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="./theme.js"></script>
+  <script src="./toast.js" defer></script>
+  <link rel="stylesheet" href="/brand.css">
+  <link rel="stylesheet" href="/admin.css">
+  <script src="/admin.js" defer></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <div class="brand-group">
+        <a class="brand-link" href="/admin" aria-label="Snaap Admin Dashboard">
+          Snaap
+          <svg class="brand-symbol" viewBox="34 20 128 155" aria-hidden="true" focusable="false">
+            <use href="/assets/snaap-symbol.svg#snaap-symbol"></use>
+          </svg>
+        </a>
+        <span class="admin-pill">Admin Console</span>
+        <span id="system-status-pill" class="badge badge-success">
+          <span class="dot"></span>
+          <span id="system-status-text">กำลังเชื่อมต่อ...</span>
+        </span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn" title="รีเฟรชข้อมูล">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+          รีเฟรช
+        </button>
+        <button id="theme-toggle" class="btn" aria-label="สลับธีม">
+          สลับธีม
+        </button>
+        <button id="btn-signout" class="btn btn-primary">ออกจากระบบผู้ดูแล</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="admin-container">
+    <div class="command-heading">
+      <div><p class="eyebrow">SNAAP OPERATIONS</p><h1>Admin Dashboard</h1><p>ภาพรวมวันนี้และเหตุการณ์ที่ต้องดูแล · เวลาไทย (UTC+7)</p></div>
+      <button class="btn" id="btn-notifications">เปิดแจ้งเตือนบนอุปกรณ์</button>
+    </div>
+    <div id="connection-status" class="connection-status" role="status" aria-live="polite">กำลังตรวจสอบระบบ…</div>
+    <div id="incident-banner" class="incident-banner" hidden role="status"></div>
+    <!-- Tabs Nav -->
+    <nav class="admin-tabs" aria-label="Admin Sections">
+      <button class="tab-btn active" data-tab="overview">
+        📊 ภาพรวม
+      </button>
+      <button class="tab-btn" data-tab="activity">
+        🔔 ศูนย์แจ้งเตือน & เหตุการณ์
+        <span class="badge badge-warning" id="tab-activity-badge" style="margin-left:4px;padding:2px 6px;font-size:10px;" hidden>0</span>
+      </button>
+      <button class="tab-btn" data-tab="users">
+        👥 จัดการผู้ใช้ & สิทธิ์
+      </button>
+      <button class="tab-btn" data-tab="diagnostics">
+        🚨 ตรวจจับปัญหา & Logs
+      </button>
+    </nav>
+
+    <!-- Tab 1: Overview -->
+    <section id="panel-overview" class="tab-panel active">
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">
+            ผู้ใช้งานทั้งหมด
+            <span class="badge badge-free" id="kpi-users-badge">กำลังโหลด</span>
+          </div>
+          <div class="kpi-value" id="kpi-total-users">-</div>
+          <div class="kpi-sub" id="kpi-pro-users">- บัญชี Pro</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">
+            กฎที่กำลังเฝ้ามอง
+            <span class="badge badge-success">Active</span>
+          </div>
+          <div class="kpi-value" id="kpi-active-rules">-</div>
+          <div class="kpi-sub" id="kpi-total-rules">จากทั้งหมด - กฎ</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">
+            สัญญาณเตือน (24 ชม.)
+            <span class="badge badge-pro">Signals</span>
+          </div>
+          <div class="kpi-value" id="kpi-signals-24h">-</div>
+          <div class="kpi-sub">ตรวจจับสัญญาณเรียลไทม์</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">
+            การส่งแจ้งเตือน (24 ชม.)
+            <span class="badge" id="kpi-delivery-badge">Deliveries</span>
+          </div>
+          <div class="kpi-value" id="kpi-deliveries-success">-</div>
+          <div class="kpi-sub" id="kpi-deliveries-sub">สำเร็จ - / ล้มเหลว -</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">
+            การเรียกใช้ AI ประจำเดือน
+            <span class="badge badge-pro">AI Quota</span>
+          </div>
+          <div class="kpi-value" id="kpi-ai-total">-</div>
+          <div class="kpi-sub" id="kpi-ai-breakdown">Standard: - | Deep: -</div>
+        </div>
+      </div>
+
+      <!-- Today's Activity Highlights -->
+      <div class="today-banner" id="today-banner">
+        <div class="today-banner-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:22px;">🔔</span>
+            <div>
+              <strong style="font-size:15px;">สรุปสิ่งที่เกิดขึ้นวันนี้ (Today's Highlights)</strong>
+              <div style="font-size:12px;color:var(--secondary);" id="today-summary-text">กำลังโหลดข้อมูลวันนี้...</div>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-primary" id="btn-view-all-activity">ดูการแจ้งเตือนทั้งหมด →</button>
+        </div>
+        <div class="today-feed-preview" id="today-feed-preview">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Services Health -->
+      <h2 class="section-title">สถานะบริการและระบบเชื่อมต่อ (Services Health)</h2>
+      <div class="health-grid">
+        <div class="health-card">
+          <div class="health-icon">🗄️</div>
+          <div class="health-info">
+            <div class="health-name">PostgreSQL Database</div>
+            <div class="health-desc" id="health-db-desc">กำลังตรวจสอบ...</div>
+          </div>
+          <span class="badge" id="badge-health-db">-</span>
+        </div>
+        <div class="health-card">
+          <div class="health-icon">📈</div>
+          <div class="health-info">
+            <div class="health-name">Market Monitor (5 Exchanges)</div>
+            <div class="health-desc" id="health-market-desc">กำลังตรวจสอบรอบสแกน...</div>
+          </div>
+          <span class="badge" id="badge-health-market">กำลังตรวจสอบ</span>
+        </div>
+        <div class="health-card">
+          <div class="health-icon">🤖</div>
+          <div class="health-info">
+            <div class="health-name">AI Assistant Engine</div>
+            <div class="health-desc" id="health-ai-desc">กำลังตรวจสอบ...</div>
+          </div>
+          <span class="badge" id="badge-health-ai">-</span>
+        </div>
+        <div class="health-card">
+          <div class="health-icon">💳</div>
+          <div class="health-info">
+            <div class="health-name">Stripe Payments</div>
+            <div class="health-desc" id="health-stripe-desc">กำลังตรวจสอบ...</div>
+          </div>
+          <span class="badge" id="badge-health-stripe">-</span>
+        </div>
+        <div class="health-card">
+          <div class="health-icon">📣</div>
+          <div class="health-info">
+            <div class="health-name">Telegram & LINE Channels</div>
+            <div class="health-desc" id="health-channels-desc">กำลังตรวจสอบ...</div>
+          </div>
+          <span class="badge" id="badge-health-channels">-</span>
+        </div>
+        <div class="health-card">
+          <div class="health-icon">⏱️</div>
+          <div class="health-info">
+            <div class="health-name">Server Runtime</div>
+            <div class="health-desc" id="health-runtime-desc">กำลังตรวจสอบ...</div>
+          </div>
+          <span class="badge badge-free" id="badge-health-runtime">Online</span>
+        </div>
+      </div>
+
+      <!-- Recent Deliveries Highlight -->
+      <h2 class="section-title">การส่งแจ้งเตือนล่าสุด (Recent Deliveries)</h2>
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>เวลา</th>
+              <th>ช่องทาง</th>
+              <th>คู่เหรียญ / กระดาน</th>
+              <th>สถานะ</th>
+              <th>รายละเอียด</th>
+            </tr>
+          </thead>
+          <tbody id="recent-deliveries-tbody">
+            <tr><td colspan="5" class="empty-state">กำลังโหลดข้อมูล...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Tab 2: Activity & Incident Feed -->
+    <section id="panel-activity" class="tab-panel">
+      <!-- Daily Highlights Cards -->
+      <div class="activity-counter-grid">
+        <div class="activity-counter-card">
+          <div class="health-icon">👤</div>
+          <div>
+            <div class="activity-counter-num" id="cnt-today-signups">0</div>
+            <div style="font-size:12px;color:var(--secondary);">สมัครใหม่วันนี้</div>
+          </div>
+        </div>
+        <div class="activity-counter-card">
+          <div class="health-icon">⚠️</div>
+          <div>
+            <div class="activity-counter-num" id="cnt-today-incidents" style="color:var(--warning);">0</div>
+            <div style="font-size:12px;color:var(--secondary);">ปัญหาตลาด & ระบบ</div>
+          </div>
+        </div>
+        <div class="activity-counter-card">
+          <div class="health-icon">🚨</div>
+          <div>
+            <div class="activity-counter-num" id="cnt-today-deliveries" style="color:var(--danger);">0</div>
+            <div style="font-size:12px;color:var(--secondary);">ส่งข้อความไม่ผ่าน</div>
+          </div>
+        </div>
+        <div class="activity-counter-card">
+          <div class="health-icon">💳</div>
+          <div>
+            <div class="activity-counter-num" id="cnt-today-payments" style="color:var(--success);">0</div>
+            <div style="font-size:12px;color:var(--secondary);">การชำระเงินใหม่</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feed Filter Toolbar -->
+      <div class="user-toolbar">
+        <div class="filter-group">
+          <button class="filter-btn active" data-feed-filter="all">ทั้งหมด</button>
+          <button class="filter-btn" data-feed-filter="signup">👤 สมาชิกใหม่</button>
+          <button class="filter-btn" data-feed-filter="market">⚠️ ปัญหาตลาด</button>
+          <button class="filter-btn" data-feed-filter="delivery">🚨 ส่งไม่ผ่าน</button>
+          <button class="filter-btn" data-feed-filter="billing">💳 การเงิน</button>
+          <button class="filter-btn" data-feed-filter="system">⚙️ ระบบ</button>
+          <button class="filter-btn" data-feed-filter="admin">การกระทำของ Admin</button>
+        </div>
+        <button id="btn-refresh-feed" class="btn btn-sm">🔄 อัปเดต Feed</button>
+      </div>
+
+      <div class="incident-controls">
+        <label>สถานะ <select id="feed-state"><option value="all">ทั้งหมด</option><option value="unread">ยังไม่รับทราบ</option><option value="open">กำลังขัดข้อง</option><option value="resolved">กู้คืน / เหตุการณ์ทั่วไป</option></select></label>
+        <label>ความรุนแรง <select id="feed-severity"><option value="">ทุกระดับ</option><option value="error">รุนแรง</option><option value="warning">ควรตรวจสอบ</option><option value="info">ข้อมูล</option><option value="success">สำเร็จ</option></select></label>
+        <button class="btn" id="btn-read-all">รับทราบทั้งหมดถึงเวลาที่แสดง</button>
+      </div>
+
+      <!-- Timeline List -->
+      <div class="timeline-list" id="activity-timeline-list">
+        <div class="empty-state">กำลังโหลดข้อมูลเหตุการณ์...</div>
+      </div>
+      <button class="btn load-more" id="btn-feed-more" hidden>โหลดเหตุการณ์ก่อนหน้า</button>
+    </section>
+
+    <!-- Tab 3: Users Management -->
+    <section id="panel-users" class="tab-panel">
+      <div class="user-toolbar">
+        <div class="search-input-wrap">
+          <input type="search" id="user-search-input" class="search-input" aria-label="ค้นหาผู้ใช้" placeholder="ค้นหาด้วย Email หรือ User ID...">
+        </div>
+        <div class="filter-group">
+          <button class="filter-btn active" data-filter="all">ทั้งหมด</button>
+          <button class="filter-btn" data-filter="pro">Pro เท่านั้น</button>
+          <button class="filter-btn" data-filter="free">Free</button>
+          <button class="filter-btn" data-filter="admin">Admin</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>ผู้ใช้งาน</th>
+              <th>สถานะแพ็กเกจ (Plan)</th>
+              <th>กฎ (Rules)</th>
+              <th>การใช้ AI เดือนนี้</th>
+              <th>วันที่สมัคร</th>
+              <th style="text-align: right;">จัดการสิทธิ์ (Actions)</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="6" class="empty-state">กำลังโหลดรายชื่อผู้ใช้...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button class="btn load-more" id="btn-users-more" hidden>โหลดผู้ใช้เพิ่มเติม</button>
+    </section>
+
+    <!-- Tab 3: Diagnostics & Logs -->
+    <section id="panel-diagnostics" class="tab-panel">
+      <!-- Failed Deliveries -->
+      <h2 class="section-title">การแจ้งเตือนที่ล้มเหลว (Failed Deliveries)</h2>
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>เวลา</th>
+              <th>ช่องทาง</th>
+              <th>คู่เหรียญ</th>
+              <th>ข้อผิดพลาด (Error Detail)</th>
+            </tr>
+          </thead>
+          <tbody id="failed-deliveries-tbody">
+            <tr><td colspan="4" class="empty-state">ไม่มีรายการแจ้งเตือนที่ล้มเหลว ✨</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Market Issues -->
+      <h2 class="section-title">ปัญหาการดึงข้อมูลตลาด (Market Issues)</h2>
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>กระดาน</th>
+              <th>คู่เหรียญ</th>
+              <th>สถานะ</th>
+              <th>กฎ / เจ้าของ</th>
+              <th>ตรวจสอบล่าสุด</th>
+            </tr>
+          </thead>
+          <tbody id="market-issues-tbody">
+            <tr><td colspan="5" class="empty-state">ข้อมูลตลาดทุกคู่ทำงานปกติสมบูรณ์ ✨</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- System Error Logs -->
+      <div class="section-title">
+        <span>ประวัติ Error ของระบบ (System Logs)</span>
+        <button id="btn-clear-logs" class="btn btn-sm btn-danger">ล้าง Log ในหน่วยความจำ</button>
+      </div>
+      <div class="log-box" id="system-logs-box">
+        <div class="empty-state">ยังไม่มีบันทึก Error ล่าสุด</div>
+      </div>
+      <h2 class="section-title">ประวัติการกระทำของผู้ดูแล</h2>
+      <div id="admin-audit-list" class="log-box"></div>
+    </section>
+  </main>
+
+  <!-- Modal for Plan Selection -->
+  <div id="plan-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">ปรับสิทธิ์แพ็กเกจผู้ใช้</h3>
+      <p class="modal-desc" id="modal-user-desc">เลือกสิทธิ์ที่ต้องการมอบให้ผู้ใช้</p>
+      <div class="modal-options">
+        <button class="modal-option-btn" data-plan="pro_30d">
+          <div>
+            <strong>SNAAP Pro (30 วัน)</strong>
+            <div style="font-size:12px;color:var(--secondary);">20 เซตอัป, AI 100 ครั้ง/เดือน · Deep อยู่ระหว่างพัฒนา</div>
+          </div>
+          <span class="badge badge-pro">+30 วัน</span>
+        </button>
+        <button class="modal-option-btn" data-plan="pro_1y">
+          <div>
+            <strong>SNAAP Pro (1 ปี)</strong>
+            <div style="font-size:12px;color:var(--secondary);">เหมาะสำหรับทดสอบยาวๆ ตลอดทั้งปี</div>
+          </div>
+          <span class="badge badge-pro">+1 ปี</span>
+        </button>
+        <button class="modal-option-btn" data-plan="pro_lifetime">
+          <div>
+            <strong>SNAAP Pro ตลอดชีพ</strong>
+            <div style="font-size:12px;color:var(--secondary);">ไม่มีวันหมดอายุ · ใช้โควตา Pro ต่อเดือน</div>
+          </div>
+          <span class="badge badge-admin">ตลอดชีพ</span>
+        </button>
+        <button class="modal-option-btn" data-plan="free">
+          <div>
+            <strong>สลับกลับเป็น Free Tier</strong>
+            <div style="font-size:12px;color:var(--secondary);">จำกัด 6 กฎ, AI 20 ครั้ง, ไม่มี Deep (ใช้ทดสอบ Limit)</div>
+          </div>
+          <span class="badge badge-free">Free</span>
+        </button>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-modal-close" class="btn">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Element -->
+  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+</body>
+</html>

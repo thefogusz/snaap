@@ -21,6 +21,9 @@ import { registerSetupFiles } from "./setup-files.js";
 import { registerSetupShares } from "./setup-shares.js";
 import { registerPresets } from "./presets.js";
 import { registerRuleRemoval } from "./rule-removal.js";
+import { registerAdmin, recordSystemLog, isUserAdmin } from "./admin.js";
+import { isAdminIdentity } from "./admin-access.js";
+import { recordApiIncident } from "./admin-events.js";
 import { ApiError } from "./errors.js";
 import { hash } from "./crypto.js";
 export { ApiError } from "./errors.js";
@@ -59,6 +62,15 @@ export async function buildApp(
   });
   app.decorateRequest("userId", "");
   app.setErrorHandler((err, req, reply) => {
+    recordSystemLog({
+      type: (err as any).code || (err as any).name || "ERROR",
+      statusCode:
+        (err as any).statusCode || (err instanceof z.ZodError ? 400 : 500),
+      message: err instanceof ApiError ? err.code : "คำขอทำงานไม่สำเร็จ",
+      url: req.routeOptions.url ?? "/unknown",
+      method: req.method,
+      userId: req.userId || undefined,
+    });
     if (!(err instanceof z.ZodError) && !(err as ApiError).statusCode)
       console.error("Request failed", req.id, (err as Error).name);
     if (err instanceof z.ZodError)
@@ -82,12 +94,65 @@ export async function buildApp(
       },
     });
   });
+  const apiIncidents = new Set<string>();
+  app.addHook("onReady", async () => {
+    const result = await db
+      .query(
+        "SELECT event_key FROM admin_events WHERE event_key LIKE 'api:%' AND status='open'",
+      )
+      .catch(() => ({ rows: [] }));
+    for (const event of result.rows) apiIncidents.add(event.event_key);
+  });
+  app.addHook("onSend", async (req, reply, payload) => {
+    const route = req.routeOptions.url ?? "/unknown";
+    const key = `api:${req.method} ${route}`;
+    if (reply.statusCode >= 500) {
+      apiIncidents.add(key);
+      await recordApiIncident(db, req.method, route, reply.statusCode).catch(
+        () => {},
+      );
+    } else if (reply.statusCode < 400 && apiIncidents.has(key)) {
+      await db
+        .query(
+          "UPDATE admin_events SET status='resolved',severity='success',title='API กลับมาทำงาน',detail=$2,resolved_at=now(),updated_at=now() WHERE event_key=$1 AND status='open'",
+          [key, `${req.method} ${route} · HTTP ${reply.statusCode}`],
+        )
+        .then(() => apiIncidents.delete(key))
+        .catch(() => {});
+    }
+    return payload;
+  });
   app.addHook("onRequest", async (req, reply) => {
     reply
       .header("X-Content-Type-Options", "nosniff")
       .header("X-Frame-Options", "DENY")
       .header("Referrer-Policy", "same-origin")
       .header("Cache-Control", "no-store");
+    let pagePath: string;
+    try {
+      pagePath =
+        path.posix
+          .normalize(
+            decodeURIComponent(new URL(req.url, origin).pathname).replaceAll(
+              "\\",
+              "/",
+            ),
+          )
+          .toLowerCase()
+          .replace(/\/$/, "") || "/";
+    } catch {
+      throw new ApiError(400, "INVALID_URL", "รูปแบบ URL ไม่ถูกต้อง");
+    }
+    if (
+      pagePath === "/admin" ||
+      pagePath.startsWith("/admin/") ||
+      pagePath === "/admin.html" ||
+      pagePath === "/admin-login.html"
+    )
+      reply.header(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      );
     const railwayHealthcheck =
       !!process.env.RAILWAY_PROJECT_ID &&
       req.headers.host === "healthcheck.railway.app" &&
@@ -114,6 +179,24 @@ export async function buildApp(
       req.headers["x-snaap-client"] !== "web"
     )
       throw new ApiError(403, "CSRF", "คำขอไม่มี client header");
+    if (
+      ["GET", "HEAD"].includes(req.method) &&
+      ["/admin", "/admin/", "/admin.html"].includes(pagePath)
+    ) {
+      const token = req.cookies.snaap_session;
+      const sessionUser = token
+        ? (
+            await db.query(
+              "SELECT user_id FROM sessions WHERE token_hash=$1 AND expires_at>now()",
+              [hash(token)],
+            )
+          ).rows[0]
+        : undefined;
+      if (!sessionUser) return reply.redirect("/admin/login");
+      if (!(await isUserAdmin(db, sessionUser.user_id)).isAdmin)
+        return reply.redirect("/admin/login?error=admin_denied");
+      if (pagePath !== "/admin") return reply.redirect("/admin");
+    }
     if (
       !req.url.startsWith("/api/v1/") ||
       req.url.startsWith("/api/v1/auth/") ||
@@ -145,29 +228,37 @@ export async function buildApp(
       req.workspaceId = id;
     }
   });
-  async function session(userId: string, reply: any) {
+  async function session(userId: string, reply: any, lifetimeSeconds = 604800) {
     const token = randomBytes(32).toString("hex");
     await db.query("DELETE FROM sessions WHERE expires_at<=now()");
     await db.query(
-      "INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')",
-      [hash(token), userId],
+      "INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 second')",
+      [hash(token), userId, lifetimeSeconds],
     );
     reply.setCookie("snaap_session", token, {
       httpOnly: true,
       sameSite: "lax",
       secure: origin.startsWith("https"),
       path: "/",
-      maxAge: 604800,
+      maxAge: lifetimeSeconds,
     });
+    return token;
   }
-  registerGoogle(app, db, origin, session);
+  registerGoogle(app, db, origin, async (id, reply) => {
+    await session(id, reply);
+  });
   registerWorkspaces(app, db);
   await registerFiles(app, db);
   registerHarness(app, db);
   registerMarkets(app, db, !!options.monitoring);
   await registerBilling(app, db, origin);
-  await registerDestinations(app, db, {local: options.local, origin});
+  await registerDestinations(app, db, { local: options.local, origin });
   registerHistory(app, db);
+  registerAdmin(app, db, {
+    local: options.local,
+    monitoring: options.monitoring,
+    session,
+  });
   app.get("/api/v1/health", async () => ({
     database: (await db.query("SELECT 1")).rowCount === 1,
     local: !!options.local,
@@ -205,6 +296,7 @@ export async function buildApp(
         hash(oauthState),
       ]);
     reply.clearCookie("snaap_oauth", { path: "/api/v1/auth/" });
+    reply.clearCookie("snaap_oauth_purpose", { path: "/api/v1/auth/" });
     if (req.cookies.snaap_session)
       await db.query("DELETE FROM sessions WHERE token_hash=$1", [
         hash(req.cookies.snaap_session),
@@ -214,8 +306,16 @@ export async function buildApp(
   });
   app.get("/api/v1/me", async (req) => {
     const user = (
-      await db.query("SELECT id,email FROM users WHERE id=$1", [req.userId])
+      await db.query("SELECT id,email,role,google_sub FROM users WHERE id=$1", [
+        req.userId,
+      ])
     ).rows[0];
+    const impersonating = !!(
+      await db.query(
+        "SELECT 1 FROM admin_impersonations WHERE session_hash=$1",
+        [hash(req.cookies.snaap_session ?? "")],
+      )
+    ).rowCount;
     const pro = (
       await db.query(
         "SELECT pro_until FROM entitlements WHERE owner_id=$1 AND pro_until>now()",
@@ -224,7 +324,7 @@ export async function buildApp(
     ).rows[0];
     const usage = (
       await db.query(
-        "SELECT mode,count(*)::int AS count FROM usage_ledger WHERE owner_id=$1 AND created_at>=date_trunc('month',now()) AND status IN ('RESERVED','COMPLETED') GROUP BY mode",
+        "SELECT mode,count(*)::int AS count FROM usage_ledger WHERE owner_id=$1 AND created_at>=date_trunc('month',now()) AND status IN ('RESERVED','COMPLETED') AND NOT quota_waived GROUP BY mode",
         [req.userId],
       )
     ).rows;
@@ -236,10 +336,13 @@ export async function buildApp(
         )
       ).rows[0].n,
     );
+    const isAdmin = isAdminIdentity(user);
     return {
       ...user,
       plan: pro ? "PRO" : "FREE",
       proUntil: pro?.pro_until ?? null,
+      isAdmin,
+      impersonating,
       requiresRuleSelection: active > (pro ? 20 : 6),
       limits: {
         activeRules: pro ? 20 : 6,
@@ -248,7 +351,7 @@ export async function buildApp(
         deep: pro ? 10 : 0,
       },
       usage,
-      local: user.email === "local@snaap.invalid",
+      local: user?.email === "local@snaap.invalid",
     };
   });
   app.get(
@@ -563,8 +666,11 @@ export async function buildApp(
   });
   app.get("/api/v1/signals", async (req) => {
     const { before, after } = z
-      .object({ before: z.string().uuid().optional(), after: z.string().uuid().optional() })
-      .refine(value => !(value.before && value.after), "Choose one cursor")
+      .object({
+        before: z.string().uuid().optional(),
+        after: z.string().uuid().optional(),
+      })
+      .refine((value) => !(value.before && value.after), "Choose one cursor")
       .parse(req.query);
     return (
       await db.query(
@@ -601,5 +707,10 @@ export async function buildApp(
     root: path.resolve("dist"),
     index: "index.html",
   });
+  app.get("/admin", async (_req, reply) => reply.sendFile("admin.html"));
+  app.get("/admin/login", async (_req, reply) =>
+    reply.sendFile("admin-login.html"),
+  );
+  app.get("/admin/", async (_req, reply) => reply.redirect("/admin"));
   return { app, session, origin };
 }
