@@ -5,8 +5,8 @@ async function renderLabImageChoices() {
   state.libraryImages=images.slice(0,5);
   target.innerHTML=`<h3>ภาพจากข้อมูลของฉัน</h3><p class="field-note">${images.length ? `ใช้ภาพในคลังอัตโนมัติ ${state.libraryImages.length} ภาพ · พิมพ์ @ชื่อภาพ เพื่อระบุภาพที่ต้องการอ้างอิง` : 'ยังไม่มีภาพ เพิ่มภาพอ้างอิงได้ที่ข้อมูลของฉัน'}</p>`;
 }
-async function renderTradingLab() {
-  const images=await api('/images');
+async function renderTradingLab(images) {
+  images ??= await api('/images');
   state.allLibraryImages=images;
   const section=document.createElement('section');
   section.className='runtime-card trading-lab-images';

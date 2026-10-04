@@ -416,7 +416,7 @@ document.addEventListener("keydown", (event) => {
     closeAccountMenu(true);
   }
 });
-async function api(url, method = "GET", body) {
+async function api(url, method = "GET", body, options = {}) {
   const headers = { "x-snaap-client": "web" };
   if(state.workspaceId)headers['x-snaap-workspace']=state.workspaceId;
   if (body && !(body instanceof FormData))
@@ -424,6 +424,7 @@ async function api(url, method = "GET", body) {
   const res = await fetch("/api/v1" + url, {
     method,
     headers,
+    signal: options.signal,
     body:
       body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   });
@@ -1306,46 +1307,71 @@ function renderBilling() {
   }
 }
 let historyRenderVersion=0;
+let historyLoadController;
 async function renderHistory() {
   const version=++historyRenderVersion;
+  historyLoadController?.abort();
+  historyLoadController=new AbortController();
+  // Bound reads, including response-body parsing, without blocking the menu.
+  const signal=AbortSignal.any([historyLoadController.signal,AbortSignal.timeout(12000)]);
   const view = $("#view-history");
-  view.innerHTML='<p role="status">กำลังโหลดข้อมูลของฉัน…</p>';
-  try {
-    const imports = await api("/imports");
-    if(version!==historyRenderVersion)return;
-    view.innerHTML =
-      '<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div><div class="runtime-card history-file-card"><h2>นำเข้าจากไฟล์</h2><p>CSV / XLSX รูปแบบกลาง · ตรวจข้อมูลก่อนบันทึก</p><a class="secondary template-download" href="/assets/trade-import-template.csv" download>ดาวน์โหลดไฟล์ต้นแบบ CSV</a><details class="import-format"><summary>รูปแบบข้อมูลที่รองรับ</summary><p class="field-note">คอลัมน์: time, exchange, market, pair, side, price, quantity, fee, id<br>market: Spot / Futures · ไม่ระบุจะเป็น Spot · quantity: จำนวนเหรียญ · เวลาแบบ ISO · side: buy / sell</p></details><label>ชื่อเรียกชุดประวัติ <input id="account-scope" placeholder="เช่น ประวัติเทรดเดือนตุลาคม"><small class="field-note">ชื่อที่คุณตั้งไว้แยกชุดข้อมูล ไม่ใช่ชื่อบัญชีบนกระดาน</small></label><p class="field-note">รายการไม่มี trade ID จะเก็บทั้งหมด กรุณาตรวจไฟล์ซ้ำก่อนนำเข้า</p><input id="history-upload" type="file" accept=".csv,.xlsx"><div id="import-preview"></div></div>' +
-      imports
-        .map(
-          (i) =>
-            `<div class="runtime-card history-import-entry" data-import-connection="${esc(i.account_scope??'')}"><div class="history-api-header"><h2>${esc(i.name)}</h2><span data-history-api-actions></span></div><p>${i.count} รายการ · ${new Date(i.created_at).toLocaleString("th-TH")}</p></div>`,
-        )
-        .join("");
-    await renderConnections();
-    if(version!==historyRenderVersion)return;
-    await renderTradingLab();
-    if(version!==historyRenderVersion)return;
-    const imageLibrary=view.querySelector('.trading-lab-images');
-    imageLibrary?.after(view.querySelector('#history-connections'));
-    const fileImport=view.querySelector('#account-scope')?.closest('.runtime-card');
-    if(fileImport){
-      const disclosure=document.createElement('details');disclosure.className='history-file-details';
-      const summary=document.createElement('summary');summary.textContent='เลือกไฟล์ CSV / XLSX หรือดูรูปแบบที่รองรับ';disclosure.append(summary);
-      [...fileImport.children].filter(child=>child.tagName!=='H2').forEach(child=>disclosure.append(child));
-      fileImport.append(disclosure);
-    }
-    const upload = $("#history-upload");
-    const fileLabel = document.createElement("label");
-    fileLabel.className = "file-drop";
-    fileLabel.innerHTML =
-      uiIcon("upload") +
-      "<span><strong>เลือกไฟล์ประวัติ</strong><small>CSV หรือ XLSX · ตรวจข้อมูลก่อนนำเข้า</small></span>";
-    upload.before(fileLabel);
-    fileLabel.append(upload);
-    upload.setAttribute("aria-label", "เลือกไฟล์ประวัติ CSV หรือ XLSX");
-  } catch (e) {
-    toast(e.message);
+  view.innerHTML =
+      '<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div><div class="runtime-card history-file-card"><h2>นำเข้าจากไฟล์</h2><p>CSV / XLSX รูปแบบกลาง · ตรวจข้อมูลก่อนบันทึก</p><a class="secondary template-download" href="/assets/trade-import-template.csv" download>ดาวน์โหลดไฟล์ต้นแบบ CSV</a><details class="import-format"><summary>รูปแบบข้อมูลที่รองรับ</summary><p class="field-note">คอลัมน์: time, exchange, market, pair, side, price, quantity, fee, id<br>market: Spot / Futures · ไม่ระบุจะเป็น Spot · quantity: จำนวนเหรียญ · เวลาแบบ ISO · side: buy / sell</p></details><label>ชื่อเรียกชุดประวัติ <input id="account-scope" placeholder="เช่น ประวัติเทรดเดือนตุลาคม"><small class="field-note">ชื่อที่คุณตั้งไว้แยกชุดข้อมูล ไม่ใช่ชื่อบัญชีบนกระดาน</small></label><p class="field-note">รายการไม่มี trade ID จะเก็บทั้งหมด กรุณาตรวจไฟล์ซ้ำก่อนนำเข้า</p><input id="history-upload" type="file" accept=".csv,.xlsx"><div id="import-preview"></div></div>';
+  const fileImport=view.querySelector('#account-scope')?.closest('.runtime-card');
+  if(fileImport){
+    const disclosure=document.createElement('details');disclosure.className='history-file-details';
+    const summary=document.createElement('summary');summary.textContent='เลือกไฟล์ CSV / XLSX หรือดูรูปแบบที่รองรับ';disclosure.append(summary);
+    [...fileImport.children].filter(child=>child.tagName!=='H2').forEach(child=>disclosure.append(child));
+    fileImport.append(disclosure);
   }
+  const upload = $("#history-upload");
+  const fileLabel = document.createElement("label");
+  fileLabel.className = "file-drop";
+  fileLabel.innerHTML =
+    uiIcon("upload") +
+    "<span><strong>เลือกไฟล์ประวัติ</strong><small>CSV หรือ XLSX · ตรวจข้อมูลก่อนนำเข้า</small></span>";
+  upload.before(fileLabel);
+  fileLabel.append(upload);
+  upload.setAttribute("aria-label", "เลือกไฟล์ประวัติ CSV หรือ XLSX");
+
+  const slots={};
+  for(const [key,label] of [['imports','ประวัติที่นำเข้า'],['connections','การเชื่อมต่อกระดาน'],['images','ภาพอ้างอิง']]){
+    const slot=document.createElement('div');
+    slot.className='runtime-card';
+    slot.innerHTML=`<h2>${label}</h2><p role="status">กำลังโหลด…</p>`;
+    view.append(slot);
+    slots[key]=slot;
+  }
+  let connections;
+  const load=async(key,label,render)=>{
+    try{
+      const data=await api('/'+key,'GET',undefined,{signal});
+      if(version!==historyRenderVersion)return;
+      await render(data);
+      slots[key].remove();
+      const imageLibrary=view.querySelector('.trading-lab-images');
+      const connectionSection=view.querySelector('#history-connections');
+      if(imageLibrary && connectionSection)imageLibrary.after(connectionSection);
+    }catch{
+      if(version!==historyRenderVersion)return;
+      slots[key].innerHTML=`<h2>${label}</h2><p role="status">ยังโหลดข้อมูลส่วนนี้ไม่ได้</p>`;
+    }
+  };
+  await Promise.all([
+    load('imports','ประวัติที่นำเข้า',imports=>{
+      const list=document.createElement('div');
+      list.innerHTML=imports
+        .filter(i=>!connections?.items.some(c=>c.id===i.account_scope))
+        .map(i=>`<div class="runtime-card history-import-entry" data-import-connection="${esc(i.account_scope??'')}"><div class="history-api-header"><h2>${esc(i.name)}</h2><span data-history-api-actions></span></div><p>${i.count} รายการ · ${new Date(i.created_at).toLocaleString("th-TH")}</p></div>`)
+        .join('');
+      slots.imports.before(list);
+    }),
+    load('connections','การเชื่อมต่อกระดาน',async data=>{
+      connections=data;
+      await renderConnections(data);
+    }),
+    load('images','ภาพอ้างอิง',images=>renderTradingLab(images)),
+  ]);
 }
 function showActivation(rule) {
   const dialog = document.createElement("dialog");
