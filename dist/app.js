@@ -56,7 +56,7 @@ $('#rule-form').addEventListener('submit',e=>{
 });
 function addMessage(text,user=false){
   const message=document.createElement('div');message.className=`message ${user?'user':'assistant'}`;
-  if(user)message.textContent=text;else message.innerHTML=`<span class="mini-brand" aria-hidden="true">s*</span><div class="assistant-body">${text}</div>`;
+  if(user)message.textContent=text;else message.innerHTML=`<span class="mini-brand" aria-hidden="true"><img class="brand-badge-symbol" src="/assets/snaap-favicon.svg?v=2" alt="" aria-hidden="true"></span><div class="assistant-body">${text}</div>`;
   $('#messages').append(message);
 }
 function chat(prompt){

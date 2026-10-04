@@ -136,6 +136,32 @@ export function renderSignal(
       )[effectiveSide ?? ""] ?? "Unspecified direction")
     : signalDirection(signal.event, signal.setup_market, signal.setup_side);
   const title = `${clean(signal.pair, 50)} · ${direction}`;
+  const pair = clean(signal.pair, 50);
+  const directionBadge =
+    effectiveSide === "SHORT"
+      ? {
+          label: en ? "SHORT" : "SHORT · ขาย",
+          color: "#FF909A",
+          background: "#44262F",
+        }
+      : effectiveSide === "LONG" || effectiveSide === "SPOT"
+        ? {
+            label:
+              effectiveSide === "SPOT"
+                ? en
+                  ? "BUY"
+                  : "ซื้อ"
+                : en
+                  ? "LONG"
+                  : "LONG · ซื้อ",
+            color: "#67E2B1",
+            background: "#173D32",
+          }
+        : {
+            label: en ? "UNSPECIFIED" : "ไม่ระบุฝั่ง",
+            color: "#C3CCD6",
+            background: "#29323D",
+          };
   const heading =
     appearance.heading || (en ? "Signal alert" : "แจ้งเตือนสัญญาณ");
   const price = Number(signal.event.referencePrice).toLocaleString("en-US", {
@@ -181,7 +207,12 @@ export function renderSignal(
         : brand
           ? brand + "/assets/" + signalBanner(appearance.accent)
           : undefined;
-  const testLabel = signal.test ? (en ? "[TEST] " : "[ทดสอบ] ") : "";
+  const testLabel =
+    signal.test && appearance.layout === "minimal"
+      ? en
+        ? "[TEST] "
+        : "[ทดสอบ] "
+      : "";
   const marker =
     signal.event.kind === "CANCEL" || signal.event.kind === "EXPIRED"
       ? "⚪"
@@ -265,12 +296,39 @@ export function renderSignal(
                 backgroundColor: "#181D24",
                 contents: [
                   {
-                    type: "text",
-                    text: title,
-                    weight: "bold",
-                    size: "md",
-                    color: "#F4F7FB",
-                    wrap: true,
+                    type: "box",
+                    layout: "horizontal",
+                    alignItems: "center",
+                    spacing: "sm",
+                    contents: [
+                      {
+                        type: "text",
+                        text: pair,
+                        weight: "bold",
+                        size: "lg",
+                        color: "#F4F7FB",
+                        wrap: true,
+                        flex: 1,
+                      },
+                      {
+                        type: "box",
+                        layout: "vertical",
+                        flex: 0,
+                        paddingAll: "6px",
+                        cornerRadius: "6px",
+                        backgroundColor: directionBadge.background,
+                        contents: [
+                          {
+                            type: "text",
+                            text: directionBadge.label,
+                            weight: "bold",
+                            size: "sm",
+                            color: directionBadge.color,
+                            align: "center",
+                          },
+                        ],
+                      },
+                    ],
                   },
                   {
                     type: "text",
@@ -363,7 +421,7 @@ export function renderSignal(
               {
                 title: discordText(testLabel + title),
                 description: discordText(event + " · " + heading),
-                color: parseInt(accents[appearance.accent].slice(1), 16),
+                color: parseInt(directionBadge.color.slice(1), 16),
                 fields: fields.map((x) => ({
                   name: x.label,
                   value: discordText(x.value) || "—",
@@ -422,6 +480,8 @@ export function renderSignal(
   return {
     text,
     title,
+    pair,
+    directionBadge,
     event,
     fields,
     test: !!signal.test,

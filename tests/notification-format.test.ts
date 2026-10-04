@@ -44,6 +44,7 @@ test("LINE card is a Flex bubble and falls back to text when minimal is selected
   assert.equal(card.payload.contents.body.paddingAll, "12px");
   assert.ok(
     card.payload.contents.body.contents
+      .slice(2)
       .filter((item: any) => item.type === "box")
       .every((item: any) => item.layout === "baseline"),
   );

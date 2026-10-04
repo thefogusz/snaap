@@ -1,6 +1,5 @@
 /* Shared brand accent; neutral text tiers keep the light theme crisp. */
 :root { color-scheme: light; --brand-lime: #d0f64c; --lime: var(--brand-lime); --accent-ink: #4d6b00; --control-line: #888e82; --ink: #101010; --muted: #303030; }
-.brand-dot { color: var(--accent-ink); }
 .welcome h1 { font-weight: 700; }
 .page-heading h1, .conversation-heading h1 { font-weight: 600; }
 .section-title h2, .watch-preview h3, .discovery-preview h3, .history-explainer h3, .watch-row h2, .dialog-heading h2 { font-weight: 600; }
@@ -27,7 +26,6 @@
 [data-theme="dark"] .watch-row-footer,
 [data-theme="dark"] .prototype-badge,
 [data-theme="dark"] .round-button { border-color: var(--line); }
-[data-theme="dark"] .brand-dot { color: var(--lime); }
 [data-theme="dark"] .new-chat { background: #252529; color: #f4f4f5; box-shadow: inset 0 0 0 1px #3b3b42; }
 [data-theme="dark"] .new-chat:hover { background: #303036; }
 [data-theme="dark"] .avatar,
