@@ -65,3 +65,5 @@ Minimal layout is always plain text, even if a previously saved appearance has s
 Snaap cards default to a chart-enabled dark presentation with bright text and an accent color, while explicit showChart=false is respected. LINE Flex sets dark header/body/footer colors. The chart PNG itself is dark on every platform; Discord embed and Telegram caption backgrounds follow the recipient app theme. Minimal text appearance is unchanged.
 
 LINE cards use a compact kilo bubble: one header row, a full chart with tap-to-open image action, baseline label/value rows, and one footer row for the return link and creator signature. The studio preview is capped at 300 CSS pixels and keeps readable 14px values. Long text wraps without truncation. Reference: https://developers.line.biz/en/reference/messaging-api/#bubble
+
+The compact card header uses the shared green/white symbol with a white Snaap wordmark, exported as a transparent PNG for LINE. HTTPS origins serve /assets/snaap-card-wordmark.png; local delivery falls back to the text name while the studio previews the local asset. Chart output is capped at 1024 pixels to comply with LINE Flex image limits.

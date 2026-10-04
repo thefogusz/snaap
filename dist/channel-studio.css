@@ -455,6 +455,11 @@
   letter-spacing: -0.03em;
   flex-shrink: 0;
 }
+.channel-card-preview header .signal-brand > img {
+  display: block;
+  width: 86px;
+  height: auto;
+}
 .channel-card-preview.line header span {
   font-size: 12px;
   text-align: right;

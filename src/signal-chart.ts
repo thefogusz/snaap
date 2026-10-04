@@ -131,7 +131,7 @@ export async function chartPng(
       hour12: false,
     });
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="1200" height="720" rx="22" fill="#181d24"/><g font-family="Arial,sans-serif"><text x="65" y="63" font-size="34" font-weight="700" fill="${color}">Snaap*</text><text x="65" y="110" font-size="28" font-weight="700" fill="#f6f8fb">${escape(signal.pair)} · ${escape(signal.exchange)} · ${escape(signal.setup_market ?? signal.event.market)} · ${escape(chart.timeframe)}</text><text x="1115" y="63" text-anchor="end" font-size="22" fill="${color}">${signal.test ? "DEMO · " : ""}${escape(signal.event.kind)} ${escape(signal.event.side ?? signal.setup_side)}</text>${ticks}${candles}<path d="M${left} ${y(signal.event.referencePrice)}H${right}" stroke="${color}" stroke-width="2" stroke-dasharray="8 6"/><circle cx="${x(end)}" cy="${y(signal.event.referencePrice)}" r="7" fill="${color}"/><text x="65" y="640" fill="#c3ccd6" font-size="21">${escape(stamp(start))}</text><text x="1040" y="640" text-anchor="end" fill="#c3ccd6" font-size="21">${escape(stamp(end))} · UTC+7</text><text x="65" y="687" fill="${color}" font-size="20">${signal.test ? "DEMO CANDLES" : "CLOSED CANDLES"} · ${bars.length} bars · Reference ${signal.event.referencePrice.toLocaleString("en-US", { maximumFractionDigits: 8 })}</text></g></svg>`;
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  return sharp(Buffer.from(svg)).resize({width:1024,withoutEnlargement:true}).png().toBuffer();
 }
 export function demoChart(at: number): ChartSnapshot {
   let price = 67410;

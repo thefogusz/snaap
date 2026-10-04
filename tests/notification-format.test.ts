@@ -36,6 +36,11 @@ test("LINE card is a Flex bubble and falls back to text when minimal is selected
   assert.equal(card.payload.contents.type, "bubble");
   assert.equal(card.payload.contents.size, "kilo");
   assert.equal(card.payload.contents.header.layout, "horizontal");
+  assert.equal(card.payload.contents.header.contents[0].type, "image");
+  assert.equal(
+    card.payload.contents.header.contents[0].url,
+    "https://snaap.example/assets/snaap-card-wordmark.png",
+  );
   assert.equal(card.payload.contents.body.paddingAll, "12px");
   assert.ok(
     card.payload.contents.body.contents
