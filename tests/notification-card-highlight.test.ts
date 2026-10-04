@@ -6,6 +6,22 @@ import {
   renderSignal,
 } from "../src/notification-format.js";
 import { chartPng } from "../src/signal-chart.js";
+test("Discord cards identify entry directions and exit states with colored symbols", () => {
+  const sample = demoSignal();
+  const appearance = appearanceSchema.parse({ accent: "violet" });
+  for (const [kind, side, marker] of [
+    ["ENTRY", "LONG", "🟢"],
+    ["ENTRY", "SHORT", "🔴"],
+    ["EXIT", "SHORT", "🟡"],
+    ["CANCEL", "LONG", "⚪"],
+    ["EXPIRED", "SHORT", "⚪"],
+  ]) {
+    const output = renderSignal("DISCORD", { ...sample, event: { ...sample.event, kind, side } }, appearance, "");
+    assert.ok(output.payload.embeds[0].title.startsWith(marker + " "));
+    assert.equal(output.marker, marker);
+    assert.equal(output.payload.embeds[0].color, parseInt("C8B5FF", 16));
+  }
+});
 test("card highlights Long/Short separately and omits visible test labels", () => {
   const appearance = appearanceSchema.parse({ layout: "card" }),
     signal = demoSignal();
