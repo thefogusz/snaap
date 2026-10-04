@@ -1076,9 +1076,15 @@ function renderWatch() {
     footnote.textContent =
       "ประเมินแท่งปิดทุกนาที · ดูสถานะข้อมูลและผลการส่งในหน้าการแจ้งเตือน";
 }
-async function refresh() {
-  state.rules = await api("/rules");
-  state.me = await api("/me");
+async function refresh({ reuseMe = false } = {}) {
+  const [rules, me, rows, destinations] = await Promise.all([
+    api("/rules"),
+    reuseMe && state.me ? Promise.resolve(state.me) : api("/me"),
+    api("/conversations"),
+    api("/destinations"),
+  ]);
+  state.rules = rules;
+  state.me = me;
   paintWorkspacePicker();
   if (!state.me.local) {
     const name = state.me.email.split("@")[0];
@@ -1100,10 +1106,9 @@ async function refresh() {
   $("#ai-mode option[value=deep]").textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
   $("#ai-mode").value = 'standard';
   renderWatch();
-  const rows = await api("/conversations");
   state.conversationRows = rows;
   conversationPicker.hidden = rows.length === 0;
-  state.destinations = (await api("/destinations")).items;
+  state.destinations = destinations.items;
   conversations.innerHTML =
     '<option value="">บทสนทนาที่บันทึก</option>' +
     rows
@@ -1945,22 +1950,22 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 // Also checkpoint programmatic updates such as cleared text after sending a message.
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
-  await directionToolsReady;
-  await indicatorCatalogReady;
+  await Promise.all([directionToolsReady, indicatorCatalogReady]);
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
   try {
-    state.health = await api("/health");
-    try{state.me=await api('/me');}
+    try {
+      const [health, me] = await Promise.all([api('/health'), api('/me'), initWorkspaces()]);
+      state.health = health;
+      state.me = me;
+    }
     catch(error){
       if(error.statusCode!==401)throw error;
       location.replace('/login.html');return;
     }
     sessionStorage.removeItem('snaap-signed-out');
-    await initWorkspaces();
-    await refresh();
+    await refresh({ reuseMe: true });
     await restoreRecovery();
-    await refreshContext();
     status.textContent = `${state.me?.local ? "บัญชีทดสอบ · " : ""}${state.health.ai ? "AI พร้อมเชื่อมต่อ" : "ยังไม่เชื่อม AI · ตั้งเงื่อนไขและดูกราฟได้"}`;
   } catch (error) {
     status.hidden = false;

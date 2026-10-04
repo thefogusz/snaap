@@ -5,8 +5,21 @@ html[data-boot="loading"] .startup-status {
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:16px; background:var(--bg); color:var(--muted); font-size:14px;
 }
-.startup-status strong { color:var(--ink); font-size:28px; letter-spacing:-1px; }
-.startup-status strong span { color:var(--lime); }
+.startup-logo { display:inline-flex; align-items:baseline; color:var(--ink); font-size:40px; font-weight:800; letter-spacing:-2px; line-height:1; }
+.startup-letter { display:inline-block; animation:startup-wave 1.8s ease-in-out infinite; animation-delay:calc(var(--letter) * .12s); }
+.startup-star { display:inline-block; margin-left:3px; color:var(--lime); transform-origin:50% 38%; animation:startup-spark 1.8s ease-in-out infinite; animation-delay:.6s; }
+@keyframes startup-wave {
+  0%, 35%, 100% { color:var(--ink); transform:translateY(0); text-shadow:none; }
+  14% { color:var(--lime); transform:translateY(-2px); text-shadow:0 0 16px rgb(208 246 76 / 35%); }
+}
+@keyframes startup-spark {
+  0%, 35%, 100% { transform:rotate(0) scale(1); text-shadow:none; }
+  14% { transform:rotate(60deg) scale(1.18); text-shadow:0 0 18px rgb(208 246 76 / 65%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .startup-letter, .startup-star { animation:none; }
+  .startup-letter { color:var(--lime); }
+}
 /* Suppress automatic CSS entrances during recovery. Navigation owns its motion. */
 .app .view:not([hidden]),
 .message.boot-restored,
