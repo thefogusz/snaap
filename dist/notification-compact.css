@@ -25,10 +25,8 @@
 .notification-rules .watch-row .ui-icon{width:14px;height:14px}
 .notification-rules .watch-row>[role="alert"]{grid-column:1/-1;font-size:13px;margin-top:8px}
 .notification-rules .watch-details{grid-column:1/-1;min-width:0;border:0;padding:0;margin:0}
-.notification-rules .watch-details summary{width:fit-content;cursor:pointer;color:var(--muted);font-size:12px;line-height:1.6;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px}
-.notification-rules .watch-details summary::-webkit-details-marker{display:none}
-.notification-rules .watch-details summary::after{content:"";width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg);margin-top:-3px}
-.notification-rules .watch-details[open] summary::after{transform:rotate(225deg);margin-top:3px}
+.notification-rules .watch-details summary{width:fit-content;cursor:pointer;color:var(--muted);font-size:12px;line-height:1.6;padding:4px 0;list-style:disclosure-closed inside;display:list-item}
+.notification-rules .watch-details[open] summary{list-style-type:disclosure-open}
 .notification-rules .watch-details-content{display:grid;gap:12px;margin-top:8px;padding-top:12px;border-top:1px solid var(--line)}
 .notification-rules :is(.watch-rule-summary,.watch-all-pairs){font-size:12px;line-height:1.8;margin:0;padding:0;overflow-wrap:anywhere;color:var(--muted)}
 .notification-rules .watch-details-content strong{font-weight:500;color:var(--ink);margin-right:6px}
