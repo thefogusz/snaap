@@ -1,4 +1,5 @@
 import pg from "pg";
+import { migrateAdmin } from "./admin-schema.js";
 export function database(url: string) {
   return new pg.Pool({ connectionString: url, max: 8 });
 }
@@ -66,6 +67,7 @@ export async function migrate(db: pg.Pool) {
     ALTER TABLE usage_ledger ADD COLUMN IF NOT EXISTS output_tokens integer NOT NULL DEFAULT 0;
     ALTER TABLE usage_ledger ADD COLUMN IF NOT EXISTS estimated_usd numeric;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'user';
+    ALTER TABLE usage_ledger ADD COLUMN IF NOT EXISTS quota_waived boolean NOT NULL DEFAULT false;
   `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS workspaces(id uuid PRIMARY KEY,owner_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,name text NOT NULL,is_default boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now());
@@ -79,6 +81,7 @@ export async function migrate(db: pg.Pool) {
     UPDATE conversations c SET saved_rule_id=(SELECT min(r.id::text)::uuid FROM rules r WHERE r.owner_id=c.owner_id AND r.workspace_id IS NOT DISTINCT FROM c.workspace_id AND r.deleted_at IS NULL AND r.spec=c.draft HAVING count(*)=1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;
     CREATE TABLE IF NOT EXISTS data_scopes(owner_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('image','import','connection')),resource_id uuid NOT NULL,workspace_ids uuid[],PRIMARY KEY(owner_id,kind,resource_id));
   `);
+  await migrateAdmin(db);
 }
 export async function transaction<T>(
   db: pg.Pool,

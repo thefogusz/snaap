@@ -42,7 +42,10 @@ test("isUserAdmin checks role, email list, and local mode", async () => {
     }) as unknown as pg.Pool;
 
   // Non-existent user
-  let res = await isUserAdmin(mockDb(null), "00000000-0000-0000-0000-000000000000");
+  let res = await isUserAdmin(
+    mockDb(null),
+    "00000000-0000-0000-0000-000000000000",
+  );
   assert.equal(res.isAdmin, false);
 
   // Normal user, not local
@@ -91,7 +94,8 @@ test("isUserAdmin checks role, email list, and local mode", async () => {
 test("admin endpoints enforce permissions and support plan/quota updates", async () => {
   const testUserId = "00000000-0000-4000-8000-000000000001";
   const targetUserId = "11111111-1111-4111-8111-111111111111";
-  const rawSession = "11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff";
+  const rawSession =
+    "11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff";
   const tokenHash = hash(rawSession);
 
   const queries: { sql: string; values: any[] }[] = [];
@@ -101,7 +105,11 @@ test("admin endpoints enforce permissions and support plan/quota updates", async
       if (sql.includes("FROM sessions WHERE token_hash=$1")) {
         return { rowCount: 1, rows: [{ user_id: testUserId }] };
       }
-      if (sql.includes("SELECT id, email, role, created_at FROM users WHERE id=$1")) {
+      if (
+        sql.includes(
+          "SELECT id, email, role, created_at FROM users WHERE id=$1",
+        )
+      ) {
         return {
           rowCount: 1,
           rows: [
@@ -117,7 +125,9 @@ test("admin endpoints enforce permissions and support plan/quota updates", async
       if (sql.includes("SELECT id FROM users WHERE id=$1")) {
         return { rowCount: 1, rows: [{ id: targetUserId }] };
       }
-      if (sql.includes("SELECT u.id, u.email, u.role, e.pro_until FROM users")) {
+      if (
+        sql.includes("SELECT u.id, u.email, u.role, e.pro_until FROM users")
+      ) {
         return {
           rowCount: 1,
           rows: [
@@ -130,12 +140,14 @@ test("admin endpoints enforce permissions and support plan/quota updates", async
           ],
         };
       }
-      if (sql.includes("DELETE FROM usage_ledger")) {
+      if (sql.includes("UPDATE usage_ledger SET quota_waived")) {
         return { rowCount: 5, rows: [] };
       }
       return { rowCount: 0, rows: [] };
     },
   } as unknown as pg.Pool;
+  db.connect = async () =>
+    ({ query: db.query.bind(db), release: () => {} }) as any;
 
   const { app } = await buildApp(db, { local: true });
   try {
@@ -193,7 +205,8 @@ test("admin endpoints enforce permissions and support plan/quota updates", async
     assert.equal(resetQuota.statusCode, 200);
     const quotaData = JSON.parse(resetQuota.body);
     assert.equal(quotaData.ok, true);
-    assert.equal(quotaData.deletedRecords, 5);
+    assert.equal(quotaData.deletedRecords, 0);
+    assert.equal(quotaData.resetRecords, 5);
 
     // 5. Activity & Incident Feed
     const activity = await app.inject({

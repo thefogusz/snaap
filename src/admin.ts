@@ -3,6 +3,9 @@ import type pg from "pg";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ApiError } from "./errors.js";
+import { transaction } from "./data/db.js";
+import { registerAdminEvents, auditAdmin } from "./admin-events.js";
+import { hash } from "./crypto.js";
 
 export interface SystemLogEntry {
   id: string;
@@ -76,7 +79,12 @@ export function registerAdmin(
   db: pg.Pool,
   options: {
     local?: boolean;
-    session: (id: string, reply: FastifyReply) => Promise<void>;
+    monitoring?: boolean;
+    session: (
+      id: string,
+      reply: FastifyReply,
+      lifetimeSeconds?: number,
+    ) => Promise<string>;
   },
 ) {
   // Pre-handler hook to authenticate admin access for all /api/v1/admin/* routes
@@ -97,6 +105,28 @@ export function registerAdmin(
   });
 
   // Overview & Diagnostics
+  app.post("/api/v1/impersonation/restore", async (req, reply) => {
+    const sessionHash = hash(req.cookies.snaap_session ?? "");
+    const actor = (
+      await db.query(
+        "SELECT actor_id FROM admin_impersonations WHERE session_hash=$1",
+        [sessionHash],
+      )
+    ).rows[0];
+    if (
+      !actor ||
+      !(await isUserAdmin(db, actor.actor_id, options.local)).isAdmin
+    )
+      throw new ApiError(
+        403,
+        "ADMIN_REQUIRED",
+        "ไม่พบเซสชันผู้ดูแลที่กลับไปได้",
+      );
+    await options.session(actor.actor_id, reply);
+    await db.query("DELETE FROM sessions WHERE token_hash=$1", [sessionHash]);
+    await auditAdmin(db, actor.actor_id, "user.impersonate.end", req.userId);
+    return { ok: true };
+  });
   app.get("/api/v1/admin/overview", async () => {
     const start = Date.now();
     let dbPing = 0;
@@ -119,12 +149,22 @@ export function registerAdmin(
       recentDeliveriesRes,
       monitorIssuesRes,
       recentAiRunsRes,
+      heartbeatRes,
     ] = await Promise.all([
       db.query("SELECT count(*)::int AS n FROM users"),
       db.query(
         "SELECT count(*)::int AS n FROM entitlements WHERE pro_until > now()",
       ),
-      db.query("SELECT count(*)::int AS n FROM users WHERE role = 'admin'"),
+      db.query(
+        "SELECT count(*)::int AS n FROM users WHERE role='admin' OR lower(email)=ANY($1::text[]) OR ($2 AND (email='local@snaap.invalid' OR id='00000000-0000-4000-8000-000000000001'))",
+        [
+          (process.env.ADMIN_EMAILS ?? "")
+            .split(",")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean),
+          !!options.local,
+        ],
+      ),
       db.query("SELECT count(*)::int AS n FROM rules WHERE deleted_at IS NULL"),
       db.query(
         "SELECT count(*)::int AS n FROM rules WHERE active AND deleted_at IS NULL",
@@ -136,16 +176,19 @@ export function registerAdmin(
         "SELECT status, count(*)::int AS count FROM deliveries WHERE signal_id IN (SELECT id FROM signals WHERE created_at >= now() - interval '24 hours') GROUP BY status",
       ),
       db.query(
-        "SELECT mode, count(*)::int AS count FROM usage_ledger WHERE created_at >= date_trunc('month', now()) AND status IN ('RESERVED','COMPLETED') GROUP BY mode",
+        "SELECT mode,count(*) FILTER(WHERE status IN ('RESERVED','COMPLETED'))::int AS count,sum(COALESCE(estimated_usd,0)) AS estimated_usd FROM usage_ledger WHERE created_at>=date_trunc('month',now()) GROUP BY mode",
       ),
       db.query(
         "SELECT d.id, d.status, d.attempts, d.detail, dest.kind, dest.name as destination_name, s.pair, s.exchange, s.created_at FROM deliveries d JOIN destinations dest ON dest.id=d.destination_id JOIN signals s ON s.id=d.signal_id ORDER BY s.created_at DESC LIMIT 10",
       ),
       db.query(
-        "SELECT ms.rule_id, ms.exchange, ms.pair, ms.status, ms.checked_at, r.name as rule_name, u.email as owner_email FROM monitor_status ms JOIN rules r ON r.id = ms.rule_id JOIN users u ON u.id = r.owner_id WHERE ms.status != 'HEALTHY' ORDER BY ms.checked_at DESC LIMIT 10",
+        "SELECT ms.rule_id, ms.exchange, ms.pair, ms.status, ms.checked_at, r.spec->>'name' as rule_name, u.email as owner_email FROM monitor_status ms JOIN rules r ON r.id = ms.rule_id JOIN users u ON u.id = r.owner_id WHERE ms.status != 'READY' AND r.active AND r.deleted_at IS NULL ORDER BY ms.checked_at DESC LIMIT 10",
       ),
       db.query(
         "SELECT ar.id, ar.conversation_id, ar.status, ar.created_at, u.email as owner_email FROM agent_runs ar JOIN users u ON u.id = ar.owner_id ORDER BY ar.created_at DESC LIMIT 10",
+      ),
+      db.query(
+        "SELECT checked_at FROM service_heartbeats WHERE service='monitor'",
       ),
     ]);
 
@@ -161,7 +204,22 @@ export function registerAdmin(
 
     return {
       health: {
-        database: { status: dbPing >= 0 ? "healthy" : "error", latencyMs: dbPing },
+        database: {
+          status: dbPing >= 0 ? "healthy" : "error",
+          latencyMs: dbPing,
+        },
+        monitor: {
+          enabled: !!options.monitoring,
+          checkedAt: heartbeatRes.rows[0]?.checked_at ?? null,
+          status: !options.monitoring
+            ? "disabled"
+            : heartbeatRes.rows[0] &&
+                Date.now() -
+                  new Date(heartbeatRes.rows[0].checked_at).getTime() <
+                  180000
+              ? "healthy"
+              : "error",
+        },
         uptimeSeconds: Math.floor(process.uptime()),
         memoryMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
         ai: {
@@ -196,11 +254,16 @@ export function registerAdmin(
         deliveries24h: {
           total: Object.values(deliveryMap).reduce((a, b) => a + b, 0),
           delivered: deliveryMap["DELIVERED"] ?? 0,
-          failed: (deliveryMap["FAILED"] ?? 0) + (deliveryMap["AMBIGUOUS"] ?? 0),
+          failed:
+            (deliveryMap["FAILED"] ?? 0) + (deliveryMap["AMBIGUOUS"] ?? 0),
           retry: deliveryMap["RETRY"] ?? 0,
           pending: deliveryMap["PENDING"] ?? 0,
         },
         aiCallsMonth: {
+          estimatedUsd: aiMonthRes.rows.reduce(
+            (sum, row) => sum + Number(row.estimated_usd ?? 0),
+            0,
+          ),
           standard: aiMap["standard"] ?? 0,
           deep: aiMap["deep"] ?? 0,
           total: (aiMap["standard"] ?? 0) + (aiMap["deep"] ?? 0),
@@ -213,33 +276,57 @@ export function registerAdmin(
   });
 
   // Users List
-  app.get("/api/v1/admin/users", async () => {
+  app.get("/api/v1/admin/users", async (req) => {
+    const q = z
+      .object({
+        search: z.string().max(200).default(""),
+        filter: z.enum(["all", "pro", "free", "admin"]).default("all"),
+        before: z.string().uuid().optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      })
+      .strict()
+      .parse(req.query);
     const adminEmails = (process.env.ADMIN_EMAILS || "")
       .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
-    const result = await db.query(`
-      SELECT 
+    const result = await db.query(
+      `
+      WITH listed AS (SELECT
         u.id, 
         u.email, 
         u.role, 
         u.created_at,
+        (u.role='admin' OR COALESCE(lower(u.email)=ANY($1::text[]),false) OR ($2 AND u.id='00000000-0000-4000-8000-000000000001')) AS is_admin,
         e.pro_until,
         (e.pro_until IS NOT NULL AND e.pro_until > now()) AS is_pro,
         (SELECT count(*)::int FROM rules r WHERE r.owner_id = u.id AND r.deleted_at IS NULL) AS rules_count,
         (SELECT count(*)::int FROM rules r WHERE r.owner_id = u.id AND r.active AND r.deleted_at IS NULL) AS active_rules_count,
         (SELECT count(*)::int FROM signals s WHERE s.owner_id = u.id) AS signals_count,
-        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'standard' AND ul.created_at >= date_trunc('month', now()) AND ul.status IN ('RESERVED','COMPLETED')) AS ai_standard_used,
-        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'deep' AND ul.created_at >= date_trunc('month', now()) AND ul.status IN ('RESERVED','COMPLETED')) AS ai_deep_used
+        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'standard' AND ul.created_at >= date_trunc('month', now()) AND ul.status IN ('RESERVED','COMPLETED') AND NOT quota_waived) AS ai_standard_used,
+        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'deep' AND ul.created_at >= date_trunc('month', now()) AND ul.status IN ('RESERVED','COMPLETED') AND NOT quota_waived) AS ai_deep_used
       FROM users u
       LEFT JOIN entitlements e ON e.owner_id = u.id
-      ORDER BY u.created_at DESC
-      LIMIT 100
-    `);
+      WHERE ($3='' OR position(lower($3) IN lower(COALESCE(u.email,'')))>0 OR position(lower($3) IN u.id::text)>0)
+      AND ($4::uuid IS NULL OR (u.created_at,u.id)<(SELECT created_at,id FROM users WHERE id=$4)))
+      SELECT * FROM listed WHERE $5='all' OR ($5='pro' AND is_pro) OR ($5='free' AND NOT is_pro AND NOT is_admin) OR ($5='admin' AND is_admin)
+      ORDER BY created_at DESC,id DESC LIMIT $6
+    `,
+      [
+        adminEmails,
+        !!options.local,
+        q.search,
+        q.before ?? null,
+        q.filter,
+        q.limit + 1,
+      ],
+    );
 
     return {
-      users: result.rows.map((row) => ({
+      nextCursor:
+        result.rows.length > q.limit ? result.rows[q.limit - 1].id : null,
+      users: result.rows.slice(0, q.limit).map((row) => ({
         ...row,
         isAdmin:
           row.role === "admin" ||
@@ -253,92 +340,177 @@ export function registerAdmin(
 
   // Change User Plan or Role
   app.post("/api/v1/admin/users/:userId/plan", async (req) => {
-    const { userId } = z.object({ userId: z.string().uuid() }).parse(req.params);
+    const { userId } = z
+      .object({ userId: z.string().uuid() })
+      .parse(req.params);
     const body = z
       .object({
-        plan: z
-          .enum(["free", "pro_30d", "pro_1y", "pro_lifetime"])
-          .optional(),
+        plan: z.enum(["free", "pro_30d", "pro_1y", "pro_lifetime"]).optional(),
         role: z.enum(["user", "admin"]).optional(),
       })
+      .strict()
+      .refine(
+        (body) => !!(body.plan || body.role),
+        "ระบุแพ็กเกจหรือสิทธิ์ที่ต้องการเปลี่ยน",
+      )
       .parse(req.body);
 
-    const userExists = (
-      await db.query("SELECT id FROM users WHERE id=$1", [userId])
-    ).rowCount;
-    if (!userExists) {
-      throw new ApiError(404, "USER_NOT_FOUND", "ไม่พบผู้ใช้ที่ระบุ");
-    }
+    const updated = await transaction(db, async (c) => {
+      const userExists = (
+        await c.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId])
+      ).rowCount;
+      if (!userExists) {
+        throw new ApiError(404, "USER_NOT_FOUND", "ไม่พบผู้ใช้ที่ระบุ");
+      }
 
-    if (body.plan) {
-      if (body.plan === "free") {
-        await db.query(
-          "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, now()) ON CONFLICT(owner_id) DO UPDATE SET pro_until=now()",
-          [userId],
-        );
-      } else if (body.plan === "pro_30d") {
-        await db.query(
-          "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, now() + interval '30 days') ON CONFLICT(owner_id) DO UPDATE SET pro_until=GREATEST(COALESCE(entitlements.pro_until, now()), EXCLUDED.pro_until)",
-          [userId],
-        );
-      } else if (body.plan === "pro_1y") {
-        await db.query(
-          "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, now() + interval '1 year') ON CONFLICT(owner_id) DO UPDATE SET pro_until=GREATEST(COALESCE(entitlements.pro_until, now()), EXCLUDED.pro_until)",
-          [userId],
-        );
-      } else if (body.plan === "pro_lifetime") {
-        await db.query(
-          "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, '2099-12-31 23:59:59+00') ON CONFLICT(owner_id) DO UPDATE SET pro_until=EXCLUDED.pro_until",
-          [userId],
+      if (body.plan) {
+        if (body.plan === "free") {
+          await c.query(
+            "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, now()) ON CONFLICT(owner_id) DO UPDATE SET pro_until=now()",
+            [userId],
+          );
+        } else if (body.plan === "pro_30d") {
+          await c.query(
+            "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, now() + interval '30 days') ON CONFLICT(owner_id) DO UPDATE SET pro_until=GREATEST(COALESCE(entitlements.pro_until, now()), EXCLUDED.pro_until)",
+            [userId],
+          );
+        } else if (body.plan === "pro_1y") {
+          await c.query(
+            "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, now() + interval '1 year') ON CONFLICT(owner_id) DO UPDATE SET pro_until=GREATEST(COALESCE(entitlements.pro_until, now()), EXCLUDED.pro_until)",
+            [userId],
+          );
+        } else if (body.plan === "pro_lifetime") {
+          await c.query(
+            "INSERT INTO entitlements(owner_id, pro_until) VALUES($1, '2099-12-31 23:59:59+00') ON CONFLICT(owner_id) DO UPDATE SET pro_until=EXCLUDED.pro_until",
+            [userId],
+          );
+        }
+      }
+
+      if (body.plan) {
+        await c.query(
+          "INSERT INTO manual_entitlements(owner_id,pro_until) VALUES($1,CASE $2 WHEN 'free' THEN NULL WHEN 'pro_30d' THEN now()+interval '30 days' WHEN 'pro_1y' THEN now()+interval '1 year' ELSE '2099-12-31 23:59:59+00'::timestamptz END) ON CONFLICT(owner_id) DO UPDATE SET pro_until=excluded.pro_until",
+          [userId, body.plan],
         );
       }
-    }
+      if (body.role) {
+        if (body.role === "user" && userId === req.userId)
+          throw new ApiError(
+            409,
+            "SELF_DEMOTION",
+            "ไม่สามารถถอนสิทธิ์ Admin ของตัวเอง",
+          );
+        if (body.role === "user") {
+          const target = (
+            await c.query("SELECT email FROM users WHERE id=$1", [userId])
+          ).rows[0];
+          const configured = (process.env.ADMIN_EMAILS ?? "")
+            .split(",")
+            .map((s) => s.trim().toLowerCase());
+          if (
+            (target?.email &&
+              configured.includes(target.email.toLowerCase())) ||
+            (options.local && userId === "00000000-0000-4000-8000-000000000001")
+          )
+            throw new ApiError(
+              409,
+              "ADMIN_FROM_CONFIG",
+              "สิทธิ์นี้มาจากการตั้งค่าเซิร์ฟเวอร์ ต้องเปลี่ยน ADMIN_EMAILS ที่เซิร์ฟเวอร์",
+            );
+        }
+        await c.query("UPDATE users SET role=$2 WHERE id=$1", [
+          userId,
+          body.role,
+        ]);
+      }
 
-    if (body.role) {
-      await db.query("UPDATE users SET role=$2 WHERE id=$1", [userId, body.role]);
-    }
+      const updated = (
+        await c.query(
+          "SELECT u.id, u.email, u.role, e.pro_until FROM users u LEFT JOIN entitlements e ON e.owner_id=u.id WHERE u.id=$1",
+          [userId],
+        )
+      ).rows[0];
 
-    const updated = (
-      await db.query(
-        "SELECT u.id, u.email, u.role, e.pro_until FROM users u LEFT JOIN entitlements e ON e.owner_id=u.id WHERE u.id=$1",
-        [userId],
-      )
-    ).rows[0];
+      await auditAdmin(c, req.userId, "user.update", userId, body);
+      return updated;
+    });
 
     return {
       ok: true,
       user: {
         ...updated,
-        isPro: updated.pro_until ? new Date(updated.pro_until) > new Date() : false,
+        isPro: updated.pro_until
+          ? new Date(updated.pro_until) > new Date()
+          : false,
       },
     };
   });
 
   // Reset User Monthly AI Quota
   app.post("/api/v1/admin/users/:userId/reset-quota", async (req) => {
-    const { userId } = z.object({ userId: z.string().uuid() }).parse(req.params);
-    const deleteRes = await db.query(
-      "DELETE FROM usage_ledger WHERE owner_id=$1 AND created_at >= date_trunc('month', now())",
-      [userId],
-    );
+    const { userId } = z
+      .object({ userId: z.string().uuid() })
+      .parse(req.params);
+    const resetRecords = await transaction(db, async (c) => {
+      if (
+        !(
+          await c.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId])
+        ).rowCount
+      )
+        throw new ApiError(404, "USER_NOT_FOUND", "ไม่พบผู้ใช้");
+      if (
+        (
+          await c.query(
+            "SELECT 1 FROM agent_runs WHERE owner_id=$1 AND status='RUNNING' AND created_at>now()-interval '5 minutes'",
+            [userId],
+          )
+        ).rowCount
+      )
+        throw new ApiError(
+          409,
+          "AGENT_BUSY",
+          "รอการวิเคราะห์ที่กำลังทำงานก่อนรีเซ็ตโควตา",
+        );
+      await auditAdmin(c, req.userId, "quota.reset", userId);
+      return (
+        await c.query(
+          "UPDATE usage_ledger SET quota_waived=true WHERE owner_id=$1 AND created_at>=date_trunc('month',now()) AND status='COMPLETED' AND NOT quota_waived",
+          [userId],
+        )
+      ).rowCount;
+    });
     return {
       ok: true,
       userId,
-      deletedRecords: deleteRes.rowCount,
+      resetRecords,
+      deletedRecords: 0,
       message: "รีเซ็ตโควตาการใช้งาน AI ประจำเดือนเรียบร้อยแล้ว",
     };
   });
 
   // Impersonate User
   app.post("/api/v1/admin/users/:userId/impersonate", async (req, reply) => {
-    const { userId } = z.object({ userId: z.string().uuid() }).parse(req.params);
+    const { userId } = z
+      .object({ userId: z.string().uuid() })
+      .parse(req.params);
     const user = (
       await db.query("SELECT id, email FROM users WHERE id=$1", [userId])
     ).rows[0];
     if (!user) {
       throw new ApiError(404, "USER_NOT_FOUND", "ไม่พบผู้ใช้");
     }
-    await options.session(userId, reply);
+    if ((await isUserAdmin(db, userId, options.local)).isAdmin)
+      throw new ApiError(
+        409,
+        "ADMIN_IMPERSONATION",
+        "ใช้การสวมบัญชีเฉพาะผู้ใช้ทั่วไป",
+      );
+    await auditAdmin(db, req.userId, "user.impersonate", userId);
+    const token = await options.session(userId, reply, 900);
+    await db.query(
+      "INSERT INTO admin_impersonations(session_hash,actor_id) VALUES($1,$2)",
+      [hash(token), req.userId],
+    );
     return {
       ok: true,
       impersonated: { id: user.id, email: user.email },
@@ -353,7 +525,7 @@ export function registerAdmin(
         "SELECT d.id, d.status, d.attempts, d.detail, dest.kind, dest.name as destination_name, s.pair, s.exchange, s.created_at FROM deliveries d JOIN destinations dest ON dest.id=d.destination_id JOIN signals s ON s.id=d.signal_id WHERE d.status IN ('FAILED', 'RETRY', 'AMBIGUOUS') ORDER BY s.created_at DESC LIMIT 50",
       ),
       db.query(
-        "SELECT ms.rule_id, ms.exchange, ms.pair, ms.status, ms.checked_at, r.name as rule_name, u.email as owner_email FROM monitor_status ms JOIN rules r ON r.id = ms.rule_id JOIN users u ON u.id = r.owner_id WHERE ms.status != 'HEALTHY' ORDER BY ms.checked_at DESC LIMIT 50",
+        "SELECT ms.rule_id, ms.exchange, ms.pair, ms.status, ms.checked_at, r.spec->>'name' as rule_name, u.email as owner_email FROM monitor_status ms JOIN rules r ON r.id = ms.rule_id JOIN users u ON u.id = r.owner_id WHERE ms.status != 'READY' AND r.active AND r.deleted_at IS NULL ORDER BY ms.checked_at DESC LIMIT 50",
       ),
     ]);
 
@@ -370,128 +542,11 @@ export function registerAdmin(
       logs: getSystemLogs(),
     };
   });
-
-  // Activity & Incident Feed (Unified events timeline)
-  app.get("/api/v1/admin/activity", async () => {
-    const [signupsRes, billingRes, marketIssuesRes, deliveriesRes, aiRunsRes] =
-      await Promise.all([
-        db.query(
-          "SELECT id, email, created_at FROM users WHERE created_at >= now() - interval '7 days' ORDER BY created_at DESC LIMIT 30",
-        ),
-        db.query(
-          "SELECT bg.payment_id, bg.amount, bg.kind, bg.received_at, u.email FROM billing_grants bg JOIN users u ON u.id = bg.owner_id WHERE bg.received_at >= now() - interval '7 days' ORDER BY bg.received_at DESC LIMIT 20",
-        ),
-        db.query(
-          "SELECT ms.rule_id, ms.exchange, ms.pair, ms.status, ms.checked_at, r.name as rule_name, u.email as owner_email FROM monitor_status ms JOIN rules r ON r.id = ms.rule_id JOIN users u ON u.id = r.owner_id WHERE ms.status != 'HEALTHY' ORDER BY ms.checked_at DESC LIMIT 20",
-        ),
-        db.query(
-          "SELECT d.id, d.status, d.attempts, d.detail, dest.kind, dest.name as destination_name, s.pair, s.exchange, s.created_at, u.email as user_email FROM deliveries d JOIN destinations dest ON dest.id=d.destination_id JOIN signals s ON s.id=d.signal_id JOIN users u ON u.id = s.owner_id WHERE d.status IN ('FAILED', 'AMBIGUOUS', 'RETRY') ORDER BY s.created_at DESC LIMIT 20",
-        ),
-        db.query(
-          "SELECT ar.id, ar.status, ar.created_at, u.email as user_email FROM agent_runs ar JOIN users u ON u.id=ar.owner_id WHERE ar.status IN ('FAILED', 'ERROR') ORDER BY ar.created_at DESC LIMIT 20",
-        ),
-      ]);
-
-    const events: Array<{
-      id: string;
-      category: "signup" | "market" | "delivery" | "billing" | "system";
-      severity: "info" | "success" | "warning" | "error";
-      title: string;
-      detail: string;
-      timestamp: string;
-    }> = [];
-
-    // 1. Signups
-    for (const row of signupsRes.rows) {
-      events.push({
-        id: `signup-${row.id}`,
-        category: "signup",
-        severity: "info",
-        title: "👤 มีผู้ใช้งานใหม่ลงทะเบียน",
-        detail: row.email ? `อีเมล: ${row.email}` : `User ID: ${row.id}`,
-        timestamp: row.created_at,
-      });
-    }
-
-    // 2. Billing / Upgrades
-    for (const row of billingRes.rows) {
-      events.push({
-        id: `billing-${row.payment_id}`,
-        category: "billing",
-        severity: "success",
-        title: "💳 ได้รับการชำระเงินแพ็กเกจ Pro",
-        detail: `${row.email || "ผู้ใช้"} ชำระเงิน ${row.amount / 100} บาท ผ่าน ${row.kind}`,
-        timestamp: row.received_at,
-      });
-    }
-
-    // 3. Market Monitor Issues
-    for (const row of marketIssuesRes.rows) {
-      events.push({
-        id: `market-${row.rule_id}-${row.exchange}-${row.pair}-${new Date(row.checked_at).getTime()}`,
-        category: "market",
-        severity: "warning",
-        title: `⚠️ กระดาน ${row.exchange}: ข้อมูล ${row.pair} ผิดปกติ`,
-        detail: `สถานะ: ${row.status} (กฎ: "${row.rule_name || row.rule_id}" โดย ${row.owner_email || "-"})`,
-        timestamp: row.checked_at,
-      });
-    }
-
-    // 4. Failed Deliveries
-    for (const row of deliveriesRes.rows) {
-      events.push({
-        id: `delivery-${row.id}`,
-        category: "delivery",
-        severity: "error",
-        title: `🚨 ส่งแจ้งเตือน ${row.kind} ไม่สำเร็จ (${row.pair})`,
-        detail: `${row.destination_name ? `ช่องทาง "${row.destination_name}": ` : ""}${row.detail || `สถานะ ${row.status}`} (${row.user_email || "-"})`,
-        timestamp: row.created_at,
-      });
-    }
-
-    // 5. AI Errors
-    for (const row of aiRunsRes.rows) {
-      events.push({
-        id: `ai-${row.id}`,
-        category: "system",
-        severity: "error",
-        title: "🤖 การประมวลผล AI ล้มเหลว",
-        detail: `ผู้ใช้ ${row.user_email || "-"} สถานะ ${row.status}`,
-        timestamp: row.created_at,
-      });
-    }
-
-    // 6. System log errors (recent 15)
-    for (const log of getSystemLogs().slice(0, 15)) {
-      events.push({
-        id: `log-${log.id}`,
-        category: "system",
-        severity: log.statusCode && log.statusCode >= 500 ? "error" : "warning",
-        title: `⚙️ ระบบเกิดข้อผิดพลาด: ${log.type}`,
-        detail: `${log.method ? `[${log.method} ${log.url}] ` : ""}${log.message}`,
-        timestamp: log.timestamp,
-      });
-    }
-
-    // Sort descending by timestamp
-    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-    // Compute today stats
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayMs = today.getTime();
-
-    const todayEvents = events.filter((e) => new Date(e.timestamp).getTime() >= todayMs);
-    const summary = {
-      todayTotal: todayEvents.length,
-      todaySignups: todayEvents.filter((e) => e.category === "signup").length,
-      todayIncidents: todayEvents.filter((e) => e.severity === "error" || e.severity === "warning").length,
-      todayPayments: todayEvents.filter((e) => e.category === "billing").length,
-    };
-
-    return {
-      summary,
-      events,
-    };
+  app.post("/api/v1/admin/logs/clear", async (req) => {
+    await auditAdmin(db, req.userId, "logs.clear");
+    clearSystemLogs();
+    return { ok: true };
   });
+
+  registerAdminEvents(app, db, !!options.monitoring);
 }
