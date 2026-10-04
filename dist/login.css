@@ -1,17 +1,21 @@
-:root{color-scheme:dark;font-family:system-ui,"Noto Sans Thai",sans-serif;background:#101012;color:#f4f4f5}
-*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 0,rgba(210,250,64,.05),transparent 60%),#101012}
-.login-card{width:min(100%,440px);padding:40px 32px;border:1px solid #303033;background:#1c1c1f;border-radius:24px;text-align:center;box-shadow:0 18px 60px #0002}
-.login-brand{font-family:"DM Sans",sans-serif;font-size:48px;line-height:1.1;letter-spacing:-2.4px;font-weight:800;margin-bottom:32px}.login-brand span{color:#d5fa40}
-.login-eyebrow{color:#d5fa40;font-size:12px;margin:0 0 12px}h1{font-size:26px;line-height:1.4;margin:0 0 14px;font-weight:650}.login-intro{color:#b8b8c0;font-size:14px;line-height:1.85;margin:0 0 26px}
-#login-status{color:#c7c7cf;font-size:13px;line-height:1.7;margin:0 0 20px}#login-status[data-error]{padding:12px 14px;border-radius:12px;background:#ffffff06;border:1px solid #37373c}
-.google-button{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px;padding:12px 18px;border:1px solid #747775;border-radius:12px;background:#fff;color:#1f1f1f;font-size:14px;font-weight:500;text-decoration:none;transition:background .18s}.google-button:hover{background:#f0f0f0}.google-button svg{width:20px;height:20px;flex:none}
-.login-privacy{font-size:12px;color:#9898a2;line-height:1.8;margin:20px 0 0}.local-access{border-top:1px solid #303033;margin-top:28px;padding-top:20px;display:grid;gap:10px;font-size:11px;color:#9898a2}.local-access button{font:inherit;font-size:13px;cursor:pointer;border:1px solid #414146;border-radius:10px;color:#ddd;background:transparent;padding:11px}.local-access button:disabled{opacity:.5;cursor:wait}a:focus-visible,button:focus-visible{outline:2px solid #d5fa40;outline-offset:4px}
-.google-button{width:52px;height:52px;min-height:52px;padding:0;border-radius:50%;margin:30px auto 0}
-.google-button svg{width:24px;height:24px}
-.local-access{border:0;margin-top:20px;padding:0}
-.local-access button{border:0;padding:6px;color:#9898a2;font-size:11px}
-.google-button[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
-.login-card{animation:login-enter .22s ease-out}
+:root{color-scheme:dark;font-family:"DM Sans","Noto Sans Thai",sans-serif;background:#101012;color:#f4f4f5;--lime:#d0f64c}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:#101012}
+.login-card{width:min(100%,440px);padding:48px 32px 40px;border:1px solid #303033;background:#1c1c1f;border-radius:24px;text-align:center;box-shadow:0 18px 60px #0002;animation:login-enter .22s ease-out}
+.login-brand{display:inline-flex;align-items:baseline;font-family:"DM Sans",sans-serif;font-size:43px;line-height:1;letter-spacing:-3px;font-weight:800;margin-bottom:28px;color:#f4f4f5}
+.login-brand span{color:var(--lime);font-size:47px;margin-left:3px}
+h1{font-size:24px;line-height:1.55;margin:0;font-weight:600;letter-spacing:-.3px;text-wrap:balance}
+#login-status{color:#c7c7cf;font-size:13px;line-height:1.7;margin:20px 0 0}
+#login-status[data-error]{padding:12px 14px;border-radius:12px;background:#ffffff06;border:1px solid #37373c}
+.google-button{display:flex;align-items:center;justify-content:center;width:52px;height:52px;padding:0;border:1px solid #e4e4e7;border-radius:50%;margin:28px auto 0;background:#fff;text-decoration:none;transition:background .18s,transform .18s}
+.google-button:hover{background:#f0f0f0;transform:translateY(-1px)}
+.google-button svg{width:24px;height:24px;flex:none}
+.google-button[aria-disabled="true"]{opacity:.5;cursor:not-allowed;transform:none}
+.local-access{margin-top:20px;font-size:11px;color:#9898a2}
+.local-access button{font:inherit;cursor:pointer;border:0;border-radius:8px;background:transparent;padding:8px 12px;color:#9898a2}
+.local-access button:hover{color:#f4f4f5;background:#ffffff06}
+.local-access button:disabled{opacity:.5;cursor:wait}
+a:focus-visible,button:focus-visible{outline:2px solid var(--lime);outline-offset:4px}
 @keyframes login-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@media(prefers-reduced-motion:reduce){.login-card{animation:none}}
-@media(max-width:480px){.login-card{padding:32px 24px}}
+@media(prefers-reduced-motion:reduce){.login-card{animation:none}.google-button{transition:none}}
+@media(max-width:480px){body{padding:20px}.login-card{padding:40px 24px 32px}h1{font-size:22px}}
