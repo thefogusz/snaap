@@ -48,6 +48,12 @@
 
   <!-- Main Container -->
   <main class="admin-container">
+    <div class="command-heading">
+      <div><p class="eyebrow">SNAAP OPERATIONS</p><h1>Admin Dashboard</h1><p>ภาพรวมวันนี้และเหตุการณ์ที่ต้องดูแล · เวลาไทย (UTC+7)</p></div>
+      <button class="btn" id="btn-notifications">เปิดแจ้งเตือนบนอุปกรณ์</button>
+    </div>
+    <div id="connection-status" class="connection-status" role="status" aria-live="polite">กำลังตรวจสอบระบบ…</div>
+    <div id="incident-banner" class="incident-banner" hidden role="status"></div>
     <!-- Tabs Nav -->
     <nav class="admin-tabs" aria-label="Admin Sections">
       <button class="tab-btn active" data-tab="overview">
@@ -143,9 +149,9 @@
           <div class="health-icon">📈</div>
           <div class="health-info">
             <div class="health-name">Market Monitor (5 Exchanges)</div>
-            <div class="health-desc">Binance, Bybit, OKX, Bitget, MEXC</div>
+            <div class="health-desc" id="health-market-desc">กำลังตรวจสอบรอบสแกน...</div>
           </div>
-          <span class="badge badge-success" id="badge-health-market">รันปกติ</span>
+          <span class="badge" id="badge-health-market">กำลังตรวจสอบ</span>
         </div>
         <div class="health-card">
           <div class="health-icon">🤖</div>
@@ -244,21 +250,29 @@
           <button class="filter-btn" data-feed-filter="delivery">🚨 ส่งไม่ผ่าน</button>
           <button class="filter-btn" data-feed-filter="billing">💳 การเงิน</button>
           <button class="filter-btn" data-feed-filter="system">⚙️ ระบบ</button>
+          <button class="filter-btn" data-feed-filter="admin">การกระทำของ Admin</button>
         </div>
         <button id="btn-refresh-feed" class="btn btn-sm">🔄 อัปเดต Feed</button>
+      </div>
+
+      <div class="incident-controls">
+        <label>สถานะ <select id="feed-state"><option value="all">ทั้งหมด</option><option value="unread">ยังไม่รับทราบ</option><option value="open">กำลังขัดข้อง</option><option value="resolved">กู้คืน / เหตุการณ์ทั่วไป</option></select></label>
+        <label>ความรุนแรง <select id="feed-severity"><option value="">ทุกระดับ</option><option value="error">รุนแรง</option><option value="warning">ควรตรวจสอบ</option><option value="info">ข้อมูล</option><option value="success">สำเร็จ</option></select></label>
+        <button class="btn" id="btn-read-all">รับทราบทั้งหมดถึงเวลาที่แสดง</button>
       </div>
 
       <!-- Timeline List -->
       <div class="timeline-list" id="activity-timeline-list">
         <div class="empty-state">กำลังโหลดข้อมูลเหตุการณ์...</div>
       </div>
+      <button class="btn load-more" id="btn-feed-more" hidden>โหลดเหตุการณ์ก่อนหน้า</button>
     </section>
 
     <!-- Tab 3: Users Management -->
     <section id="panel-users" class="tab-panel">
       <div class="user-toolbar">
         <div class="search-input-wrap">
-          <input type="text" id="user-search-input" class="search-input" placeholder="🔍 ค้นหาด้วย Email หรือ User ID...">
+          <input type="search" id="user-search-input" class="search-input" aria-label="ค้นหาผู้ใช้" placeholder="ค้นหาด้วย Email หรือ User ID...">
         </div>
         <div class="filter-group">
           <button class="filter-btn active" data-filter="all">ทั้งหมด</button>
@@ -285,6 +299,7 @@
           </tbody>
         </table>
       </div>
+      <button class="btn load-more" id="btn-users-more" hidden>โหลดผู้ใช้เพิ่มเติม</button>
     </section>
 
     <!-- Tab 3: Diagnostics & Logs -->
@@ -329,11 +344,13 @@
       <!-- System Error Logs -->
       <div class="section-title">
         <span>ประวัติ Error ของระบบ (System Logs)</span>
-        <button id="btn-clear-logs" class="btn btn-sm btn-danger">ล้างประวัติ Log</button>
+        <button id="btn-clear-logs" class="btn btn-sm btn-danger">ล้าง Log ในหน่วยความจำ</button>
       </div>
       <div class="log-box" id="system-logs-box">
         <div class="empty-state">ยังไม่มีบันทึก Error ล่าสุด</div>
       </div>
+      <h2 class="section-title">ประวัติการกระทำของผู้ดูแล</h2>
+      <div id="admin-audit-list" class="log-box"></div>
     </section>
   </main>
 
@@ -379,6 +396,6 @@
   </div>
 
   <!-- Toast Element -->
-  <div id="toast" class="toast" hidden></div>
+  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
 </body>
 </html>

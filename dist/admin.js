@@ -11,8 +11,28 @@
     feedFilter: "all",
     search: "",
     selectedUserId: null,
+    feedState: "all",
+    feedSeverity: "",
+    feedCursor: null,
+    userCursor: null,
+    eventVersions: new Map(),
+    feedLoaded: false,
+    feedRequest: 0,
+    userRequest: 0,
   };
 
+  const escapeHTML = (value) =>
+    String(value ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -39,6 +59,7 @@
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Bangkok",
       });
     } catch {
       return isoString;
@@ -51,7 +72,9 @@
       const d = new Date(isoString);
       if (d.getFullYear() > 2090) return "ตลอดชีพ";
       const now = new Date();
-      const diffHours = Math.round((d.getTime() - now.getTime()) / (1000 * 3600));
+      const diffHours = Math.round(
+        (d.getTime() - now.getTime()) / (1000 * 3600),
+      );
       if (diffHours <= 0) return "หมดอายุแล้ว";
       if (diffHours < 24) return `เหลือ ${diffHours} ชม.`;
       const diffDays = Math.ceil(diffHours / 24);
@@ -84,20 +107,25 @@
       "Content-Type": "application/json",
     };
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(12000),
       ...options,
       headers: { ...defaultHeaders, ...(options.headers || {}) },
     });
 
     if (res.status === 401) {
-      alert("กรุณาเข้าสู่ระบบก่อนเข้าใช้งานหน้าผู้ดูแลระบบ");
-      window.location.href = "/login.html";
+      if (!state.redirecting) {
+        state.redirecting = true;
+        window.location.href = "/login.html";
+      }
       throw new Error("UNAUTHENTICATED");
     }
 
     if (res.status === 403) {
       const err = await res.json().catch(() => ({}));
-      alert("คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (เฉพาะ Admin เท่านั้น)");
-      window.location.href = "/";
+      if (!state.redirecting) {
+        state.redirecting = true;
+        window.location.href = "/";
+      }
       throw new Error(err.error?.message || "FORBIDDEN");
     }
 
@@ -153,12 +181,13 @@
       ? "badge badge-success"
       : "badge badge-danger";
     $("#system-status-text").textContent = dbOk
-      ? `ระบบพร้อมใช้งาน (${health.database.latencyMs}ms)`
+      ? `ฐานข้อมูลตอบสนอง (${health.database.latencyMs}ms)`
       : "Database ผิดปกติ";
 
     // KPIs
     $("#kpi-total-users").textContent = kpis.totalUsers;
-    $("#kpi-pro-users").textContent = `${kpis.proUsers} บัญชี Pro (${kpis.adminUsers} Admin)`;
+    $("#kpi-pro-users").textContent =
+      `${kpis.proUsers} บัญชี Pro (${kpis.adminUsers} Admin)`;
     $("#kpi-users-badge").textContent = `${kpis.totalUsers} บัญชี`;
 
     $("#kpi-active-rules").textContent = kpis.activeRules;
@@ -168,46 +197,77 @@
 
     const del = kpis.deliveries24h;
     $("#kpi-deliveries-success").textContent = del.delivered;
-    $("#kpi-deliveries-sub").textContent = `สำเร็จ ${del.delivered} / ล้มเหลว ${del.failed} / รอส่ง ${del.pending}`;
+    $("#kpi-deliveries-sub").textContent =
+      `สำเร็จ ${del.delivered} / ล้มเหลว ${del.failed} / รอส่ง ${del.pending}`;
     $("#kpi-delivery-badge").className =
       del.failed > 0 ? "badge badge-danger" : "badge badge-success";
     $("#kpi-delivery-badge").textContent =
-      del.failed > 0 ? `ล้มเหลว ${del.failed}` : "100% ปกติ";
+      del.failed > 0 ? `ล้มเหลว ${del.failed}` : "ไม่มีรายการล้มเหลว";
 
     const ai = kpis.aiCallsMonth;
     $("#kpi-ai-total").textContent = ai.total;
-    $("#kpi-ai-breakdown").textContent = `Standard: ${ai.standard} | Deep: ${ai.deep}`;
+    $("#kpi-ai-breakdown").textContent =
+      `Standard: ${ai.standard} | Deep: ${ai.deep} · ต้นทุนประมาณ $${Number(ai.estimatedUsd || 0).toFixed(3)}`;
 
     // Health cards
-    $("#health-db-desc").textContent = `ความเร็วการตอบสนอง ${health.database.latencyMs} ms`;
-    $("#badge-health-db").className = dbOk ? "badge badge-success" : "badge badge-danger";
+    $("#health-db-desc").textContent =
+      `ความเร็วการตอบสนอง ${health.database.latencyMs} ms`;
+    $("#badge-health-db").className = dbOk
+      ? "badge badge-success"
+      : "badge badge-danger";
     $("#badge-health-db").textContent = dbOk ? "ปกติ" : "Error";
+    const monitor = health.monitor;
+    $("#health-market-desc").textContent = monitor.enabled
+      ? monitor.checkedAt
+        ? `สแกนสำเร็จล่าสุด ${formatDate(monitor.checkedAt)}`
+        : "ยังไม่พบรอบสแกนสำเร็จ"
+      : "ยังไม่เปิดตัวเฝ้าตลาด";
+    $("#badge-health-market").className =
+      `badge ${monitor.status === "healthy" ? "badge-success" : monitor.enabled ? "badge-danger" : "badge-free"}`;
+    $("#badge-health-market").textContent =
+      monitor.status === "healthy"
+        ? "กำลังสแกน"
+        : monitor.enabled
+          ? "ไม่ตอบสนอง"
+          : "ปิดอยู่";
 
     $("#health-ai-desc").textContent = health.ai.configured
       ? `โมเดล: ${health.ai.standardModel} / ${health.ai.deepModel}`
       : "ยังไม่ได้ตั้งค่า API Key";
-    $("#badge-health-ai").className = health.ai.configured ? "badge badge-success" : "badge badge-warning";
-    $("#badge-health-ai").textContent = health.ai.configured ? "เชื่อมต่อแล้ว" : "ไม่ได้เชื่อม";
+    $("#badge-health-ai").className = health.ai.configured
+      ? "badge badge-success"
+      : "badge badge-warning";
+    $("#badge-health-ai").textContent = health.ai.configured
+      ? "ตั้งค่าแล้ว"
+      : "ยังไม่ได้ตั้งค่า";
 
     $("#health-stripe-desc").textContent = health.billing.configured
       ? health.billing.liveEnabled
         ? "เปิดรับเงินจริง (Live Mode)"
         : "โหมดทดสอบ (Test Mode)"
       : "ยังไม่ได้เชื่อมต่อ Stripe";
-    $("#badge-health-stripe").className = health.billing.configured ? "badge badge-success" : "badge badge-free";
-    $("#badge-health-stripe").textContent = health.billing.configured ? "พร้อมใช้" : "ปิดอยู่";
+    $("#badge-health-stripe").className = health.billing.configured
+      ? "badge badge-success"
+      : "badge badge-free";
+    $("#badge-health-stripe").textContent = health.billing.configured
+      ? "ตั้งค่าแล้ว"
+      : "ปิดอยู่";
 
     const channels = [];
     if (health.telegram.configured) channels.push("Telegram");
     if (health.line.configured) channels.push("LINE");
-    $("#health-channels-desc").textContent = channels.length > 0
-      ? `ช่องทางที่เปิด: ${channels.join(", ")}`
-      : "ยังไม่ได้ระบุ Bot Credentials";
-    $("#badge-health-channels").className = channels.length > 0 ? "badge badge-success" : "badge badge-free";
-    $("#badge-health-channels").textContent = channels.length > 0 ? "เปิดใช้งาน" : "ไม่มี";
+    $("#health-channels-desc").textContent =
+      channels.length > 0
+        ? `ช่องทางที่เปิด: ${channels.join(", ")}`
+        : "ยังไม่ได้ระบุ Bot Credentials";
+    $("#badge-health-channels").className =
+      channels.length > 0 ? "badge badge-success" : "badge badge-free";
+    $("#badge-health-channels").textContent =
+      channels.length > 0 ? "เปิดใช้งาน" : "ไม่มี";
 
     const uptimeMins = Math.floor(health.uptimeSeconds / 60);
-    $("#health-runtime-desc").textContent = `Uptime: ${uptimeMins} นาที | Memory: ${health.memoryMb} MB`;
+    $("#health-runtime-desc").textContent =
+      `Uptime: ${uptimeMins} นาที | Memory: ${health.memoryMb} MB`;
 
     // Recent deliveries table
     const tbody = $("#recent-deliveries-tbody");
@@ -220,16 +280,18 @@
       .map((d) => {
         let badgeClass = "badge-free";
         if (d.status === "DELIVERED") badgeClass = "badge-success";
-        else if (d.status === "FAILED" || d.status === "AMBIGUOUS") badgeClass = "badge-danger";
-        else if (d.status === "RETRY" || d.status === "PENDING") badgeClass = "badge-warning";
+        else if (d.status === "FAILED" || d.status === "AMBIGUOUS")
+          badgeClass = "badge-danger";
+        else if (d.status === "RETRY" || d.status === "PENDING")
+          badgeClass = "badge-warning";
 
         return `
         <tr>
           <td>${formatDate(d.created_at)}</td>
-          <td><span class="badge badge-free">${d.kind || "-"}</span> ${d.destination_name || ""}</td>
-          <td><strong>${d.pair || "-"}</strong> <small style="color:var(--tertiary);">(${d.exchange || "-"})</small></td>
-          <td><span class="badge ${badgeClass}">${d.status}</span></td>
-          <td style="font-size:12px;color:var(--secondary);">${d.detail || "-"}</td>
+          <td><span class="badge badge-free">${escapeHTML(d.kind || "-")}</span> ${escapeHTML(d.destination_name || "")}</td>
+          <td><strong>${escapeHTML(d.pair || "-")}</strong> <small style="color:var(--tertiary);">(${escapeHTML(d.exchange || "-")})</small></td>
+          <td><span class="badge ${badgeClass}">${escapeHTML(d.status)}</span></td>
+          <td style="font-size:12px;color:var(--secondary);">${escapeHTML(d.detail || "-")}</td>
         </tr>
       `;
       })
@@ -238,12 +300,18 @@
 
   function getCategoryIcon(cat) {
     switch (cat) {
-      case "signup": return "👤";
-      case "market": return "⚠️";
-      case "delivery": return "🚨";
-      case "billing": return "💳";
-      case "system": return "⚙️";
-      default: return "🔔";
+      case "signup":
+        return "👤";
+      case "market":
+        return "⚠️";
+      case "delivery":
+        return "🚨";
+      case "billing":
+        return "💳";
+      case "system":
+        return "⚙️";
+      default:
+        return "🔔";
     }
   }
 
@@ -251,25 +319,90 @@
     if (!isoString) return false;
     const d = new Date(isoString);
     const now = new Date();
-    return d.getDate() === now.getDate() &&
+    return (
+      d.getDate() === now.getDate() &&
       d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear();
+      d.getFullYear() === now.getFullYear()
+    );
   }
 
   // Load Activity & Incident Feed
-  async function loadActivity() {
+  async function loadActivity(append = false, background = false) {
+    const request = ++state.feedRequest;
+    const query = new URLSearchParams({ state: state.feedState, limit: "50" });
+    if (state.feedFilter !== "all") query.set("category", state.feedFilter);
+    if (state.feedSeverity) query.set("severity", state.feedSeverity);
+    if (append && state.feedCursor) query.set("before", state.feedCursor);
     try {
-      const data = await apiFetch("/api/v1/admin/activity");
+      const data = await apiFetch(`/api/v1/admin/activity?${query}`);
+      if (request !== state.feedRequest) return;
+      const fresh = data.highlights.filter(
+        (e) => e.unread && state.eventVersions.get(e.id) !== e.timestamp,
+      );
+      if (state.feedLoaded && !append && fresh.length) {
+        const message =
+          fresh.length === 1
+            ? fresh[0].title
+            : `มี ${fresh.length} เหตุการณ์ใหม่ · ${fresh[0].title}`;
+        showToast(message);
+        if (
+          state.deviceNotifications &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
+          try {
+            const notification = new Notification("SNAAP Admin", {
+              body: message,
+              tag: "snaap-admin-events",
+            });
+            notification.onclick = () => {
+              window.focus();
+              $('[data-tab="activity"]').click();
+              notification.close();
+            };
+          } catch {
+            /* In-page alerts stay available if the OS rejects notifications. */
+          }
+        }
+      }
+      for (const e of [...data.highlights, ...data.events])
+        state.eventVersions.set(e.id, e.timestamp);
+      if (state.eventVersions.size > 500)
+        state.eventVersions = new Map([...state.eventVersions].slice(-250));
+      state.feedLoaded = true;
+      if (!background || state.activity.events.length <= 50)
+        state.feedCursor = data.nextCursor;
+      if (append) data.events = [...state.activity.events, ...data.events];
+      else if (background && state.activity.events.length > 50) {
+        const combined = new Map(state.activity.events.map((e) => [e.id, e]));
+        for (const e of data.events) combined.set(e.id, e);
+        data.events = [...combined.values()].sort(
+          (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
+        );
+      }
       state.activity = data;
+      $("#connection-status").className = "connection-status";
+      $("#connection-status").textContent =
+        `อัปเดตล่าสุด ${new Date(data.checkedAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok" })} · ตรวจทุก 15 วินาที`;
+      $("#incident-banner").hidden = !data.summary.openIncidents;
+      $("#incident-banner").textContent =
+        `มี ${data.summary.openIncidents} เหตุขัดข้องที่ยังไม่กู้คืน · ${data.activeIncidents.map((e) => e.title).join(" · ")}`;
+      $("#btn-feed-more").hidden = !state.feedCursor;
       renderTodayBanner(data);
       renderActivity(data);
     } catch (err) {
-      console.error("Activity load error", err);
+      $("#connection-status").className = "connection-status is-error";
+      $("#connection-status").textContent =
+        "ติดต่อระบบไม่ได้ · ข้อมูลที่แสดงอาจเก่า กำลังลองเชื่อมต่อใหม่";
+      if (!state.feedLoaded)
+        $("#activity-timeline-list").textContent =
+          "โหลดเหตุการณ์ไม่สำเร็จ กดอัปเดตเพื่อลองอีกครั้ง";
     }
   }
 
   function renderTodayBanner(data) {
-    const { summary, events } = data;
+    const { summary } = data;
+    const events = data.highlights || data.events;
     const summaryText = $("#today-summary-text");
     if (summaryText) {
       summaryText.textContent = `วันนี้: สมาชิกใหม่ +${summary.todaySignups} คน · ปัญหาตลาด/ระบบ ${summary.todayIncidents} ครั้ง · ยอดชำระเงิน ${summary.todayPayments} รายการ`;
@@ -277,12 +410,12 @@
 
     const badge = $("#tab-activity-badge");
     if (badge) {
-      if (summary.todayIncidents > 0) {
-        badge.textContent = summary.todayIncidents;
+      if (summary.unread > 0) {
+        badge.textContent = summary.unread;
         badge.className = "badge badge-danger";
         badge.hidden = false;
-      } else if (summary.todaySignups > 0) {
-        badge.textContent = summary.todaySignups;
+      } else if (summary.unread > 0) {
+        badge.textContent = summary.unread;
         badge.className = "badge badge-pro";
         badge.hidden = false;
       } else {
@@ -294,7 +427,7 @@
     if (!previewList) return;
 
     if (!events || events.length === 0) {
-      previewList.innerHTML = `<div style="font-size:13px;color:var(--tertiary);padding:4px 0;">ยังไม่มีเหตุการณ์ใหม่ในรอบ 7 วันที่ผ่านมา ✨</div>`;
+      previewList.innerHTML = `<div style="font-size:13px;color:var(--tertiary);padding:4px 0;">ยังไม่มีเหตุการณ์ในช่วงนี้ ✨</div>`;
       return;
     }
 
@@ -311,8 +444,8 @@
           <div class="today-feed-item">
             <div class="today-feed-item-left">
               <span>${getCategoryIcon(e.category)}</span>
-              <strong>${e.title}</strong>
-              <span style="color:var(--secondary);font-size:12px;">${e.detail}</span>
+              <strong>${escapeHTML(e.title)}</strong>
+              <span style="color:var(--secondary);font-size:12px;">${escapeHTML(e.detail)}</span>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="badge ${badgeClass}" style="font-size:11px;">${formatTimeAgo(e.timestamp)}</span>
@@ -327,13 +460,16 @@
     const { summary, events } = data;
 
     // Counters
-    if ($("#cnt-today-signups")) $("#cnt-today-signups").textContent = summary.todaySignups || 0;
-    if ($("#cnt-today-incidents")) $("#cnt-today-incidents").textContent = summary.todayIncidents || 0;
+    if ($("#cnt-today-signups"))
+      $("#cnt-today-signups").textContent = summary.todaySignups || 0;
+    if ($("#cnt-today-incidents"))
+      $("#cnt-today-incidents").textContent = summary.todayIncidents || 0;
     if ($("#cnt-today-deliveries")) {
-      const todayFailed = events.filter((e) => e.category === "delivery" && isToday(e.timestamp)).length;
+      const todayFailed = summary.todayDeliveries || 0;
       $("#cnt-today-deliveries").textContent = todayFailed;
     }
-    if ($("#cnt-today-payments")) $("#cnt-today-payments").textContent = summary.todayPayments || 0;
+    if ($("#cnt-today-payments"))
+      $("#cnt-today-payments").textContent = summary.todayPayments || 0;
 
     const list = $("#activity-timeline-list");
     if (!list) return;
@@ -349,26 +485,45 @@
     }
 
     list.innerHTML = filtered
-      .map((e) => `
-        <div class="timeline-card severity-${e.severity}">
+      .map(
+        (e) => `
+        <div class="timeline-card severity-${escapeHTML(e.severity)} ${e.unread ? "is-unread" : ""}">
           <div class="timeline-icon-box">${getCategoryIcon(e.category)}</div>
           <div class="timeline-body">
             <div class="timeline-header">
-              <span class="timeline-title">${e.title}</span>
+              <span class="timeline-title">${escapeHTML(e.title)}</span>
               <span class="timeline-time">${formatDate(e.timestamp)} (${formatTimeAgo(e.timestamp)})</span>
             </div>
-            <div class="timeline-detail">${e.detail}</div>
+            <div class="timeline-detail">${escapeHTML(e.detail)}</div>
+            <div class="event-meta">
+              <span class="badge ${e.status === "open" ? "badge-danger" : "badge-success"}">${e.status === "open" ? "กำลังขัดข้อง" : ["market", "system", "delivery"].includes(e.category) ? "กู้คืนแล้ว" : "บันทึกแล้ว"}</span>
+              <span>${{ error: "รุนแรง", warning: "ควรตรวจสอบ", info: "ข้อมูล", success: "สำเร็จ" }[e.severity] || "ข้อมูล"}</span>
+              <span>เกิด ${Number(e.occurrences)} ครั้ง · เริ่ม ${formatDate(e.created_at)}</span>
+              ${e.unread ? `<button class="btn btn-sm" data-ack="${escapeHTML(e.id)}">รับทราบ</button>` : "<span>รับทราบแล้ว</span>"}
+              ${e.metadata?.ruleId ? `<span>Rule ${escapeHTML(e.metadata.ruleId)}</span>` : ""}
+              ${e.metadata?.runId ? `<span>Run ${escapeHTML(e.metadata.runId)}</span>` : ""}
+            </div>
           </div>
         </div>
-      `)
+      `,
+      )
       .join("");
   }
 
   // Load Users Data
-  async function loadUsers() {
+  async function loadUsers(append = false) {
+    const request = ++state.userRequest;
+    const query = new URLSearchParams({
+      search: state.search,
+      filter: state.filter,
+    });
+    if (append && state.userCursor) query.set("before", state.userCursor);
     try {
-      const data = await apiFetch("/api/v1/admin/users");
-      state.users = data.users || [];
+      const data = await apiFetch(`/api/v1/admin/users?${query}`);
+      if (request !== state.userRequest) return;
+      state.users = append ? [...state.users, ...data.users] : data.users || [];
+      state.userCursor = data.nextCursor;
+      $("#btn-users-more").hidden = !data.nextCursor;
       renderUsers();
     } catch (err) {
       console.error("Load users error", err);
@@ -418,10 +573,10 @@
         <tr>
           <td>
             <div class="user-cell">
-              <span class="user-email">${u.email || "ไม่ระบุอีเมล"}</span>
-              <span class="user-id" data-copy="${u.id}" title="คลิกเพื่อคัดลอก ID">
+              <span class="user-email">${escapeHTML(u.email || "ไม่ระบุอีเมล")}</span>
+              <button class="user-id btn btn-sm" data-copy="${escapeHTML(u.id)}" title="คัดลอก User ID">
                 ${u.id.slice(0, 8)}...${u.id.slice(-4)} 📋
-              </span>
+              </button>
             </div>
           </td>
           <td>${planBadge}</td>
@@ -436,16 +591,16 @@
           <td>${formatDate(u.created_at)}</td>
           <td style="text-align: right;">
             <div class="actions-cell" style="justify-content: flex-end;">
-              <button class="btn btn-sm btn-primary" data-action="plan" data-user="${u.id}">
+              <button class="btn btn-sm btn-primary" data-action="plan" data-user="${escapeHTML(u.id)}">
                 ปรับสิทธิ์
               </button>
-              <button class="btn btn-sm" data-action="toggle-admin" data-user="${u.id}" data-role="${u.role}">
-                ${u.role === "admin" ? "ถอน Admin" : "ตั้ง Admin"}
+              <button class="btn btn-sm" data-action="toggle-admin" data-user="${escapeHTML(u.id)}" data-role="${escapeHTML(u.role)}" ${u.isAdmin && u.role !== "admin" ? 'disabled title="สิทธิ์มาจากการตั้งค่าเซิร์ฟเวอร์"' : ""}>
+                ${u.isAdmin && u.role !== "admin" ? "Admin จากการตั้งค่า" : u.role === "admin" ? "ถอน Admin" : "ตั้ง Admin"}
               </button>
-              <button class="btn btn-sm" data-action="reset-quota" data-user="${u.id}" title="ล้างจำนวนการใช้ AI เดือนนี้">
+              <button class="btn btn-sm" data-action="reset-quota" data-user="${escapeHTML(u.id)}" title="ล้างจำนวนการใช้ AI เดือนนี้">
                 🧹 ล้างโควตา AI
               </button>
-              <button class="btn btn-sm" data-action="impersonate" data-user="${u.id}" title="เข้าสู่ระบบเสมือนผู้ใช้นี้">
+              <button class="btn btn-sm" data-action="impersonate" data-user="${escapeHTML(u.id)}" title="เข้าสู่บัญชีผู้ใช้เพื่อช่วยตรวจสอบ 15 นาที" ${u.isAdmin ? "disabled" : ""}>
                 👁️ สวมรอย
               </button>
             </div>
@@ -459,9 +614,20 @@
   // Load Diagnostics
   async function loadDiagnostics() {
     try {
-      const data = await apiFetch("/api/v1/admin/diagnostics");
+      const [data, audit] = await Promise.all([
+        apiFetch("/api/v1/admin/diagnostics"),
+        apiFetch("/api/v1/admin/audit"),
+      ]);
       state.diagnostics = data;
       renderDiagnostics(data);
+      $("#admin-audit-list").innerHTML =
+        audit.entries
+          .map(
+            (e) =>
+              `<div class="log-entry"><strong>${escapeHTML(e.action)}</strong><div>${escapeHTML(e.actor_email || e.actor_id)} → ${escapeHTML(e.subject_email || e.subject_id || "ระบบ")}</div><small>${formatDate(e.created_at)}</small></div>`,
+          )
+          .join("") ||
+        '<div class="empty-state">ยังไม่มีการกระทำของผู้ดูแล</div>';
     } catch (err) {
       console.error("Diagnostics error", err);
       showToast("โหลด Diagnostics ไม่สำเร็จ");
@@ -481,9 +647,9 @@
           (d) => `
         <tr>
           <td>${formatDate(d.created_at)}</td>
-          <td><span class="badge badge-free">${d.kind || "-"}</span> ${d.destination_name || ""}</td>
-          <td><strong>${d.pair || "-"}</strong> (${d.exchange || "-"})</td>
-          <td><span class="badge badge-danger">${d.status}</span> <span style="font-size:12px;color:var(--danger);">${d.detail || "ไม่ระบุรายละเอียด"}</span></td>
+          <td><span class="badge badge-free">${escapeHTML(d.kind || "-")}</span> ${escapeHTML(d.destination_name || "")}</td>
+          <td><strong>${escapeHTML(d.pair || "-")}</strong> (${escapeHTML(d.exchange || "-")})</td>
+          <td><span class="badge badge-danger">${escapeHTML(d.status)}</span> <span style="font-size:12px;color:var(--danger);">${escapeHTML(d.detail || "ไม่ระบุรายละเอียด")}</span></td>
         </tr>
       `,
         )
@@ -499,10 +665,10 @@
         .map(
           (m) => `
         <tr>
-          <td><strong>${m.exchange}</strong></td>
-          <td>${m.pair}</td>
-          <td><span class="badge badge-warning">${m.status}</span></td>
-          <td>${m.rule_name || "-"} <small style="color:var(--tertiary);">(${m.owner_email || "-"})</small></td>
+          <td><strong>${escapeHTML(m.exchange)}</strong></td>
+          <td>${escapeHTML(m.pair)}</td>
+          <td><span class="badge badge-warning">${escapeHTML(m.status)}</span></td>
+          <td>${escapeHTML(m.rule_name || "-")} <small style="color:var(--tertiary);">(${escapeHTML(m.owner_email || "-")})</small></td>
           <td>${formatDate(m.checked_at)}</td>
         </tr>
       `,
@@ -520,12 +686,12 @@
           (l) => `
         <div class="log-entry">
           <div class="log-meta">
-            <span class="badge ${l.statusCode && l.statusCode >= 500 ? "badge-danger" : "badge-warning"}">${l.type} (${l.statusCode || "-"})</span>
+            <span class="badge ${l.statusCode && l.statusCode >= 500 ? "badge-danger" : "badge-warning"}">${escapeHTML(l.type)} (${l.statusCode || "-"})</span>
             <span>${formatDate(l.timestamp)}</span>
-            ${l.method ? `<span>[${l.method} ${l.url || ""}]</span>` : ""}
+            ${l.method ? `<span>[${l.method} ${escapeHTML(l.url || "")}]</span>` : ""}
           </div>
-          <div style="font-weight:600;margin-top:2px;">${l.message}</div>
-          ${l.detail ? `<pre style="margin:4px 0 0;font-size:11px;color:var(--secondary);">${JSON.stringify(l.detail, null, 2)}</pre>` : ""}
+          <div style="font-weight:600;margin-top:2px;">${escapeHTML(l.message)}</div>
+          ${l.detail ? `<pre style="margin:4px 0 0;font-size:11px;color:var(--secondary);">${escapeHTML(JSON.stringify(l.detail, null, 2))}</pre>` : ""}
         </div>
       `,
         )
@@ -533,180 +699,273 @@
     }
   }
 
-  // Event Listeners for User Actions
-  function setupUserActions() {
-    // Copy User ID
-    $("#users-tbody").addEventListener("click", (e) => {
-      const copyEl = e.target.closest("[data-copy]");
-      if (copyEl) {
-        const id = copyEl.dataset.copy;
-        navigator.clipboard.writeText(id).then(() => {
-          showToast(`คัดลอก User ID: ${id}`);
-        });
-        return;
-      }
-
-      // Open Plan Modal
-      const planBtn = e.target.closest('[data-action="plan"]');
-      if (planBtn) {
-        state.selectedUserId = planBtn.dataset.user;
-        const user = state.users.find((u) => u.id === state.selectedUserId);
-        $("#modal-user-desc").textContent = `ผู้ใช้: ${user?.email || state.selectedUserId}`;
-        $("#plan-modal").hidden = false;
-        return;
-      }
-
-      // Toggle Admin
-      const adminBtn = e.target.closest('[data-action="toggle-admin"]');
-      if (adminBtn) {
-        const userId = adminBtn.dataset.user;
-        const currentRole = adminBtn.dataset.role;
-        const nextRole = currentRole === "admin" ? "user" : "admin";
-        const confirmMsg =
-          nextRole === "admin"
-            ? "ต้องการแต่งตั้งผู้ใช้นี้เป็น Admin หรือไม่?"
-            : "ต้องการถอนสิทธิ์ Admin ของผู้ใช้นี้หรือไม่?";
-        if (confirm(confirmMsg)) {
-          apiFetch(`/api/v1/admin/users/${userId}/plan`, {
-            method: "POST",
-            body: JSON.stringify({ role: nextRole }),
-          }).then(() => {
-            showToast("อัปเดตสิทธิ์สำเร็จ");
-            loadUsers();
-          });
-        }
-        return;
-      }
-
-      // Reset AI Quota
-      const resetBtn = e.target.closest('[data-action="reset-quota"]');
-      if (resetBtn) {
-        const userId = resetBtn.dataset.user;
-        if (confirm("ต้องการล้างประวัติการใช้ AI ประจำเดือนของผู้ใช้นี้หรือไม่? (โควตาจะกลับมาเต็มทันที)")) {
-          apiFetch(`/api/v1/admin/users/${userId}/reset-quota`, {
-            method: "POST",
-            body: JSON.stringify({}),
-          }).then(() => {
-            showToast("รีเซ็ตโควตา AI สำเร็จแล้ว");
-            loadUsers();
-          });
-        }
-        return;
-      }
-
-      // Impersonate
-      const impBtn = e.target.closest('[data-action="impersonate"]');
-      if (impBtn) {
-        const userId = impBtn.dataset.user;
-        const user = state.users.find((u) => u.id === userId);
-        if (confirm(`ต้องการสวมรอยเข้าสู่ระบบเสมือน ${user?.email || userId} หรือไม่?`)) {
-          apiFetch(`/api/v1/admin/users/${userId}/impersonate`, {
-            method: "POST",
-            body: JSON.stringify({}),
-          }).then(() => {
-            showToast("สวมรอยสำเร็จ กำลังพาไปหน้าหลัก...");
-            setTimeout(() => {
-              window.location.href = "/";
-            }, 600);
-          });
-        }
-        return;
-      }
-    });
-
-    // Plan Modal Option Selection
-    $$(".modal-option-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const plan = btn.dataset.plan;
-        if (!state.selectedUserId) return;
-        $("#plan-modal").hidden = true;
-
-        apiFetch(`/api/v1/admin/users/${state.selectedUserId}/plan`, {
-          method: "POST",
-          body: JSON.stringify({ plan }),
-        }).then(() => {
-          showToast("ปรับสิทธิ์แพ็กเกจสำเร็จเรียบร้อย");
-          loadUsers();
-          loadOverview();
-        });
-      });
-    });
-
-    $("#btn-modal-close").addEventListener("click", () => {
-      $("#plan-modal").hidden = true;
-    });
-
-    // Search and Filters
-    $("#user-search-input").addEventListener("input", (e) => {
-      state.search = e.target.value;
-      renderUsers();
-    });
-
-    $$(".filter-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        $$(".filter-btn").forEach((b) => b.classList.toggle("active", b === btn));
-        state.filter = btn.dataset.filter;
-        renderUsers();
-      });
-    });
-
-    // Clear logs
-    $("#btn-clear-logs").addEventListener("click", () => {
-      if (confirm("ต้องการล้างประวัติ Error ทั้งหมดหรือไม่?")) {
-        apiFetch("/api/v1/admin/logs/clear", {
-          method: "POST",
-          body: JSON.stringify({}),
-        }).then(() => {
-          showToast("ล้างประวัติ Error เรียบร้อย");
-          loadDiagnostics();
-        });
-      }
-    });
-
-    // Feed filters
-    $$("[data-feed-filter]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        $$("[data-feed-filter]").forEach((b) => b.classList.toggle("active", b === btn));
-        state.feedFilter = btn.dataset.feedFilter;
-        renderActivity(state.activity);
-      });
-    });
-
-    $("#btn-refresh-feed")?.addEventListener("click", () => {
-      showToast("อัปเดตศูนย์แจ้งเตือน...");
-      loadActivity();
-    });
-
-    $("#btn-view-all-activity")?.addEventListener("click", () => {
-      const tabBtn = $('[data-tab="activity"]');
-      if (tabBtn) tabBtn.click();
-    });
-
-    // Refresh button
-    $("#btn-refresh").addEventListener("click", () => {
-      showToast("กำลังรีเฟรชข้อมูล...");
-      loadOverview();
-      loadActivity();
-      if (state.activeTab === "users") loadUsers();
-      if (state.activeTab === "diagnostics") loadDiagnostics();
-    });
+  async function action(button, task) {
+    button.disabled = true;
+    try {
+      await task();
+    } catch (err) {
+      showToast(err.message || "ดำเนินการไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      button.disabled = false;
+    }
   }
 
+  function closeModal() {
+    $("#plan-modal").hidden = true;
+    state.modalTrigger?.focus();
+  }
+
+  function setupUserActions() {
+    $("#users-tbody").addEventListener("click", async (e) => {
+      const copy = e.target.closest("[data-copy]");
+      if (copy) {
+        await navigator.clipboard
+          .writeText(copy.dataset.copy)
+          .then(() => showToast("คัดลอก User ID แล้ว"))
+          .catch(() => showToast("คัดลอกไม่สำเร็จ"));
+        return;
+      }
+      const button = e.target.closest("[data-action]");
+      if (!button) return;
+      const id = button.dataset.user;
+      const user = state.users.find((u) => u.id === id);
+      if (button.dataset.action === "plan") {
+        state.selectedUserId = id;
+        state.modalTrigger = button;
+        $("#modal-user-desc").textContent = `ผู้ใช้: ${user?.email || id}`;
+        $("#plan-modal").hidden = false;
+        $(".modal-option-btn").focus();
+        return;
+      }
+      if (button.dataset.action === "toggle-admin") {
+        const role = button.dataset.role === "admin" ? "user" : "admin";
+        if (
+          !confirm(
+            role === "admin"
+              ? "แต่งตั้งผู้ใช้นี้เป็น Admin?"
+              : "ถอนสิทธิ์ Admin ของผู้ใช้นี้?",
+          )
+        )
+          return;
+        await action(button, async () => {
+          await apiFetch(`/api/v1/admin/users/${id}/plan`, {
+            method: "POST",
+            body: JSON.stringify({ role }),
+          });
+          showToast("อัปเดตสิทธิ์แล้ว");
+          await loadUsers();
+          await loadOverview();
+        });
+      } else if (button.dataset.action === "reset-quota") {
+        if (
+          !confirm(
+            "คืนโควตา AI เดือนนี้ให้ผู้ใช้? ประวัติ tokens และค่าใช้จ่ายจะยังเก็บอยู่",
+          )
+        )
+          return;
+        await action(button, async () => {
+          await apiFetch(`/api/v1/admin/users/${id}/reset-quota`, {
+            method: "POST",
+            body: "{}",
+          });
+          showToast("คืนโควตาแล้ว");
+          await loadUsers();
+        });
+      } else if (button.dataset.action === "impersonate") {
+        if (
+          !confirm(
+            `เข้าสู่บัญชี ${user?.email || id} เพื่อช่วยตรวจสอบ? ระบบจะบันทึกการกระทำนี้`,
+          )
+        )
+          return;
+        await action(button, async () => {
+          await apiFetch(`/api/v1/admin/users/${id}/impersonate`, {
+            method: "POST",
+            body: "{}",
+          });
+          window.location.href = "/";
+        });
+      }
+    });
+    $$(".modal-option-btn").forEach((button) =>
+      button.addEventListener("click", () =>
+        action(button, async () => {
+          await apiFetch(`/api/v1/admin/users/${state.selectedUserId}/plan`, {
+            method: "POST",
+            body: JSON.stringify({ plan: button.dataset.plan }),
+          });
+          closeModal();
+          showToast("อัปเดตแพ็กเกจแล้ว");
+          await loadUsers();
+          await loadOverview();
+        }),
+      ),
+    );
+    $("#btn-modal-close").addEventListener("click", closeModal);
+    $("#plan-modal").setAttribute("role", "dialog");
+    $("#plan-modal").setAttribute("aria-modal", "true");
+    $("#plan-modal").setAttribute("aria-label", "ปรับสิทธิ์แพ็กเกจ");
+    $("#plan-modal").addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeModal();
+      if (e.key === "Tab") {
+        const buttons = $$("#plan-modal button:not(:disabled)");
+        const first = buttons[0],
+          last = buttons.at(-1);
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+    let searchTimer;
+    $("#user-search-input").addEventListener("input", (e) => {
+      state.search = e.target.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadUsers(), 250);
+    });
+    $$("[data-filter]").forEach((button) =>
+      button.addEventListener("click", () => {
+        $$("[data-filter]").forEach((b) =>
+          b.classList.toggle("active", b === button),
+        );
+        state.filter = button.dataset.filter;
+        loadUsers();
+      }),
+    );
+    $("#btn-users-more").addEventListener("click", (e) =>
+      action(e.currentTarget, () => loadUsers(true)),
+    );
+    $("#btn-clear-logs").addEventListener("click", (e) => {
+      if (
+        confirm(
+          "ล้าง Log ในหน่วยความจำ? ประวัติเหตุการณ์และการกระทำของ Admin ยังคงอยู่",
+        )
+      )
+        action(e.currentTarget, async () => {
+          await apiFetch("/api/v1/admin/logs/clear", {
+            method: "POST",
+            body: "{}",
+          });
+          await loadDiagnostics();
+          showToast("ล้าง Log แล้ว");
+        });
+    });
+    $$("[data-feed-filter]").forEach((button) =>
+      button.addEventListener("click", () => {
+        $$("[data-feed-filter]").forEach((b) =>
+          b.classList.toggle("active", b === button),
+        );
+        state.feedFilter = button.dataset.feedFilter;
+        loadActivity();
+      }),
+    );
+    $("#feed-state").addEventListener("change", (e) => {
+      state.feedState = e.target.value;
+      loadActivity();
+    });
+    $("#feed-severity").addEventListener("change", (e) => {
+      state.feedSeverity = e.target.value;
+      loadActivity();
+    });
+    $("#btn-feed-more").addEventListener("click", (e) =>
+      action(e.currentTarget, () => loadActivity(true)),
+    );
+    $("#btn-read-all").addEventListener("click", (e) =>
+      action(e.currentTarget, async () => {
+        if (!state.activity.checkedAt) return;
+        await apiFetch("/api/v1/admin/activity/read-all", {
+          method: "POST",
+          body: JSON.stringify({ through: state.activity.checkedAt }),
+        });
+        await loadActivity();
+      }),
+    );
+    $("#activity-timeline-list").addEventListener("click", (e) => {
+      const button = e.target.closest("[data-ack]");
+      if (button)
+        action(button, async () => {
+          await apiFetch(
+            `/api/v1/admin/activity/${button.dataset.ack}/acknowledge`,
+            { method: "POST", body: "{}" },
+          );
+          await loadActivity();
+        });
+    });
+    $("#btn-refresh-feed").addEventListener("click", () => loadActivity());
+    $("#btn-view-all-activity").addEventListener("click", () =>
+      $("[data-tab='activity']").click(),
+    );
+    $("#btn-refresh").addEventListener("click", (e) =>
+      action(e.currentTarget, async () => {
+        await Promise.all([
+          loadOverview(),
+          loadActivity(),
+          state.activeTab === "users" ? loadUsers() : Promise.resolve(),
+          state.activeTab === "diagnostics"
+            ? loadDiagnostics()
+            : Promise.resolve(),
+        ]);
+      }),
+    );
+    $("#btn-notifications").addEventListener("click", (e) =>
+      action(e.currentTarget, async () => {
+        if (!("Notification" in window)) {
+          showToast("เบราว์เซอร์นี้ไม่รองรับ ใช้แจ้งเตือนในหน้า Dashboard ได้");
+          return;
+        }
+        if (state.deviceNotifications) {
+          state.deviceNotifications = false;
+          try {
+            localStorage.setItem("snaap-admin-notifications", "off");
+          } catch {}
+          $("#btn-notifications").textContent = "เปิดแจ้งเตือนบนอุปกรณ์";
+          showToast(
+            "ปิดแจ้งเตือนบนอุปกรณ์แล้ว การแจ้งเตือนใน Dashboard ยังเปิดอยู่",
+          );
+          return;
+        }
+        const permission = await Notification.requestPermission();
+        state.deviceNotifications = permission === "granted";
+        try {
+          localStorage.setItem(
+            "snaap-admin-notifications",
+            state.deviceNotifications ? "on" : "off",
+          );
+        } catch {}
+        $("#btn-notifications").textContent =
+          permission === "granted"
+            ? "ปิดแจ้งเตือนบนอุปกรณ์"
+            : "การแจ้งเตือนใน Dashboard เปิดอยู่";
+        showToast(
+          permission === "granted"
+            ? "จะแจ้งเหตุการณ์ใหม่ระหว่างเปิด Dashboard"
+            : "เปิดสิทธิ์แจ้งเตือนได้ในการตั้งค่าเบราว์เซอร์",
+        );
+      }),
+    );
+  }
   // Init
   document.addEventListener("DOMContentLoaded", () => {
+    try {
+      state.deviceNotifications =
+        localStorage.getItem("snaap-admin-notifications") === "on";
+    } catch {
+      state.deviceNotifications = false;
+    }
+    if (state.deviceNotifications)
+      $("#btn-notifications").textContent = "ปิดแจ้งเตือนบนอุปกรณ์";
     setupTabs();
     setupUserActions();
     loadOverview();
     loadActivity();
 
-    // Auto-refresh overview & activity every 30s
+    // Poll the operations inbox on every tab.
     setInterval(() => {
-      if (state.activeTab === "overview") {
-        loadOverview();
-        loadActivity();
-      } else if (state.activeTab === "activity") {
-        loadActivity();
-      }
-    }, 30000);
+      loadActivity(false, true);
+      if (state.activeTab === "overview") loadOverview();
+    }, 15000);
   });
 })();

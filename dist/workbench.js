@@ -1119,6 +1119,27 @@ async function refresh({ reuseMe = false } = {}) {
     if (signout) signout.before(adminLink);
     else accountMenu.append(adminLink);
   }
+  if(state.me?.impersonating && !document.getElementById('admin-impersonation-banner')) {
+    const banner=document.createElement('div');
+    banner.id='admin-impersonation-banner';
+    banner.setAttribute('role','status');
+    banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;padding:12px;background:#fef3d6;color:#543600;display:flex;gap:16px;justify-content:center;align-items:center;flex-wrap:wrap';
+    const message=document.createElement('span');
+    message.textContent='โหมดช่วยตรวจสอบบัญชีผู้ใช้ · เซสชันนี้มีอายุ 15 นาที';
+    const restore=document.createElement('button');
+    restore.className='btn';
+    restore.textContent='กลับสู่ Admin Dashboard';
+    restore.addEventListener('click',async()=>{
+      restore.disabled=true;
+      try {
+        const response=await fetch('/api/v1/impersonation/restore',{method:'POST',headers:{'x-snaap-client':'web','content-type':'application/json'},body:'{}'});
+        if(!response.ok) throw new Error('กลับบัญชีผู้ดูแลไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่');
+        location.href='/admin.html';
+      } catch(error) {message.textContent=error.message;restore.disabled=false;}
+    });
+    banner.append(message,restore);
+    document.body.prepend(banner);
+  }
   $("#ai-mode option[value=deep]").disabled = true;
   $("#ai-mode option[value=deep]").textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
   $("#ai-mode").value = 'standard';

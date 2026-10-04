@@ -67,4 +67,6 @@ Integration/load tests create isolated users and clean up only their own test re
 
 See [implementation status](docs/implementation-status.md) for implemented behavior, known gaps and release gates. The design documents describe the target; this status file describes the actual implementation.
 
+The [Admin Dashboard](docs/admin-dashboard.md) is available at `/admin.html` for authorized administrators. It includes a persistent operational inbox, daily summaries, incident recovery and acknowledgment, user/plan/quota management, and audited temporary user impersonation. Run `npm run test:admin` for its isolated PostgreSQL integration checks.
+
 Notification setup, Channel Studio customization, LINE quota guardrails and the sample signed Webhook receiver are documented in [notification channels](docs/notification-channels.md). `npm run test:notifications` verifies bindings, ownership and concurrent quota reservations with isolated local accounts; it sends no external messages.
