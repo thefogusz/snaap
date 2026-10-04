@@ -33,6 +33,8 @@ export async function migrate(db: pg.Pool) {
     CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id,created_at);
     CREATE INDEX IF NOT EXISTS usage_owner_time ON usage_ledger(owner_id,created_at);
     CREATE INDEX IF NOT EXISTS signals_owner ON signals(owner_id,created_at);
+    CREATE INDEX IF NOT EXISTS rules_active_owner ON rules(owner_id) WHERE active;
+    CREATE INDEX IF NOT EXISTS deliveries_recovery ON deliveries(attempts,id) WHERE status IN ('PENDING','RETRY');
     ALTER TABLE rules ADD COLUMN IF NOT EXISTS activated_at timestamptz;
     CREATE TABLE IF NOT EXISTS monitor_checkpoints (rule_id uuid REFERENCES rules,revision integer,exchange text,pair text,state jsonb NOT NULL,checked_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(rule_id,revision,exchange,pair));
     CREATE TABLE IF NOT EXISTS monitor_status (rule_id uuid REFERENCES rules,exchange text,pair text,status text NOT NULL,checked_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(rule_id,exchange,pair));
@@ -70,6 +72,7 @@ export async function migrate(db: pg.Pool) {
     CREATE INDEX IF NOT EXISTS setup_shares_owner ON setup_shares(owner_id);
     CREATE UNIQUE INDEX IF NOT EXISTS workspaces_default_owner ON workspaces(owner_id) WHERE is_default;
     ALTER TABLE rules ADD COLUMN IF NOT EXISTS workspace_id uuid REFERENCES workspaces;
+    UPDATE rules SET active=false,revision=revision+1,updated_at=now() WHERE active AND jsonb_array_length(spec->'pairs')>10;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS workspace_id uuid REFERENCES workspaces;
     UPDATE conversations c SET saved_rule_id=(SELECT r.id FROM messages m JOIN rules r ON r.id=(m.ui_card->>'ruleId')::uuid AND r.owner_id=c.owner_id AND r.deleted_at IS NULL WHERE m.conversation_id=c.id AND m.ui_card->>'type'='preset' AND m.ui_card->>'ruleId' IS NOT NULL ORDER BY m.created_at DESC,m.id DESC LIMIT 1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;
     UPDATE conversations c SET saved_rule_id=(SELECT min(r.id::text)::uuid FROM rules r WHERE r.owner_id=c.owner_id AND r.workspace_id IS NOT DISTINCT FROM c.workspace_id AND r.deleted_at IS NULL AND r.spec=c.draft HAVING count(*)=1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;

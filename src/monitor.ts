@@ -15,6 +15,11 @@ import { strategySeries } from "./markets.js";
 import { deliver } from "./destinations.js";
 import { captureChart } from "./signal-chart.js";
 import { RealtimeMarkets } from "./realtime.js";
+import {
+  monitorBatches,
+  splitMonitorTargets,
+  type MonitorBatch,
+} from "./monitor-batches.js";
 
 type Target = {
   ruleId: string;
@@ -36,6 +41,16 @@ export async function evaluateTarget(
   ).rows[0];
   if (!row) return;
   const spec = strategySchema.parse(row.spec);
+  // The durable checkpoint also catches duplicate stream/recovery jobs after restart.
+  const previous = (
+    await db.query(
+      "SELECT state FROM monitor_checkpoints WHERE rule_id=$1 AND revision=$2 AND exchange=$3 AND pair=$4",
+      [row.id, target.revision, target.exchange, target.pair],
+    )
+  ).rows[0];
+  const expectedClose =
+    Math.floor(Date.now() / frames[spec.timeframe]) * frames[spec.timeframe];
+  if (previous && Number(previous.state.lastTime) >= expectedClose) return;
   if (spec.market === "Perpetual Futures" && !spec.side) {
     await db.query(
       "INSERT INTO monitor_status VALUES($1,$2,$3,'DIRECTION_REQUIRED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
@@ -50,7 +65,7 @@ export async function evaluateTarget(
     return;
   const blocked = (
     await db.query(
-      "SELECT (SELECT count(*) FROM rules WHERE owner_id=$1 AND active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) THEN 20 ELSE 3 END AS blocked",
+      "SELECT (SELECT count(*) FROM rules WHERE owner_id=$1 AND active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) THEN 20 ELSE 6 END AS blocked",
       [row.owner_id],
     )
   ).rows[0].blocked;
@@ -96,24 +111,13 @@ export async function evaluateTarget(
       )
     ).rows[0];
     if (!current) return;
-    const allowance = !!(
+    const quota = (
       await c.query(
-        "SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()",
+        "SELECT (SELECT count(*) FROM rules WHERE owner_id=$1 AND active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) THEN 20 ELSE 6 END AS blocked",
         [current.owner_id],
       )
-    ).rowCount
-      ? 20
-      : 3;
-    if (
-      Number(
-        (
-          await c.query(
-            "SELECT count(*) AS n FROM rules WHERE owner_id=$1 AND active",
-            [current.owner_id],
-          )
-        ).rows[0].n,
-      ) > allowance
-    ) {
+    ).rows[0];
+    if (quota.blocked) {
       await c.query(
         "INSERT INTO monitor_status VALUES($1,$2,$3,'QUOTA_BLOCKED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
         [row.id, target.exchange, target.pair],
@@ -127,6 +131,7 @@ export async function evaluateTarget(
       )
     ).rows[0];
     let state: Lifecycle = stored?.state ?? emptyLifecycle();
+    if (stored && latest && state.lastTime >= latest) return;
     const after = new Date(current.activated_at).getTime();
     if (!stored)
       state.lastTime =
@@ -164,16 +169,15 @@ export async function evaluateTarget(
             ),
           ],
         );
-        if (inserted.rowCount)
-          for (const destination of spec.destinations)
-            deliveryIds.push(
-              ...(
-                await c.query(
-                  "INSERT INTO deliveries(id,signal_id,destination_id,status) SELECT $1,$2,id,'PENDING' FROM destinations WHERE id=$3 AND owner_id=$4 AND verified ON CONFLICT DO NOTHING RETURNING id",
-                  [randomUUID(), id, destination, row.owner_id],
-                )
-              ).rows.map((r) => r.id),
-            );
+        if (inserted.rowCount && spec.destinations.length)
+          deliveryIds.push(
+            ...(
+              await c.query(
+                "INSERT INTO deliveries(id,signal_id,destination_id,status) SELECT gen_random_uuid(),$1,id,'PENDING' FROM destinations WHERE id=ANY($2::uuid[]) AND owner_id=$3 AND verified ON CONFLICT DO NOTHING RETURNING id",
+                [id, spec.destinations, row.owner_id],
+              )
+            ).rows.map((r) => r.id),
+          );
       }
     }
     await c.query(
@@ -197,6 +201,12 @@ export async function startMonitor(
     schema: queueSchema,
     useListenNotify: true,
   });
+  const measurements = {
+    batches: 0,
+    targets: 0,
+    maxWaitMs: 0,
+    maxDurationMs: 0,
+  };
   boss.on("error", () => console.error("Queue operation failed"));
   await boss.start();
   await boss.createQueue("scan");
@@ -206,43 +216,88 @@ export async function startMonitor(
     retryBackoff: true,
   });
   await boss.createQueue("deliver", { retryLimit: 3, retryDelay: 30 });
+  await boss.createQueue("evaluate-market", {
+    retryLimit: 3,
+    retryDelay: 15,
+    retryBackoff: true,
+  });
+  await boss.updateQueue("evaluate-market", {
+    deleteAfterSeconds: 3600,
+    retentionSeconds: 86400,
+  });
+  await boss.updateQueue("evaluate-market", { notify: true });
   await boss.updateQueue("evaluate", { notify: true });
   await boss.updateQueue("deliver", { notify: true });
+  const insertJobs = async (
+    name: string,
+    jobs: Parameters<PgBoss["insert"]>[1],
+  ) => {
+    for (let offset = 0; offset < jobs.length; offset += 250)
+      await boss.insert(name, jobs.slice(offset, offset + 250));
+  };
+  const enqueueDeliveries = (ids: string[]) =>
+    insertJobs(
+      "deliver",
+      ids.map((id) => ({
+        data: { id },
+        singletonKey: id,
+        singletonSeconds: 55,
+      })),
+    );
   const realtime = new RealtimeMarkets(async (targets, closedAt) => {
-    for (const target of targets)
-      await boss.send("evaluate", target, {
+    await insertJobs(
+      "evaluate-market",
+      splitMonitorTargets(targets).map((chunk) => ({
+        data: { targets: chunk, queuedAt: Date.now() },
         singletonKey: [
-          target.ruleId,
-          target.revision,
-          target.exchange,
-          target.pair,
           closedAt,
-        ].join(":"),
+          ...chunk.map((t) =>
+            [t.ruleId, t.revision, t.exchange, t.pair].join(":"),
+          ),
+        ].join("|"),
         singletonSeconds: 1,
-        expireInSeconds: 120,
-      });
+        expireInSeconds: 900,
+      })),
+    );
   });
   await boss.work("scan", async () => {
+    const scanStarted = Date.now();
     const rows = (
       await db.query(
         "SELECT r.id,r.revision,r.spec FROM rules r WHERE r.active",
       )
     ).rows;
     realtime.reconcile(rows);
-    for (const row of rows) {
-      const spec = strategySchema.parse(row.spec);
-      for (const exchange of spec.exchange)
-        for (const pair of spec.pairs)
-          await boss.send(
-            "evaluate",
-            { ruleId: row.id, revision: row.revision, exchange, pair },
-            {
-              singletonKey: [row.id, row.revision, exchange, pair].join(":"),
-              singletonSeconds: 55,
-              expireInSeconds: 120,
-            },
-          );
+    const checkpoints = new Map<string, number>(
+      (
+        await db.query(
+          "SELECT c.rule_id,c.revision,c.exchange,c.pair,c.state->>'lastTime' AS last_time FROM monitor_checkpoints c JOIN rules r ON r.id=c.rule_id AND r.revision=c.revision WHERE r.active",
+        )
+      ).rows.map((c) => [
+        [c.rule_id, c.revision, c.exchange, c.pair].join(":"),
+        Number(c.last_time),
+      ]),
+    );
+    const { groups, total } = monitorBatches(
+      rows.map((row) => ({ ...row, spec: strategySchema.parse(row.spec) })),
+      checkpoints,
+    );
+    let dueTargets = 0,
+      queuedBatches = 0;
+    const plannedJobs: Parameters<PgBoss["insert"]>[1] = [];
+    for (const [key, targets] of groups) {
+      dueTargets += targets.length;
+      for (const [index, chunk] of splitMonitorTargets(targets).entries()) {
+        plannedJobs.push({
+          data: { targets: chunk, queuedAt: Date.now() },
+          singletonKey: `${key}:${index}`,
+          singletonSeconds: 55,
+          expireInSeconds: 900,
+        });
+        queuedBatches++;
+      }
     }
+    await insertJobs("evaluate-market", plannedJobs);
     // Recover quota reservations left by a crashed process. A run has a 90-second deadline.
     await db.query(
       "UPDATE usage_ledger SET status='REFUNDED' WHERE status='RESERVED' AND created_at<now()-interval '5 minutes'",
@@ -250,17 +305,57 @@ export async function startMonitor(
     await db.query(
       "UPDATE agent_runs SET status='FAILED' WHERE status='RUNNING' AND created_at<now()-interval '5 minutes'",
     );
-    for (const row of (
+    const pendingDeliveries = (
       await db.query(
-        "SELECT id FROM deliveries WHERE status IN ('PENDING','RETRY') LIMIT 500",
+        "SELECT id FROM deliveries WHERE status IN ('PENDING','RETRY') ORDER BY attempts,id LIMIT 500",
       )
-    ).rows)
-      await boss.send(
-        "deliver",
-        { id: row.id },
-        { singletonKey: row.id, singletonSeconds: 55 },
-      );
+    ).rows;
+    await enqueueDeliveries(pendingDeliveries.map((row) => row.id));
+    console.info(
+      JSON.stringify({
+        event: "monitor_scan",
+        totalTargets: total,
+        dueTargets,
+        queuedBatches,
+        durationMs: Date.now() - scanStarted,
+        ...measurements,
+      }),
+    );
+    measurements.batches =
+      measurements.targets =
+      measurements.maxWaitMs =
+      measurements.maxDurationMs =
+        0;
   });
+  await boss.work<MonitorBatch>(
+    "evaluate-market",
+    {
+      localConcurrency: 3,
+      batchSize: 8,
+      burstWhenBatchFull: true,
+      pollingIntervalSeconds: 0.5,
+      notifyPollingIntervalSeconds: 5,
+    },
+    async (jobs) => {
+      for (const job of jobs) {
+        const started = Date.now();
+        for (const target of job.data.targets) {
+          const ids = await evaluateTarget(db, target);
+          await enqueueDeliveries(ids ?? []);
+        }
+        measurements.batches++;
+        measurements.targets += job.data.targets.length;
+        measurements.maxWaitMs = Math.max(
+          measurements.maxWaitMs,
+          started - job.data.queuedAt,
+        );
+        measurements.maxDurationMs = Math.max(
+          measurements.maxDurationMs,
+          Date.now() - started,
+        );
+      }
+    },
+  );
   await boss.work<Target>(
     "evaluate",
     {
@@ -271,12 +366,7 @@ export async function startMonitor(
     async (jobs) => {
       for (const job of jobs) {
         const deliveryIds = await evaluateTarget(db, job.data);
-        for (const id of deliveryIds ?? [])
-          await boss.send(
-            "deliver",
-            { id },
-            { singletonKey: id, singletonSeconds: 55 },
-          );
+        await enqueueDeliveries(deliveryIds ?? []);
       }
     },
   );
