@@ -39,7 +39,14 @@
     return `<section class="browser-alert-settings" aria-label="การแจ้งเตือนในเบราว์เซอร์"><div><h3>แจ้งเตือนในเบราว์เซอร์</h3><p>${status}</p><p>${soundStatus}${failed ? " · เชื่อมต่อขาด กำลังลองใหม่" : ""}</p></div><div class="browser-alert-actions"><button type="button" class="secondary" data-browser-alert="desktop" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}>${preferences.desktop && permission === "granted" ? "ปิดแจ้งเตือน" : "เปิดแจ้งเตือน"}</button><button type="button" class="secondary" data-browser-alert="sound" aria-pressed="${preferences.sound}">${preferences.sound ? "ปิดเสียง" : "เปิดเสียง"}</button><button type="button" class="text-button" data-browser-alert="preview">ลองเสียง</button></div><small>รับสัญญาณใหม่จากทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วรับผ่าน Discord หรือช่องทางที่เชื่อมไว้</small></section>`;
   }
   function repaint() {
-    document.querySelectorAll("[data-browser-alert-slot]").forEach(slot => { slot.innerHTML = settingsMarkup(); });
+    const markup = settingsMarkup();
+    document.querySelectorAll("[data-browser-alert-slot]").forEach(slot => {
+      if (slot.dataset.alertMarkup === markup) return;
+      const focused = slot.contains(document.activeElement) ? document.activeElement.dataset.browserAlert : null;
+      slot.innerHTML = markup;
+      slot.dataset.alertMarkup = markup;
+      if (focused) slot.querySelector(`[data-browser-alert="${focused}"]`)?.focus({ preventScroll: true });
+    });
   }
   async function getSignals(query = "") {
     // Deliberately omit the workspace header: watch every workspace of this user.
