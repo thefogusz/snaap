@@ -20,7 +20,6 @@
   justify-content: space-between;
   align-items: center;
   padding: 26px 32px;
-  border-bottom: 1px solid var(--line);
 }
 .channel-studio-overline {
   font-size: 10px;
@@ -103,6 +102,7 @@
 .channel-flow-art {
   display: flex;
   align-items: center;
+  gap: 20px;
   height: 100px;
   margin: 0 0 24px;
 }
@@ -127,22 +127,6 @@
   width: 38px;
   height: 38px;
   object-fit: contain;
-}
-.channel-flow-line {
-  position: relative;
-  width: 100px;
-  height: 1px;
-  background: var(--line);
-  margin: 0 14px;
-}
-.channel-flow-line i {
-  position: absolute;
-  top: -3px;
-  width: 7px;
-  height: 7px;
-  background: var(--accent-ink);
-  border-radius: 50%;
-  animation: channel-travel 2.8s ease-in-out infinite;
 }
 .channel-guide-list {
   list-style: none;
@@ -181,9 +165,11 @@
 }
 .channel-admin-guide {
   margin-top: 18px;
+  border: 0;
 }
 .channel-admin-guide summary {
   font-size: 12px;
+  border: 0;
 }
 .channel-admin-guide p {
   padding-bottom: 18px;
@@ -283,7 +269,6 @@
   height: 16px;
 }
 .channel-step-footer {
-  border-top: 1px solid var(--line);
   padding-top: 20px;
   margin-top: 20px;
   display: flex;
@@ -308,7 +293,7 @@
 .channel-preview-area {
   padding: 28px 28px 36px;
   background: var(--bg);
-  border-left: 1px solid var(--line);
+
   min-width: 0;
 }
 .channel-preview-label {
@@ -694,22 +679,7 @@
   font-size: 11px;
   min-height: 36px;
 }
-@keyframes channel-travel {
-  0% {
-    transform: translateX(0);
-    opacity: 0;
-  }
-  20% {
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(94px);
-    opacity: 0;
-  }
-}
+
 @keyframes channel-step-in {
   from {
     opacity: 0;
@@ -752,7 +722,6 @@
   .channel-preview-area {
     padding: 24px 20px;
     border-left: 0;
-    border-top: 1px solid var(--line);
   }
   .channel-step-nav {
     gap: 3px;
@@ -774,8 +743,7 @@
   .channel-studio,
   .channel-step-body,
   .channel-guide-list li,
-  .channel-card-preview,
-  .channel-flow-line i {
+  .channel-card-preview {
     animation: none;
   }
   .channel-layout-options label span,
