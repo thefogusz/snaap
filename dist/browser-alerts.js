@@ -32,11 +32,13 @@
   }
   function settingsMarkup() {
     const permission = supported() ? Notification.permission : "unsupported";
-    const status = permission === "denied" ? "Chrome บล็อกอยู่ · เปลี่ยนสิทธิ์ที่ไอคอนข้าง URL → การแจ้งเตือน"
-      : permission === "unsupported" ? "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนบนหน้าจอ"
-      : preferences.desktop && permission === "granted" ? "เปิดแจ้งเตือนบนหน้าจอแล้ว" : "ยังไม่เปิดแจ้งเตือนบนหน้าจอ";
-    const soundStatus = preferences.sound ? audio?.state === "running" ? "เปิดเสียงแล้ว" : "กดลองเสียงเพื่อเปิดเสียงในรอบนี้" : "ปิดเสียงอยู่";
-    return `<section class="browser-alert-settings" aria-label="การแจ้งเตือนในเบราว์เซอร์"><div><h3>แจ้งเตือนในเบราว์เซอร์</h3><p>${status}</p><p>${soundStatus}${failed ? " · เชื่อมต่อขาด กำลังลองใหม่" : ""}</p></div><div class="browser-alert-actions"><button type="button" class="secondary" data-browser-alert="desktop" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}>${preferences.desktop && permission === "granted" ? "ปิดแจ้งเตือน" : "เปิดแจ้งเตือน"}</button><button type="button" class="secondary" data-browser-alert="sound" aria-pressed="${preferences.sound}">${preferences.sound ? "ปิดเสียง" : "เปิดเสียง"}</button><button type="button" class="text-button" data-browser-alert="preview">ลองเสียง</button></div><small>รับสัญญาณใหม่จากทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วรับผ่าน Discord หรือช่องทางที่เชื่อมไว้</small></section>`;
+    const desktopOn = preferences.desktop && permission === "granted";
+    const hints = [];
+    if (permission === "denied") hints.push("Chrome บล็อกอยู่ · เปลี่ยนสิทธิ์ที่ไอคอนข้าง URL");
+    if (permission === "unsupported") hints.push("เบราว์เซอร์นี้ไม่รองรับแจ้งเตือนบนหน้าจอ");
+    if (preferences.sound && audio?.state !== "running") hints.push("กดลองเสียงเพื่อเปิดเสียงในรอบนี้");
+    if (failed) hints.push("เชื่อมต่อขาด กำลังลองใหม่");
+    return `<section class="browser-alert-settings" aria-label="การแจ้งเตือนในเบราว์เซอร์"><span class="browser-alert-label" title="รับสัญญาณทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วใช้ช่องทางที่เชื่อมไว้">ในเบราว์เซอร์ <small>ขณะเปิดเว็บ</small></span><div class="browser-alert-actions"><button type="button" class="browser-alert-toggle" data-browser-alert="desktop" aria-pressed="${desktopOn}" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}><span aria-hidden="true" class="browser-alert-dot"></span>แจ้งเตือน</button><button type="button" class="browser-alert-toggle" data-browser-alert="sound" aria-pressed="${preferences.sound}"><span aria-hidden="true" class="browser-alert-dot"></span>เสียง</button><button type="button" class="text-button" data-browser-alert="preview">ลองเสียง</button></div>${hints.length ? `<p class="browser-alert-hint" role="status">${hints.join(" · ")}</p>` : ""}</section>`;
   }
   function repaint() {
     const markup = settingsMarkup();
