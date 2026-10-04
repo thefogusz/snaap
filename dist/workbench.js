@@ -114,7 +114,7 @@ tabs.hidden = true;
 const chatTools = document.createElement("div");
 chatTools.className = "chat-tools";
 chatTools.innerHTML =
-  '<button class="secondary" data-attach-image>แนบภาพ</button><input id="image-upload" type="file" accept="image/png,image/jpeg,image/webp" hidden><select id="ai-mode" aria-label="โหมด AI"><option value="standard">ปกติ</option><option value="deep">วิเคราะห์ละเอียด · Pro</option></select><button type="button" class="text-button my-data-toggle" data-context role="switch" aria-checked="false" aria-label="ใช้ข้อมูลของฉัน"><span>ใช้ข้อมูลของฉัน</span><span class="switch-track" aria-hidden="true"></span></button>';
+  '<button class="secondary" data-attach-image>แนบภาพ</button><input id="image-upload" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><select id="ai-mode" aria-label="โหมด AI"><option value="standard">ปกติ</option><option value="deep">วิเคราะห์ละเอียด · Pro</option></select><button type="button" class="text-button my-data-toggle" data-context role="switch" aria-checked="false" aria-label="ใช้ข้อมูลของฉัน"><span>ใช้ข้อมูลของฉัน</span><span class="switch-track" aria-hidden="true"></span></button>';
 $("#followup-form").before(chatTools);
 chatTools.querySelector('option[value="deep"]').disabled = true;
 chatTools.querySelector('option[value="deep"]').textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
@@ -131,7 +131,7 @@ async function setMyData(enabled) {
   const button=chatTools.querySelector('[data-context]');
   button.disabled=true;
   try {
-    if(enabled){await refreshContext();await renderLabImageChoices(true);}
+    if(enabled)await Promise.all([refreshContext(), renderLabImageChoices(true)]);
     state.useMyData=enabled;
     button.setAttribute('aria-checked',String(enabled));
     sources.hidden=!enabled;
@@ -416,7 +416,7 @@ document.addEventListener("keydown", (event) => {
     closeAccountMenu(true);
   }
 });
-async function api(url, method = "GET", body) {
+async function api(url, method = "GET", body, options = {}) {
   const headers = { "x-snaap-client": "web" };
   if(state.workspaceId)headers['x-snaap-workspace']=state.workspaceId;
   if (body && !(body instanceof FormData))
@@ -424,6 +424,7 @@ async function api(url, method = "GET", body) {
   const res = await fetch("/api/v1" + url, {
     method,
     headers,
+    signal: options.signal,
     body:
       body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   });
@@ -1165,6 +1166,9 @@ async function refreshContext() {
 async function chat(text) {
   if (!text.trim() || state.busy) return;
   if(state.uploading){toast('กำลังแนบภาพ รอให้พรีวิวปรากฏก่อนส่ง');return;}
+  if(new Set([...state.images,...(state.useMyData?state.libraryImages:[])].map(image=>image.id)).size>5){
+    toast('ใช้ภาพรวมได้สูงสุด 5 ภาพต่อข้อความ รวมภาพจากข้อมูลของฉัน กรุณาลดภาพหรือปิดใช้ข้อมูลของฉัน');return;
+  }
   if (!state.health?.ai) {
     toast("AI ยังไม่พร้อมใช้งาน คุณตั้งเงื่อนไขเองได้");
     return;
@@ -1217,7 +1221,7 @@ async function chat(text) {
         selection,
         draft: state.draft,
         useMyData:state.useMyData,
-        imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))].slice(0,8),
+        imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))],
 
       },
     );
@@ -1265,6 +1269,63 @@ function renderImages() {
         `<span><img src="${i.url}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
     )
     .join("");
+}
+async function attachChatImages(files) {
+  if(state.busy||state.uploading)return toast('รอให้ข้อความหรือภาพก่อนหน้าเสร็จก่อน');
+  const valid=[];
+  for(const file of files){
+    if(!['image/png','image/jpeg','image/webp'].includes(file.type)){
+      toast(`${file.name || 'ไฟล์นี้'}: รองรับ PNG, JPEG และ WebP`);continue;
+    }
+    if(file.size>5*1024*1024){toast(`${file.name}: ภาพต้องไม่เกิน 5 MB`);continue;}
+    valid.push(file);
+  }
+  if(!valid.length)return;
+  const remaining=5-state.images.length;
+  if(valid.length>remaining)return toast('แนบได้สูงสุด 5 ภาพต่อข้อความ กรุณาเลือกภาพให้น้อยลงหรือนำภาพเดิมออก');
+  state.uploading=true;
+  const workspaceAtUpload=state.workspaceId;
+  previews.setAttribute('aria-busy','true');
+  const progress=document.createElement('p');progress.setAttribute('role','status');
+  const updateProgress=index=>{progress.textContent=`กำลังแนบภาพ ${index}/${valid.length}…`;previews.append(progress);};
+  updateProgress(1);
+  try{
+    showDesigner();
+    setWorkbenchTab('chat');
+    await ensureConversation('บทสนทนาภาพ');
+    const uploadConversation=state.conversation;
+    for(const [index,file] of valid.entries()){
+      if(state.workspaceId!==workspaceAtUpload||state.conversation!==uploadConversation)break;
+      updateProgress(index+1);
+      const form=new FormData();form.append('file',file);
+      try{
+        const image=await api(`/images?purpose=chat&conversationId=${uploadConversation}`,'POST',form);
+        if(state.workspaceId!==workspaceAtUpload||state.conversation!==uploadConversation){toast('ภาพไม่ได้แนบเข้าบทสนทนาที่เพิ่งเปลี่ยน');break;}
+        state.crop=null;state.images.push(image);renderImages();
+      }catch(error){toast(`${file.name}: ${error.message}`);}
+    }
+  }catch(error){toast(error.message);}
+  finally{state.uploading=false;previews.removeAttribute('aria-busy');progress.remove();}
+}
+for(const target of [chatComposer,$('#chat-form')]){
+  target.addEventListener('paste',event=>{
+    const files=[...(event.clipboardData?.files ?? [])];
+    if(!files.length)return;
+    event.preventDefault();
+    void attachChatImages(files);
+  });
+  target.addEventListener('dragover',event=>{
+    if(!event.dataTransfer?.types.includes('Files'))return;
+    event.preventDefault();event.dataTransfer.dropEffect='copy';target.classList.add('is-image-dragover');
+  });
+  target.addEventListener('dragleave',event=>{
+    if(!target.contains(event.relatedTarget))target.classList.remove('is-image-dragover');
+  });
+  target.addEventListener('drop',event=>{
+    target.classList.remove('is-image-dragover');
+    if(!event.dataTransfer?.files.length)return;
+    event.preventDefault();void attachChatImages([...event.dataTransfer.files]);
+  });
 }
 function renderReplay() {
   const target = $("#replay-result");
@@ -1330,46 +1391,71 @@ function renderBilling() {
   }
 }
 let historyRenderVersion=0;
+let historyLoadController;
 async function renderHistory() {
   const version=++historyRenderVersion;
+  historyLoadController?.abort();
+  historyLoadController=new AbortController();
+  // Bound reads, including response-body parsing, without blocking the menu.
+  const signal=AbortSignal.any([historyLoadController.signal,AbortSignal.timeout(12000)]);
   const view = $("#view-history");
-  view.innerHTML='<p role="status">กำลังโหลดข้อมูลของฉัน…</p>';
-  try {
-    const imports = await api("/imports");
-    if(version!==historyRenderVersion)return;
-    view.innerHTML =
-      '<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div><div class="runtime-card history-file-card"><h2>นำเข้าจากไฟล์</h2><p>CSV / XLSX รูปแบบกลาง · ตรวจข้อมูลก่อนบันทึก</p><a class="secondary template-download" href="/assets/trade-import-template.csv" download>ดาวน์โหลดไฟล์ต้นแบบ CSV</a><details class="import-format"><summary>รูปแบบข้อมูลที่รองรับ</summary><p class="field-note">คอลัมน์: time, exchange, market, pair, side, price, quantity, fee, id<br>market: Spot / Futures · ไม่ระบุจะเป็น Spot · quantity: จำนวนเหรียญ · เวลาแบบ ISO · side: buy / sell</p></details><label>ชื่อเรียกชุดประวัติ <input id="account-scope" placeholder="เช่น ประวัติเทรดเดือนตุลาคม"><small class="field-note">ชื่อที่คุณตั้งไว้แยกชุดข้อมูล ไม่ใช่ชื่อบัญชีบนกระดาน</small></label><p class="field-note">รายการไม่มี trade ID จะเก็บทั้งหมด กรุณาตรวจไฟล์ซ้ำก่อนนำเข้า</p><input id="history-upload" type="file" accept=".csv,.xlsx"><div id="import-preview"></div></div>' +
-      imports
-        .map(
-          (i) =>
-            `<div class="runtime-card history-import-entry" data-import-connection="${esc(i.account_scope??'')}"><div class="history-api-header"><h2>${esc(i.name)}</h2><span data-history-api-actions></span></div><p>${i.count} รายการ · ${new Date(i.created_at).toLocaleString("th-TH")}</p></div>`,
-        )
-        .join("");
-    await renderConnections();
-    if(version!==historyRenderVersion)return;
-    await renderTradingLab();
-    if(version!==historyRenderVersion)return;
-    const imageLibrary=view.querySelector('.trading-lab-images');
-    imageLibrary?.after(view.querySelector('#history-connections'));
-    const fileImport=view.querySelector('#account-scope')?.closest('.runtime-card');
-    if(fileImport){
-      const disclosure=document.createElement('details');disclosure.className='history-file-details';
-      const summary=document.createElement('summary');summary.textContent='เลือกไฟล์ CSV / XLSX หรือดูรูปแบบที่รองรับ';disclosure.append(summary);
-      [...fileImport.children].filter(child=>child.tagName!=='H2').forEach(child=>disclosure.append(child));
-      fileImport.append(disclosure);
-    }
-    const upload = $("#history-upload");
-    const fileLabel = document.createElement("label");
-    fileLabel.className = "file-drop";
-    fileLabel.innerHTML =
-      uiIcon("upload") +
-      "<span><strong>เลือกไฟล์ประวัติ</strong><small>CSV หรือ XLSX · ตรวจข้อมูลก่อนนำเข้า</small></span>";
-    upload.before(fileLabel);
-    fileLabel.append(upload);
-    upload.setAttribute("aria-label", "เลือกไฟล์ประวัติ CSV หรือ XLSX");
-  } catch (e) {
-    toast(e.message);
+  view.innerHTML =
+      '<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div><div class="runtime-card history-file-card"><h2>นำเข้าจากไฟล์</h2><p>CSV / XLSX รูปแบบกลาง · ตรวจข้อมูลก่อนบันทึก</p><a class="secondary template-download" href="/assets/trade-import-template.csv" download>ดาวน์โหลดไฟล์ต้นแบบ CSV</a><details class="import-format"><summary>รูปแบบข้อมูลที่รองรับ</summary><p class="field-note">คอลัมน์: time, exchange, market, pair, side, price, quantity, fee, id<br>market: Spot / Futures · ไม่ระบุจะเป็น Spot · quantity: จำนวนเหรียญ · เวลาแบบ ISO · side: buy / sell</p></details><label>ชื่อเรียกชุดประวัติ <input id="account-scope" placeholder="เช่น ประวัติเทรดเดือนตุลาคม"><small class="field-note">ชื่อที่คุณตั้งไว้แยกชุดข้อมูล ไม่ใช่ชื่อบัญชีบนกระดาน</small></label><p class="field-note">รายการไม่มี trade ID จะเก็บทั้งหมด กรุณาตรวจไฟล์ซ้ำก่อนนำเข้า</p><input id="history-upload" type="file" accept=".csv,.xlsx"><div id="import-preview"></div></div>';
+  const fileImport=view.querySelector('#account-scope')?.closest('.runtime-card');
+  if(fileImport){
+    const disclosure=document.createElement('details');disclosure.className='history-file-details';
+    const summary=document.createElement('summary');summary.textContent='เลือกไฟล์ CSV / XLSX หรือดูรูปแบบที่รองรับ';disclosure.append(summary);
+    [...fileImport.children].filter(child=>child.tagName!=='H2').forEach(child=>disclosure.append(child));
+    fileImport.append(disclosure);
   }
+  const upload = $("#history-upload");
+  const fileLabel = document.createElement("label");
+  fileLabel.className = "file-drop";
+  fileLabel.innerHTML =
+    uiIcon("upload") +
+    "<span><strong>เลือกไฟล์ประวัติ</strong><small>CSV หรือ XLSX · ตรวจข้อมูลก่อนนำเข้า</small></span>";
+  upload.before(fileLabel);
+  fileLabel.append(upload);
+  upload.setAttribute("aria-label", "เลือกไฟล์ประวัติ CSV หรือ XLSX");
+
+  const slots={};
+  for(const [key,label] of [['imports','ประวัติที่นำเข้า'],['connections','การเชื่อมต่อกระดาน'],['images','ภาพอ้างอิง']]){
+    const slot=document.createElement('div');
+    slot.className='runtime-card';
+    slot.innerHTML=`<h2>${label}</h2><p role="status">กำลังโหลด…</p>`;
+    view.append(slot);
+    slots[key]=slot;
+  }
+  let connections;
+  const load=async(key,label,render)=>{
+    try{
+      const data=await api('/'+key,'GET',undefined,{signal});
+      if(version!==historyRenderVersion)return;
+      await render(data);
+      slots[key].remove();
+      const imageLibrary=view.querySelector('.trading-lab-images');
+      const connectionSection=view.querySelector('#history-connections');
+      if(imageLibrary && connectionSection)imageLibrary.after(connectionSection);
+    }catch{
+      if(version!==historyRenderVersion)return;
+      slots[key].innerHTML=`<h2>${label}</h2><p role="status">ยังโหลดข้อมูลส่วนนี้ไม่ได้</p>`;
+    }
+  };
+  await Promise.all([
+    load('imports','ประวัติที่นำเข้า',imports=>{
+      const list=document.createElement('div');
+      list.innerHTML=imports
+        .filter(i=>!connections?.items.some(c=>c.id===i.account_scope))
+        .map(i=>`<div class="runtime-card history-import-entry" data-import-connection="${esc(i.account_scope??'')}"><div class="history-api-header"><h2>${esc(i.name)}</h2><span data-history-api-actions></span></div><p>${i.count} รายการ · ${new Date(i.created_at).toLocaleString("th-TH")}</p></div>`)
+        .join('');
+      slots.imports.before(list);
+    }),
+    load('connections','การเชื่อมต่อกระดาน',async data=>{
+      connections=data;
+      await renderConnections(data);
+    }),
+    load('images','ภาพอ้างอิง',images=>renderTradingLab(images)),
+  ]);
 }
 function showActivation(rule) {
   const dialog = document.createElement("dialog");
@@ -1531,24 +1617,9 @@ $("#chat-input").addEventListener("keydown", (e) => {
 document.addEventListener("change", async (e) => {
   try {
     if (e.target.id === "image-upload") {
-      const file = e.target.files[0];
+      const files = [...e.target.files];
       e.target.value = "";
-      if (!file) return;
-      if (state.images.length >= 3) return toast("แนบได้ครั้งละ 3 ภาพ");
-      const form = new FormData();
-      form.append("file", file);
-      if(state.busy||state.uploading)return toast('รอให้ข้อความหรือภาพก่อนหน้าเสร็จก่อน');
-      state.uploading=true;
-      const workspaceAtUpload=state.workspaceId,conversationAtUpload=state.conversation;
-      previews.setAttribute('aria-busy','true');
-      const progress=document.createElement('p');progress.setAttribute('role','status');progress.textContent='กำลังแนบภาพ…';previews.append(progress);
-      try{
-        await ensureConversation('บทสนทนาภาพ');
-        const uploadConversation=state.conversation;
-        const image=await api(`/images?purpose=chat&conversationId=${uploadConversation}`,"POST",form);
-        if(state.workspaceId!==workspaceAtUpload||state.conversation!==uploadConversation){toast('ภาพไม่ได้แนบเข้าบทสนทนาที่เพิ่งเปลี่ยน');return;}
-        state.crop=null;state.images.push(image);renderImages();
-      }finally{state.uploading=false;previews.removeAttribute('aria-busy');progress.remove();}
+      await attachChatImages(files);
     }
     if (e.target.id === "history-upload") {
       const file = e.target.files[0];
@@ -2023,7 +2094,6 @@ async function boot() {
     document.querySelectorAll('#messages .message').forEach(message => message.classList.add('boot-restored'));
     window.SnaapBoot?.finish();
   });
-  refreshContext().catch(() => {});
 }
 boot();
 

@@ -1,6 +1,6 @@
-async function renderConnections() {
-  const data = await api("/connections"),
-    section = document.createElement("div");
+async function renderConnections(data) {
+  data ??= await api("/connections");
+  const section = document.createElement("div");
   section.className = "runtime-card";
   section.id = "history-connections";
   section.innerHTML = `<h2>เชื่อมประวัติจากกระดาน</h2><p>ใช้ประวัติจากกระดานมาช่วยออกแบบเซตอัป</p><p class="field-note">Binance / Bybit Spot · ครั้งละไม่เกิน 100 รายการตามคู่และช่วงเวลา<br>OKX / Bitget / MEXC ใช้ไฟล์นำเข้าในระหว่างตรวจรับตัวเชื่อมบัญชี</p>${data.items.map((x) => `<div class="connection-item"><strong>${esc(x.name)} · ${esc(x.exchange)} · ${esc(x.market??'Spot')}</strong><p>${x.last_sync ? "ซิงก์ล่าสุด " + new Date(x.last_sync).toLocaleString("th-TH") : "ยังไม่ซิงก์"} · ${esc(x.status)}</p><div class="connection-auto-status" data-auto-status></div><button class="text-button" data-revoke-key="${x.id}">ยกเลิกการเชื่อม</button></div>`).join("")}<details class="add-history-connection"><summary>เพิ่มการเชื่อมต่อ API</summary><form id="connect-history"><label>กระดาน<select name="exchange"><option>Binance</option><option>Bybit</option></select></label><label>ชื่อเรียกการเชื่อมต่อ<input name="name" required maxlength="80" placeholder="เช่น MEXC เทรดสั้น"></label><label>API key<input name="apiKey" type="password" autocomplete="off" required></label><label>API secret<input name="secret" type="password" autocomplete="off" required></label><p class="field-note">ใช้สิทธิ์ Read-only สำหรับประวัติ · Snaap ไม่อ่านยอดบัญชีหรือสินทรัพย์ และเก็บ key แบบเข้ารหัส</p><button type="submit" class="secondary" ${data.enabled ? "" : "disabled"}>ตรวจสิทธิ์และเชื่อม</button>${data.enabled ? "" : "<p>ผู้ดูแลต้องตั้งค่าการเข้ารหัสบนเซิร์ฟเวอร์ก่อน</p>"}</form></details>`;

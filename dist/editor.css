@@ -536,6 +536,7 @@
     border-color 200ms,
     box-shadow 200ms;
 }
+.is-image-dragover { outline: 2px dashed var(--accent-ink); outline-offset: 3px; }
 .chat-composer:focus-within {
   border-color: var(--muted);
   box-shadow: 0 10px 36px #00000012;

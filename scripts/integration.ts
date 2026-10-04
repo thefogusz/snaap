@@ -236,9 +236,18 @@ try {
       .length,
     0,
   );
-  const freeLimit=(await app.inject({url:'/api/v1/me',headers:auth})).json().limits.activeRules;
-  assert.equal(freeLimit,6);
-  const alreadyActive=Number((await db.query('SELECT count(*) AS n FROM rules WHERE owner_id=$1 AND active',[owner])).rows[0].n);
+  const freeLimit = (
+    await app.inject({ url: "/api/v1/me", headers: auth })
+  ).json().limits.activeRules;
+  assert.equal(freeLimit, 6);
+  const alreadyActive = Number(
+    (
+      await db.query(
+        "SELECT count(*) AS n FROM rules WHERE owner_id=$1 AND active",
+        [owner],
+      )
+    ).rows[0].n,
+  );
   for (let i = alreadyActive; i <= freeLimit; i++) {
     const next = (
       await app.inject({
