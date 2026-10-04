@@ -43,7 +43,7 @@ test("creator names are optional and disclaimer is absent in all formats", () =>
     );
     if (kind === "LINE")
       assert.equal(
-        result.payload.contents.footer.contents.find(
+        result.payload.contents.header.contents.find(
           (item: any) => item.text === "My signals",
         ).align,
         "end",

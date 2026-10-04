@@ -56,7 +56,7 @@ Enable the candlestick-chart option in appearance settings. New signals preserve
 
 Telegram and Discord upload the PNG directly. LINE uses the image in its Flex hero, which requires a public HTTPS APP_ORIGIN. Generic webhooks receive presentation.chart and a signed image URL when a public origin exists. Image URLs require a per-signal/accent HMAC and become invalid after encryption-key rotation. They include market data only. No external chart service or paid image hosting is used.
 
-Creator names appear as a plain signature with no Created by label. LINE Flex and the studio align the signature at the bottom right. Discord uses its native embed footer; Telegram/minimal messages place the name last because provider apps control text alignment. Creator names are custom presentation labels, not verified identities; disabling attribution omits the name from recipient payloads. Provider apps control fonts for text messages. The studio uses larger, higher-contrast type and LINE Flex cards specify larger text sizes.
+Creator names appear as a plain signature with no Created by label. LINE Flex and its studio preview place the name at the top right of the header, replacing the heading, and omit the footer. Discord uses its native embed footer; Telegram/minimal messages place the name last because provider apps control text alignment. Creator names are custom presentation labels, not verified identities; disabling attribution omits the name from recipient payloads. Provider apps control fonts for text messages. The studio uses larger, higher-contrast type and LINE Flex cards specify larger text sizes.
 
 Protocol references: [LINE image/Flex API](https://developers.line.biz/en/reference/messaging-api/) and [Discord uploads](https://github.com/discord/discord-api-docs/blob/main/developers/reference.mdx).
 
@@ -64,12 +64,12 @@ Minimal layout is always plain text, even if a previously saved appearance has s
 
 Snaap cards default to a chart-enabled dark presentation with bright text and an accent color, while explicit showChart=false is respected. LINE Flex sets dark header/body/footer colors. The chart PNG itself is dark on every platform; Discord embed and Telegram caption backgrounds follow the recipient app theme. Minimal text appearance is unchanged.
 
-LINE cards use a compact kilo bubble: one header row, a full chart with tap-to-open image action, baseline label/value rows, and one footer row for the return link and creator signature. The studio preview is capped at 280 CSS pixels and keeps readable 14px values. Long text wraps without truncation. Reference: https://developers.line.biz/en/reference/messaging-api/#bubble
+LINE cards use a compact kilo bubble: one header row with optional creator name, a full chart with tap-to-open image action, and baseline label/value rows. The studio preview is capped at 280 CSS pixels and keeps readable 14px values. Long text wraps without truncation. Reference: https://developers.line.biz/en/reference/messaging-api/#bubble
 
 The compact card header uses the shared green/white symbol with a white Snaap wordmark, exported as a transparent PNG for LINE. HTTPS origins serve /assets/snaap-card-wordmark.png; local delivery falls back to the text name while the studio previews the local asset. Chart output is capped at 1024 pixels to comply with LINE Flex image limits.
 
 Cards emphasize direction with a green Long/Buy or red Short badge, separate from the pair title. LINE renders the pill as a colored box; Discord uses the direction color on the embed. Minimal test text is unchanged.
 
-Chart annotations for timestamps, candle counts, pair/exchange, event labels and repeated branding are omitted for a clean compact card. The card body retains the readable signal details. LINE/Discord card footers show only the optional creator signature; redundant Snaap footer text and return links are omitted.
+Chart annotations for timestamps, candle counts, pair/exchange, event labels and repeated branding are omitted for a clean compact card. The card body retains the readable signal details. Discord card footers show only the optional creator signature; LINE uses its header. Redundant Snaap footer text and return links are omitted.
 
 Cards and chart backgrounds use matte neutral black #151515. Accent selections remain independent of the background. LINE uses the native kilo bubble with flexible label/value proportions and font scaling for data rows, following https://developers.line.biz/en/docs/messaging-api/flex-message-layout/ rather than a fixed pixel width in the outgoing JSON. The browser preview width is illustrative; actual LINE rendering varies with device and text settings.

@@ -266,14 +266,19 @@ export function renderSignal(
                         flex: 0,
                         color: "#F4F4F5",
                       },
-                  {
-                    type: "text",
-                    text: clean(heading, 60),
-                    size: "xs",
-                    align: "end",
-                    color: "#B9C3D0",
-                    wrap: true,
-                  },
+                  ...(signature
+                    ? [
+                        {
+                          type: "text",
+                          text: signature,
+                          size: "sm",
+                          align: "end",
+                          color: "#B9C3D0",
+                          wrap: true,
+                          flex: 1,
+                        },
+                      ]
+                    : []),
                 ],
               },
               ...(image
@@ -367,33 +372,6 @@ export function renderSignal(
                   })),
                 ],
               },
-              ...(signature
-                ? {
-                    footer: {
-                      type: "box",
-                      layout: "horizontal",
-                      paddingAll: "12px",
-                      paddingTop: "0px",
-                      backgroundColor: "#151515",
-                      spacing: "sm",
-                      contents: [
-                        ...(signature
-                          ? [
-                              {
-                                type: "text",
-                                text: signature,
-                                size: "sm",
-                                flex: 1,
-                                color: "#B9C3D0",
-                                align: "end",
-                                wrap: true,
-                              },
-                            ]
-                          : []),
-                      ],
-                    },
-                  }
-                : {}),
             },
           };
   } else if (kind === "DISCORD") {
