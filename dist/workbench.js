@@ -1036,12 +1036,38 @@ function set(path, value) {
     last = keys.pop();
   keys.reduce((o, k) => o[k] ?? (o[k] = {}), state.draft)[last] = value;
 }
+function watchSetupRow(r) {
+  const pairs = r.spec.pairs;
+  const pairPreview = pairs.slice(0, 2).join(", ");
+  const remaining = pairs.length - 2;
+  const direction = r.spec.market === "Spot" ? "ซื้อ"
+    : { LONG: "Long", SHORT: "Short", BOTH: "Long + Short" }[r.spec.side] ?? "ยังไม่ระบุฝั่ง";
+  const status = r.quota_blocked
+    ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ"
+    : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน";
+  return `<article class="watch-row">
+    <div class="watch-row-heading"><h2>${esc(r.spec.name)}</h2>
+      <div class="watch-setup-meta"><span class="watch-pairs">${esc(pairPreview)}${remaining > 0 ? ` <span class="watch-pair-count">+${remaining} คู่</span>` : ""}</span><span class="watch-tags"><span class="watch-tag">${esc(r.spec.exchange.join(" · "))}</span><span class="watch-tag">${esc(r.spec.market)}</span><span class="watch-tag watch-direction">${esc(direction)}</span></span></div>
+    </div>
+    <div class="watch-row-footer"><span class="status ${r.active && !r.quota_blocked ? "is-active" : "paused"}">${status}</span>
+      <button class="secondary" data-activate-rule="${esc(r.id)}">${uiIcon(r.active ? "pause" : "play")}${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button>
+      <button class="secondary watch-edit" data-open-rule="${esc(r.id)}" aria-label="แก้ไข ${esc(r.spec.name)}" title="แก้ไขเซตอัป">${uiIcon("sliders")}<span class="sr-only">แก้ไข</span></button>
+    </div>
+    ${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}
+    <details class="watch-details"><summary>รายละเอียด</summary><div class="watch-details-content">
+      <p class="watch-all-pairs"><strong>คู่เทรด</strong> ${esc(pairs.join(", "))}</p>
+      <p class="watch-rule-summary"><strong>เงื่อนไขเข้า</strong> ${esc(setupEntrySummary(r.spec))}</p>
+      <div class="watch-details-actions"><button class="secondary" data-export-setup-code="${esc(r.id)}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="text-button watch-delete" data-delete-rule="${esc(r.id)}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">${uiIcon("trash")}ลบเซตอัป</button></div>
+    </div></details>
+  </article>`;
+}
 function renderWatch() {
   const notice = $("#view-watch .demo-notice");
   if (notice)
     notice.textContent = state.me?.requiresRuleSelection
       ? "สิทธิ์ Pro หมดแล้ว กรุณาหยุดเซตอัพให้เหลือ 3 รายการ ระบบพักการตรวจจนกว่าจะเลือกครบ"
       : "ประเมินแท่งปิดทุกนาที · ข้อมูลแต่ละกระดานตรวจแยกกัน";
+  if (notice) notice.hidden = !state.me?.requiresRuleSelection;
   const list = state.rules.filter(
     (r) =>
       state.filter === "all" ||
@@ -1055,10 +1081,7 @@ function renderWatch() {
   });
   $("#watch-list").innerHTML = list.length
     ? list
-        .map(
-          (r) =>
-            `<article class="watch-row"><div class="watch-row-heading"><div><h2>${esc(r.spec.name)}</h2><small>${esc(r.spec.exchange.join(" · "))} · ${esc(r.spec.pairs.join(", "))} · ${esc(directionLabel(r.spec.side,r.spec.market))}</small></div><span class="status paused">${r.quota_blocked ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ" : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน"}</span></div><p class="watch-rule-summary">${esc(setupEntrySummary(r.spec))}</p>${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}<div class="watch-row-footer"><button class="text-button" data-delete-rule="${r.id}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">ลบ</button><button class="secondary" data-export-setup-code="${r.id}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="secondary" data-activate-rule="${r.id}">${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button><button class="secondary" data-open-rule="${r.id}">เปิดออกแบบ</button></div></article>`,
-        )
+        .map(watchSetupRow)
         .join("")
     : uiEmpty(
         "bell",
@@ -1070,9 +1093,6 @@ function renderWatch() {
           uiIcon("plus") +
           "ออกแบบเซตอัพ</button>",
       );
-  $$(".watch-row .status").forEach((el) =>
-    {const active=el.textContent === "เปิดใช้งาน";el.classList.toggle("is-active",active);el.classList.toggle("paused",!active);},
-  );
   const footnote = $("#view-watch .demo-footnote");
   if (footnote)
     footnote.textContent =
