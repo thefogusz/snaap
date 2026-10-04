@@ -76,9 +76,13 @@ const iconActions = [
   ["[data-sync] button", "clock"],
   ["[data-revoke-key]", "link"],
 ];
-function decorateControls() {
+function decorateControls(root = document) {
+  const query = selector => [
+    ...(root.matches?.(selector) ? [root] : []),
+    ...root.querySelectorAll(selector),
+  ];
   for (const [selector, icon, compact] of iconActions) {
-    document.querySelectorAll(selector).forEach((button) => {
+    query(selector).forEach((button) => {
       if (button.tagName !== "BUTTON" || button.classList.contains("snaap-select-trigger") || button.getAttribute('role') === 'switch') return;
       const text = button.textContent.trim();
       if (button.dataset.iconLabel === text && button.querySelector(".ui-icon"))
@@ -99,7 +103,7 @@ function decorateControls() {
       button.replaceChildren(svg, label);
     });
   }
-  document.querySelectorAll("[data-activate-rule]").forEach((button) => {
+  query("[data-activate-rule]").forEach((button) => {
     if (button.querySelector(".ui-icon")) return;
     button.classList.add("with-icon");
     button.insertAdjacentHTML(
@@ -107,7 +111,7 @@ function decorateControls() {
       uiIcon(button.textContent.includes("หยุด") ? "pause" : "play"),
     );
   });
-  document.querySelectorAll(".runtime-card h2").forEach((heading) => {
+  query(".runtime-card h2").forEach((heading) => {
     if (heading.querySelector(".ui-icon")) return;
     const text = heading.textContent;
     const icon = text.includes("Pro")
@@ -125,21 +129,47 @@ function decorateControls() {
                 : "file";
     heading.insertAdjacentHTML("afterbegin", uiIcon(icon));
   });
-  document.querySelectorAll(".setup-section h3").forEach((heading, index) => {
+  query(".setup-section h3").forEach((heading) => {
     if (heading.querySelector(".step-symbol")) return;
     heading.insertAdjacentHTML(
       "afterbegin",
-      `<span class="step-symbol">${uiIcon(index === 0 ? "sliders" : heading.textContent.includes("ออก") ? "exit" : "clock")}</span>`,
+      `<span class="step-symbol">${uiIcon(heading === document.querySelector('.setup-section h3') ? "sliders" : heading.textContent.includes("ออก") ? "exit" : "clock")}</span>`,
     );
   });
 }
 // Only decorates newly rendered controls; text/attribute updates do not restart motion.
 let decorationFrame;
-new MutationObserver(() => {
+const decorationRoots = new Set();
+new MutationObserver((records) => {
+  for (const record of records) {
+    const control = record.target.closest?.('button, .runtime-card h2, .setup-section h3');
+    if (control) decorationRoots.add(control);
+    for (const node of record.addedNodes) {
+      if (node.nodeType === 1) decorationRoots.add(node);
+    }
+  }
+  if (!decorationRoots.size) return;
   if (decorationFrame) return;
   decorationFrame = requestAnimationFrame(() => {
     decorationFrame = null;
-    decorateControls();
+    const roots = [...decorationRoots].filter(root => root.isConnected);
+    decorationRoots.clear();
+    const rootSet = new Set(roots);
+    // A list rendered in one batch can add hundreds of siblings. Scan their
+    // shared parent once instead of running every selector for each row.
+    const siblings = new Map();
+    for (const root of roots) {
+      const parent = root.parentElement;
+      if (!parent) continue;
+      const count = (siblings.get(parent) ?? 0) + 1;
+      siblings.set(parent, count);
+      if (count > 1) rootSet.add(parent);
+    }
+    for (const root of rootSet) {
+      let parent = root.parentElement;
+      while (parent && !rootSet.has(parent)) parent = parent.parentElement;
+      if (!parent) decorateControls(root);
+    }
   });
 }).observe(document.body, { childList: true, subtree: true });
 decorateControls();

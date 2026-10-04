@@ -70,8 +70,9 @@
       trigger.setAttribute("aria-label", name);
     if (trigger.disabled !== select.disabled) trigger.disabled = select.disabled;
   }
-  function scan() {
-    document.querySelectorAll("select").forEach(enhance);
+  const pendingSelects = new Set();
+  function scan(selects = document.querySelectorAll("select")) {
+    selects.forEach(select => { if (select.isConnected) enhance(select); });
     if (opened && !opened.select.isConnected) close();
   }
   function open(control) {
@@ -255,12 +256,24 @@
     },
     true,
   );
-  new MutationObserver(() => {
+  new MutationObserver((records) => {
+    for (const record of records) {
+      const select = record.target.closest?.("select");
+      if (select) pendingSelects.add(select);
+      for (const node of record.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (node.matches("select")) pendingSelects.add(node);
+        node.querySelectorAll("select").forEach(select => pendingSelects.add(select));
+      }
+    }
+    if (!pendingSelects.size && (!opened || opened.select.isConnected)) return;
     if (!scheduled) {
       scheduled = true;
       queueMicrotask(() => {
         scheduled = false;
-        scan();
+        const selects = new Set(pendingSelects);
+        pendingSelects.clear();
+        scan(selects);
       });
     }
   }).observe(document.body, {

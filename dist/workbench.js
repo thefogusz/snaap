@@ -131,7 +131,7 @@ async function setMyData(enabled) {
   const button=chatTools.querySelector('[data-context]');
   button.disabled=true;
   try {
-    if(enabled){await refreshContext();await renderLabImageChoices(true);}
+    if(enabled)await Promise.all([refreshContext(), renderLabImageChoices(true)]);
     state.useMyData=enabled;
     button.setAttribute('aria-checked',String(enabled));
     sources.hidden=!enabled;
@@ -1999,7 +1999,6 @@ async function boot() {
     document.querySelectorAll('#messages .message').forEach(message => message.classList.add('boot-restored'));
     window.SnaapBoot?.finish();
   });
-  refreshContext().catch(() => {});
 }
 boot();
 

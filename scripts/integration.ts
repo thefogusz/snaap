@@ -236,7 +236,8 @@ try {
       .length,
     0,
   );
-  for (let i = 0; i < 3; i++) {
+  // One setup is already active. Free permits six active setups at launch.
+  for (let i = 0; i < 6; i++) {
     const next = (
       await app.inject({
         method: "POST",
@@ -254,7 +255,7 @@ try {
           payload: { ...activation, expectedRevision: 1 },
         })
       ).statusCode,
-      i < 2 ? 200 : 409,
+      i < 5 ? 200 : 409,
     );
   }
   const customer = "cus_" + owner,
