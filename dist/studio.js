@@ -303,6 +303,7 @@
     dialog.className = "conversation-dialog instrument-dialog";
     dialog.setAttribute("aria-labelledby", "instrument-dialog-title");
     let mode=state.draft.pairs.length>1?'multiple':'single',selected=new Set(state.draft.pairs),catalog=[];
+    let manualSelection=new Set(selected);
     dialog.innerHTML = `<header><h2 id="instrument-dialog-title">เลือกคู่เทรด</h2><button type="button" aria-label="ปิด">${uiIcon("close")}</button></header><p>${esc(source)} · ใช้เงื่อนไขเดียวกัน แยกสัญญาณแต่ละคู่</p><div class="pair-selection-modes" role="group" aria-label="วิธีเลือกคู่เทรด"><button type="button" data-pair-mode="single">คู่เดียว</button><button type="button" data-pair-mode="multiple">หลายคู่</button><button type="button" data-pair-mode="all">ทั้งหมด</button></div><div class="pair-catalog-tools"><input type="search" aria-label="ค้นหาคู่เทรด" placeholder="ค้นหา BTC, ETH หรือชื่อคู่เทรด"><button type="button" class="secondary" data-refresh-catalog>ซิงก์ล่าสุด</button></div><p data-catalog-status role="status">กำลังโหลดจากกระดาน…</p><div class="instrument-list"></div><footer class="pair-selection-footer"><span data-selection-count></span><button type="button" class="text-button" data-clear-pairs>ล้างที่เลือก</button><button type="button" class="primary" data-apply-pairs disabled>ใช้คู่ที่เลือก</button></footer><p class="pair-selection-note">เลือกทั้งหมดจากรายการตอนนี้ · คู่มากขึ้นใช้เวลาเตรียมข้อมูลมากขึ้น</p>`;
     document.body.append(dialog);
     dialog.showModal();
@@ -320,7 +321,10 @@
       apply.disabled=loading||!catalog.length||!selected.size;
     }
     dialog.querySelectorAll('[data-pair-mode]').forEach(b=>b.onclick=()=>{
+      const previousMode=mode;
       mode=b.dataset.pairMode;
+      if(mode==='all'&&previousMode!=='all')manualSelection=new Set(selected);
+      if(previousMode==='all'&&mode!=='all')selected=new Set(manualSelection);
       if(mode==='single')selected=new Set([...selected].slice(0,1));
       if(mode==='all')selected=new Set(catalog.map(m=>m.symbol));
       paint();selectionUI();
@@ -346,6 +350,7 @@
         if (!dialog.open) return;
         catalog=data.items.filter(m=>m.supported);
         const available=new Set(catalog.map(m=>m.symbol));selected=new Set([...selected].filter(pair=>available.has(pair)));
+        manualSelection=new Set([...manualSelection].filter(pair=>available.has(pair)));
         if(mode==='all')selected=new Set(available);
         paint = () => {
           const q = dialog.querySelector("input").value.toUpperCase().trim();
