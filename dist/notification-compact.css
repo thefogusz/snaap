@@ -37,3 +37,8 @@
 #view-notifications .signal-item time{font-size:11px;line-height:1.6;color:var(--muted);white-space:nowrap;margin:0 0 0 8px;font-variant-numeric:tabular-nums}
 @media(max-width:1000px){.notification-rules .watch-row{grid-template-columns:minmax(0,1fr);gap:12px}.notification-rules .watch-row-footer{justify-content:flex-start}#view-notifications .signal-item{grid-template-columns:28px minmax(0,1fr) auto;gap:10px 12px}#view-notifications .signal-item time{grid-column:2/-1;margin:0;font-size:11px}}
 @media(max-width:600px){#view-notifications{padding:24px 16px 40px}.notification-rules .watch-row{padding:16px;border-radius:10px}.notification-rules .watch-row-heading{align-items:flex-start}.notification-rules .watch-row .status{white-space:normal;max-width:110px}.notification-rules .watch-row-footer{gap:6px}.notification-rules .watch-row-footer button{min-height:40px;padding:8px 9px;font-size:11px}#view-notifications .signal-item{padding:14px 12px;gap:8px 10px}.notification-setup-actions{gap:6px}#view-notifications .notification-setup-actions button{padding:9px 10px;font-size:12px}}
+ .browser-alert-settings { display:grid; gap:14px; padding:22px; margin-bottom:26px; border:1px solid var(--line); border-radius:18px; background:var(--white); }
+ .browser-alert-settings h3 { font-size:16px; font-weight:600; margin-bottom:8px; }
+ .browser-alert-settings p, .browser-alert-settings small { color:var(--muted); font-size:12px; line-height:1.8; }
+ .browser-alert-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+ .browser-alert-actions button:disabled { opacity:.5; cursor:default; }

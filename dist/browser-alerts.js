@@ -1,0 +1,116 @@
+"use strict";
+// Browser alerts work while this page is open. Server monitoring is independent.
+(() => {
+  let owner = null, preferences = { desktop: false, sound: false };
+  let audio, cursor = null, baseline = false, busy = false, failed = false;
+  const supported = () => window.isSecureContext && "Notification" in window;
+  const storageKey = () => "snaap-alerts:" + owner;
+  function save() {
+    try { localStorage.setItem(storageKey(), JSON.stringify(preferences)); } catch {}
+  }
+  async function unlockAudio() {
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) throw Error("เบราว์เซอร์นี้ไม่รองรับเสียงแจ้งเตือน");
+    audio ??= new Context();
+    await audio.resume();
+    if (audio.state !== "running") throw Error("กดลองเสียงอีกครั้งเพื่อเปิดเสียง");
+  }
+  function chime() {
+    if (!audio || audio.state !== "running") return false;
+    [660, 880].forEach((frequency, index) => {
+      const oscillator = audio.createOscillator(), gain = audio.createGain();
+      const start = audio.currentTime + index * .16;
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(.09, start + .015);
+      gain.gain.exponentialRampToValueAtTime(.001, start + .24);
+      oscillator.connect(gain); gain.connect(audio.destination);
+      oscillator.start(start); oscillator.stop(start + .25);
+      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    });
+    return true;
+  }
+  function settingsMarkup() {
+    const permission = supported() ? Notification.permission : "unsupported";
+    const status = permission === "denied" ? "Chrome บล็อกอยู่ · เปลี่ยนสิทธิ์ที่ไอคอนข้าง URL → การแจ้งเตือน"
+      : permission === "unsupported" ? "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนบนหน้าจอ"
+      : preferences.desktop && permission === "granted" ? "เปิดแจ้งเตือนบนหน้าจอแล้ว" : "ยังไม่เปิดแจ้งเตือนบนหน้าจอ";
+    const soundStatus = preferences.sound ? audio?.state === "running" ? "เปิดเสียงแล้ว" : "กดลองเสียงเพื่อเปิดเสียงในรอบนี้" : "ปิดเสียงอยู่";
+    return `<section class="browser-alert-settings" aria-label="การแจ้งเตือนในเบราว์เซอร์"><div><h3>แจ้งเตือนในเบราว์เซอร์</h3><p>${status}</p><p>${soundStatus}${failed ? " · เชื่อมต่อขาด กำลังลองใหม่" : ""}</p></div><div class="browser-alert-actions"><button type="button" class="secondary" data-browser-alert="desktop" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}>${preferences.desktop && permission === "granted" ? "ปิดแจ้งเตือน" : "เปิดแจ้งเตือน"}</button><button type="button" class="secondary" data-browser-alert="sound" aria-pressed="${preferences.sound}">${preferences.sound ? "ปิดเสียง" : "เปิดเสียง"}</button><button type="button" class="text-button" data-browser-alert="preview">ลองเสียง</button></div><small>รับสัญญาณใหม่จากทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วรับผ่าน Discord หรือช่องทางที่เชื่อมไว้</small></section>`;
+  }
+  function repaint() {
+    document.querySelectorAll("[data-browser-alert-slot]").forEach(slot => { slot.innerHTML = settingsMarkup(); });
+  }
+  async function getSignals(query = "") {
+    // Deliberately omit the workspace header: watch every workspace of this user.
+    const response = await fetch("/api/v1/signals" + query);
+    if (!response.ok) throw Error("Signal connection unavailable");
+    return response.json();
+  }
+  async function poll() {
+    if (busy || !state.me?.id) return;
+    busy = true;
+    try {
+      if (owner !== state.me.id) {
+        owner = state.me.id; cursor = null; baseline = false;
+        preferences = { desktop: false, sound: false };
+        try {
+          const stored = JSON.parse(localStorage.getItem(storageKey()) || "{}");
+          preferences = { desktop: stored.desktop === true, sound: stored.sound === true };
+        } catch {}
+      }
+      const rows = await getSignals(cursor ? "?after=" + encodeURIComponent(cursor) : "");
+      if (!baseline) {
+        cursor = rows[0]?.id ?? null; baseline = true;
+      } else {
+        // With no prior signal the endpoint is newest-first; otherwise it is oldest-first.
+        const fresh = cursor ? rows : rows.slice().reverse();
+        if (fresh.length) {
+          cursor = fresh.at(-1).id;
+          const last = fresh.at(-1);
+          const kind = { ENTRY: "สัญญาณเข้า", EXIT: "สัญญาณออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลารอ" }[last.event.kind] || "สัญญาณใหม่";
+          const text = fresh.length > 1 ? `มี ${fresh.length} สัญญาณใหม่ · ${last.pair}` : `${kind} · ${last.pair} · ${last.setup_name || "เซตอัป"}`;
+          toast(text);
+          if (preferences.sound) chime();
+          if (preferences.desktop && supported() && Notification.permission === "granted") {
+            try {
+              const notice = new Notification("Snaap · สัญญาณใหม่", { body: text, tag: "snaap-signals", silent: true });
+              notice.onclick = () => { window.focus(); location.hash = "notifications"; notice.close(); };
+              setTimeout(() => notice.close(), 8000);
+            } catch { /* Some mobile browsers require a service worker. Inbox still works. */ }
+          }
+          if (notificationData && ["notifications", "watch"].includes(location.hash.slice(1))) void renderNotifications();
+        }
+      }
+      failed = false;
+    } catch { failed = true; }
+    finally { busy = false; repaint(); }
+  }
+  document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-browser-alert]");
+    if (!button || !owner) return;
+    button.disabled = true;
+    try {
+      if (button.dataset.browserAlert === "desktop") {
+        if (preferences.desktop && Notification.permission === "granted") preferences.desktop = false;
+        else if (supported()) {
+          // Called directly from a click, never on page load.
+          preferences.desktop = (await Notification.requestPermission()) === "granted";
+        }
+      } else if (button.dataset.browserAlert === "sound") {
+        if (preferences.sound) preferences.sound = false;
+        else { await unlockAudio(); preferences.sound = true; chime(); }
+      } else { await unlockAudio(); chime(); }
+      save(); repaint();
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  });
+  // A saved sound preference needs a new user gesture after a reload.
+  document.addEventListener("pointerdown", () => {
+    if (preferences.sound) void unlockAudio().then(repaint).catch(() => {});
+  });
+  window.addEventListener("focus", () => { repaint(); void poll(); });
+  window.SnaapBrowserAlerts = { settingsMarkup };
+  setInterval(poll, 15000);
+  window.addEventListener("snaap-account-ready", () => { void poll(); });
+})();

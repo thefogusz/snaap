@@ -202,6 +202,15 @@
   white-space: pre-wrap;
 }
 .message .assistant-rich-text { white-space:normal; overflow-wrap:anywhere; line-height:1.8; }
+.message.user {
+  width: fit-content;
+  max-width: 85%;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: 0;
+  align-self: flex-end;
+  text-align: start;
+}
 .assistant-rich-text > :first-child { margin-top:0; }
 .assistant-rich-text > :last-child { margin-bottom:0; }
 .assistant-rich-text p { margin:0 0 12px; }

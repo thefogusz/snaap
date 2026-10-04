@@ -1085,6 +1085,7 @@ async function refresh({ reuseMe = false } = {}) {
   ]);
   state.rules = rules;
   state.me = me;
+  window.dispatchEvent(new Event('snaap-account-ready'));
   paintWorkspacePicker();
   if (!state.me.local) {
     const name = state.me.email.split("@")[0];
