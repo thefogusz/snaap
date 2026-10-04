@@ -1104,6 +1104,21 @@ async function refresh({ reuseMe = false } = {}) {
     };
     accountMenu.append(signout);
   }
+  if (state.me?.isAdmin && !$('#auth-admin-link')) {
+    const adminLink = document.createElement('a');
+    adminLink.id = 'auth-admin-link';
+    adminLink.className = 'auth-signout';
+    adminLink.href = '/admin.html';
+    adminLink.style.display = 'flex';
+    adminLink.style.alignItems = 'center';
+    adminLink.style.gap = '8px';
+    adminLink.style.textDecoration = 'none';
+    adminLink.style.color = 'inherit';
+    adminLink.innerHTML = '🛡️ <span>ระบบผู้ดูแล (Admin)</span>';
+    const signout = $('#auth-signout');
+    if (signout) signout.before(adminLink);
+    else accountMenu.append(adminLink);
+  }
   $("#ai-mode option[value=deep]").disabled = true;
   $("#ai-mode option[value=deep]").textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
   $("#ai-mode").value = 'standard';

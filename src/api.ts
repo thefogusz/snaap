@@ -21,6 +21,7 @@ import { registerSetupFiles } from "./setup-files.js";
 import { registerSetupShares } from "./setup-shares.js";
 import { registerPresets } from "./presets.js";
 import { registerRuleRemoval } from "./rule-removal.js";
+import { registerAdmin, recordSystemLog } from "./admin.js";
 import { ApiError } from "./errors.js";
 import { hash } from "./crypto.js";
 export { ApiError } from "./errors.js";
@@ -59,6 +60,15 @@ export async function buildApp(
   });
   app.decorateRequest("userId", "");
   app.setErrorHandler((err, req, reply) => {
+    recordSystemLog({
+      type: (err as any).code || (err as any).name || "ERROR",
+      statusCode: (err as any).statusCode || (err instanceof z.ZodError ? 400 : 500),
+      message: (err as any).message || String(err),
+      detail: (err as any).issues || undefined,
+      url: req.url,
+      method: req.method,
+      userId: req.userId || undefined,
+    });
     if (!(err instanceof z.ZodError) && !(err as ApiError).statusCode)
       console.error("Request failed", req.id, (err as Error).name);
     if (err instanceof z.ZodError)
@@ -168,6 +178,7 @@ export async function buildApp(
   await registerBilling(app, db, origin);
   await registerDestinations(app, db, {local: options.local, origin});
   registerHistory(app, db);
+  registerAdmin(app, db, { local: options.local, session });
   app.get("/api/v1/health", async () => ({
     database: (await db.query("SELECT 1")).rowCount === 1,
     local: !!options.local,
@@ -214,7 +225,7 @@ export async function buildApp(
   });
   app.get("/api/v1/me", async (req) => {
     const user = (
-      await db.query("SELECT id,email FROM users WHERE id=$1", [req.userId])
+      await db.query("SELECT id,email,role FROM users WHERE id=$1", [req.userId])
     ).rows[0];
     const pro = (
       await db.query(
@@ -236,10 +247,21 @@ export async function buildApp(
         )
       ).rows[0].n,
     );
+    const adminEmailList = (process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const isAdmin =
+      user?.role === "admin" ||
+      (!!user?.email && adminEmailList.includes(user.email.toLowerCase())) ||
+      (!!options.local &&
+        (user?.email === "local@snaap.invalid" ||
+          user?.id === "00000000-0000-4000-8000-000000000001"));
     return {
       ...user,
       plan: pro ? "PRO" : "FREE",
       proUntil: pro?.pro_until ?? null,
+      isAdmin,
       requiresRuleSelection: active > (pro ? 20 : 6),
       limits: {
         activeRules: pro ? 20 : 6,
@@ -248,7 +270,7 @@ export async function buildApp(
         deep: pro ? 10 : 0,
       },
       usage,
-      local: user.email === "local@snaap.invalid",
+      local: user?.email === "local@snaap.invalid",
     };
   });
   app.get(

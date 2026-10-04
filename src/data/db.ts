@@ -65,6 +65,7 @@ export async function migrate(db: pg.Pool) {
     ALTER TABLE usage_ledger ADD COLUMN IF NOT EXISTS input_tokens integer NOT NULL DEFAULT 0;
     ALTER TABLE usage_ledger ADD COLUMN IF NOT EXISTS output_tokens integer NOT NULL DEFAULT 0;
     ALTER TABLE usage_ledger ADD COLUMN IF NOT EXISTS estimated_usd numeric;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'user';
   `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS workspaces(id uuid PRIMARY KEY,owner_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,name text NOT NULL,is_default boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now());
