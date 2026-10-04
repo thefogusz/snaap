@@ -389,9 +389,33 @@ function chatEmpty() {
 const badge = $(".prototype-badge");
 badge.textContent = "บัญชี / แพ็กเกจ";
 badge.dataset.action = "billing";
-$(".profile").dataset.action = "signout";
-$(".profile").title = "ออกจากระบบ";
-$(".profile .icon").outerHTML = uiIcon("exit", "icon");
+const accountButton = $(".profile");
+accountButton.dataset.action = "account-menu";
+accountButton.title = "เมนูบัญชี";
+accountButton.setAttribute("aria-expanded", "false");
+accountButton.setAttribute("aria-controls", "account-menu");
+accountButton.setAttribute("aria-haspopup", "true");
+accountButton.querySelector(".icon").remove();
+const accountMenu = document.createElement("div");
+accountMenu.id = "account-menu";
+accountMenu.className = "account-menu";
+accountMenu.hidden = true;
+accountMenu.setAttribute("aria-label", "เมนูบัญชี");
+accountButton.before(accountMenu);
+function closeAccountMenu(restoreFocus = false) {
+  accountMenu.hidden = true;
+  accountButton.setAttribute("aria-expanded", "false");
+  if (restoreFocus) accountButton.focus();
+}
+document.addEventListener("click", (event) => {
+  if (!accountMenu.hidden && !accountMenu.contains(event.target) && !accountButton.contains(event.target)) closeAccountMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !accountMenu.hidden) {
+    event.preventDefault();
+    closeAccountMenu(true);
+  }
+});
 async function api(url, method = "GET", body) {
   const headers = { "x-snaap-client": "web" };
   if(state.workspaceId)headers['x-snaap-workspace']=state.workspaceId;
@@ -1063,14 +1087,14 @@ async function refresh() {
       esc(name) + "<small>" + esc(state.me.plan) + "</small>";
   }
   if(!$('#auth-signout')){
-    const signout=document.createElement('button');signout.id='auth-signout';signout.className='auth-signout';signout.textContent='ออกจากระบบ';
+    const signout=document.createElement('button');signout.id='auth-signout';signout.className='auth-signout';signout.innerHTML=uiIcon('exit', 'icon')+'<span>ออกจากระบบ</span>';
     signout.onclick=async()=>{
       if(state.busy||state.uploading){toast('รอให้ข้อความหรือภาพเสร็จก่อนออกจากระบบ');return;}
       signout.disabled=true;
       try{persistRecovery();if(state.draft&&draftDirty())await saveDraft();await api('/auth/logout','POST',{});sessionStorage.setItem('snaap-signed-out','true');location.replace('/login.html');}
       catch(error){toast(error.message);signout.disabled=false;}
     };
-    $('.sidebar-bottom').append(signout);
+    accountMenu.append(signout);
   }
   $("#ai-mode option[value=deep]").disabled = true;
   $("#ai-mode option[value=deep]").textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
@@ -1615,8 +1639,11 @@ document.addEventListener("click", async (e) => {
     }
     if (t.dataset.action === "menu")
       return $("#sidebar").classList.toggle("is-open");
-    if (t.dataset.action === "signout") {
-      $("#auth-signout")?.click();
+    if (t.dataset.action === "account-menu") {
+      const opening = accountMenu.hidden;
+      accountMenu.hidden = !opening;
+      accountButton.setAttribute("aria-expanded", String(opening));
+      if (opening) $("#auth-signout")?.focus();
       return;
     }
     if (t.dataset.action === "billing") {
