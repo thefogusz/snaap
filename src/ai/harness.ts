@@ -56,7 +56,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         mode: z.enum(["standard", "deep"]),
         draft: strategySchema.optional(),
         selection: selection.optional(),
-        imageIds: z.array(z.string().uuid()).max(8).default([]),
+        imageIds: z.array(z.string().uuid()).max(5, "แนบได้สูงสุด 5 ภาพต่อข้อความ").default([]),
         useMyData: z.boolean().default(false),
         crop: z
           .object({
@@ -112,8 +112,8 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       input.imageIds = [
         ...new Set([...input.imageIds, ...library.map((image) => image.id)]),
       ];
-      if (input.imageIds.length > 8)
-        throw new ApiError(400, "IMAGE_LIMIT", "เลือกภาพเกินจำนวนที่รองรับ");
+      if (input.imageIds.length > 5)
+        throw new ApiError(400, "IMAGE_LIMIT", "ใช้ภาพรวมได้สูงสุด 5 ภาพต่อข้อความ รวมภาพจากข้อมูลของฉัน กรุณาลดภาพหรือปิดใช้ข้อมูลของฉัน");
       input.selection = { ruleIds: input.selection?.ruleIds };
     } else {
       // Turning personal data off is authoritative, even for callers omitting
@@ -384,7 +384,6 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         const inputBound = boundCost(
           instructions + JSON.stringify(toolParameters).repeat(2),
           messages,
-          input.imageIds.length,
           rate,
           0,
         );
