@@ -1240,13 +1240,30 @@ async function chat(text) {
   }
 }
 function appendChatImages(images) {
-  for (const image of new Map(images.map(image => [image.id, image])).values()) {
+  const unique = [...new Map(images.map(image => [image.id, image])).values()];
+  if (!unique.length) return;
+  const gallery = document.createElement('div');
+  gallery.className = 'chat-image-gallery user';
+  gallery.setAttribute('role', 'group');
+  gallery.setAttribute('aria-label', 'ภาพที่ผู้ใช้ส่ง');
+  for (const image of unique) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chat-image-thumbnail';
+    button.setAttribute('aria-haspopup', 'dialog');
+    const name = image.name ?? 'ภาพในบทสนทนา';
+    button.setAttribute('aria-label', 'ดูภาพเต็ม: ' + name);
     const img = document.createElement('img');
     img.src = '/api/v1/images/' + image.id;
-    img.alt = image.name ?? 'ภาพในบทสนทนา';
+    img.alt = name;
     img.className = 'chat-saved-image';
-    $('#messages').append(img);
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    button.onclick = () => import('./chat-images.js').then(({openChatImage}) => openChatImage(img.src, name, button));
+    button.append(img);
+    gallery.append(button);
   }
+  $('#messages').append(gallery);
 }
 async function restoreChatImages(selectedIds) {
   if (!state.conversation) return;
