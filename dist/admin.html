@@ -11,15 +11,15 @@
   <script src="./theme.js"></script>
   <script src="./toast.js" defer></script>
   <link rel="stylesheet" href="/brand.css">
-  <link rel="stylesheet" href="./admin.css">
-  <script src="./admin.js" defer></script>
+  <link rel="stylesheet" href="/admin.css">
+  <script src="/admin.js" defer></script>
 </head>
 <body>
   <!-- Header -->
   <header class="admin-header">
     <div class="admin-header-inner">
       <div class="brand-group">
-        <a class="brand-link" href="/" aria-label="กลับสู่หน้าหลัก Snaap">
+        <a class="brand-link" href="/admin" aria-label="Snaap Admin Dashboard">
           Snaap
           <svg class="brand-symbol" viewBox="34 20 128 155" aria-hidden="true" focusable="false">
             <use href="/assets/snaap-symbol.svg#snaap-symbol"></use>
@@ -39,9 +39,7 @@
         <button id="theme-toggle" class="btn" aria-label="สลับธีม">
           สลับธีม
         </button>
-        <a href="/" class="btn btn-primary">
-          ← กลับหน้าหลัก
-        </a>
+        <button id="btn-signout" class="btn btn-primary">ออกจากระบบผู้ดูแล</button>
       </div>
     </div>
   </header>

@@ -24,7 +24,7 @@ try {
     token = randomUUID(),
     userToken = randomUUID();
   await db.query(
-    "INSERT INTO users(id,email,role) VALUES($1,'admin@test.invalid','admin'),($2,'user@test.invalid','user')",
+    "INSERT INTO users(id,email,role,google_sub) VALUES($1,'kirdssadee@gmail.com','user','integration-google-sub'),($2,'user@test.invalid','user',NULL)",
     [admin, user],
   );
   await db.query(
@@ -47,6 +47,88 @@ try {
     "x-snaap-client": "web",
     cookie: `snaap_session=${token}`,
   };
+  assert.equal(
+    (await app.inject({ url: "/admin/login", headers: { host: headers.host } }))
+      .statusCode,
+    200,
+  );
+  for (const url of [
+    "/admin",
+    "/admin/",
+    "/admin.html",
+    "/%61dmin.html",
+    "/ADMIN.HTML",
+  ]) {
+    const anon: { headers: Record<string, unknown> } = await app.inject({
+      url,
+      headers: { host: headers.host },
+    });
+    assert.equal(anon.headers.location, "/admin/login", url);
+    const denied: { headers: Record<string, unknown> } = await app.inject({
+      url,
+      headers: { ...headers, cookie: `snaap_session=${userToken}` },
+    });
+    assert.equal(
+      denied.headers.location,
+      "/admin/login?error=admin_denied",
+      url,
+    );
+  }
+  const adminPage = await app.inject({ url: "/admin", headers });
+  assert.equal(adminPage.statusCode, 200);
+  assert.ok(adminPage.body.includes("Admin Dashboard"));
+  assert.ok(adminPage.headers["content-security-policy"]);
+  assert.equal(
+    (await app.inject({ url: "/admin.html", headers })).headers.location,
+    "/admin",
+  );
+  await db.query(
+    "UPDATE users SET role='admin',google_sub='other-google-sub' WHERE id=$1",
+    [user],
+  );
+  assert.equal(
+    (
+      await app.inject({
+        url: "/api/v1/admin/overview",
+        headers: { ...headers, cookie: `snaap_session=${userToken}` },
+      })
+    ).statusCode,
+    403,
+    "a legacy admin role cannot widen the allowlist",
+  );
+  await db.query("UPDATE users SET role='user',google_sub=NULL WHERE id=$1", [
+    user,
+  ]);
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: `/api/v1/admin/users/${user}/plan`,
+        headers,
+        payload: { role: "admin" },
+      })
+    ).statusCode,
+    409,
+  );
+  const localLogin = await app.inject({
+    method: "POST",
+    url: "/api/v1/auth/local",
+    headers,
+    payload: {},
+  });
+  const localCookie = localLogin.cookies.find(
+    (c) => c.name === "snaap_session",
+  )!;
+  assert.equal(
+    (
+      await app.inject({
+        url: "/api/v1/admin/overview",
+        headers: { ...headers, cookie: `snaap_session=${localCookie.value}` },
+      })
+    ).statusCode,
+    403,
+    "local login cannot bypass admin email policy",
+  );
   for (const url of ["overview", "diagnostics", "activity", "users"]) {
     const res: { statusCode: number; body: string } = await app.inject({
       url: `/api/v1/admin/${url}`,
@@ -549,7 +631,7 @@ try {
       "UPDATE admin_events SET detail=replace(detail,'<img src=x onerror=alert(1)>','ทีมปฏิบัติการ') WHERE category='delivery'",
     );
     await app.listen({ host: "127.0.0.1", port: 4175 });
-    console.log(`Isolated admin preview: ${origin}/admin.html`);
+    console.log(`Isolated admin entry preview: ${origin}/admin`);
     await new Promise<void>((resolve) => {
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);

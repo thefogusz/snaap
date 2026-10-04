@@ -115,7 +115,7 @@
     if (res.status === 401) {
       if (!state.redirecting) {
         state.redirecting = true;
-        window.location.href = "/login.html";
+        window.location.href = "/admin/login";
       }
       throw new Error("UNAUTHENTICATED");
     }
@@ -124,7 +124,7 @@
       const err = await res.json().catch(() => ({}));
       if (!state.redirecting) {
         state.redirecting = true;
-        window.location.href = "/";
+        window.location.href = "/admin/login?error=admin_denied";
       }
       throw new Error(err.error?.message || "FORBIDDEN");
     }
@@ -593,9 +593,6 @@
               <button class="btn btn-sm btn-primary" data-action="plan" data-user="${escapeHTML(u.id)}">
                 ปรับสิทธิ์
               </button>
-              <button class="btn btn-sm" data-action="toggle-admin" data-user="${escapeHTML(u.id)}" data-role="${escapeHTML(u.role)}" ${u.isAdmin && u.role !== "admin" ? 'disabled title="สิทธิ์มาจากการตั้งค่าเซิร์ฟเวอร์"' : ""}>
-                ${u.isAdmin && u.role !== "admin" ? "Admin จากการตั้งค่า" : u.role === "admin" ? "ถอน Admin" : "ตั้ง Admin"}
-              </button>
               <button class="btn btn-sm" data-action="reset-quota" data-user="${escapeHTML(u.id)}" title="ล้างจำนวนการใช้ AI เดือนนี้">
                 🧹 ล้างโควตา AI
               </button>
@@ -716,6 +713,12 @@
   }
 
   function setupUserActions() {
+    $("#btn-signout").addEventListener("click", (e) =>
+      action(e.currentTarget, async () => {
+        await apiFetch("/api/v1/auth/logout", { method: "POST", body: "{}" });
+        window.location.href = "/admin/login";
+      }),
+    );
     $("#users-tbody").addEventListener("click", async (e) => {
       const copy = e.target.closest("[data-copy]");
       if (copy) {
@@ -737,26 +740,7 @@
         $(".modal-option-btn").focus();
         return;
       }
-      if (button.dataset.action === "toggle-admin") {
-        const role = button.dataset.role === "admin" ? "user" : "admin";
-        if (
-          !confirm(
-            role === "admin"
-              ? "แต่งตั้งผู้ใช้นี้เป็น Admin?"
-              : "ถอนสิทธิ์ Admin ของผู้ใช้นี้?",
-          )
-        )
-          return;
-        await action(button, async () => {
-          await apiFetch(`/api/v1/admin/users/${id}/plan`, {
-            method: "POST",
-            body: JSON.stringify({ role }),
-          });
-          showToast("อัปเดตสิทธิ์แล้ว");
-          await loadUsers();
-          await loadOverview();
-        });
-      } else if (button.dataset.action === "reset-quota") {
+      if (button.dataset.action === "reset-quota") {
         if (
           !confirm(
             "คืนโควตา AI เดือนนี้ให้ผู้ใช้? ประวัติ tokens และค่าใช้จ่ายจะยังเก็บอยู่",

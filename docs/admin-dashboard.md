@@ -1,6 +1,6 @@
 # Admin Dashboard
 
-Open `/admin.html` from the account menu. Access requires a database `admin` role, an email in server-side `ADMIN_EMAILS`, or the explicit local development test account. Ordinary users receive 403 from every admin API, including mutation endpoints.
+Open `/admin` directly; unauthenticated visits go to the dedicated `/admin/login` page. Sign in with Google as `kirdssadee@gmail.com`, then the callback opens `/admin` directly. This uses the existing configured Google callback URL; no additional domain or callback configuration is needed. A verified Google identity must match the sole email in `src/admin-access.ts`. Database roles, `ADMIN_EMAILS` and local test accounts cannot override this policy. Other accounts receive 403 from every admin API and cannot load the dashboard HTML. The customer account menu has no Admin link. `/admin.html` is a protected compatibility redirect.
 
 The dashboard includes user and plan management, AI quota management, service diagnostics, an operational inbox, and an audit trail. User search and event filters run on the server and support pagination.
 
@@ -23,7 +23,7 @@ The design follows [Grafana's grouped alerts](https://grafana.com/docs/grafana/l
 
 Plan changes, role changes and quota resets are transactional and record the actor and target. Quota reset preserves the ledger's token and cost history using `quota_waived`; quota admission and usage displays ignore waived records. Reset is blocked during an active AI run.
 
-Manual Pro grants are stored separately and survive Stripe's recalculation after a payment refund. A Free override clears the manual grant; subsequent billing events may restore paid entitlement from surviving purchases. Self-demotion is blocked, and an admin granted through `ADMIN_EMAILS` must be removed in the server configuration.
+Manual Pro grants are stored separately and survive Stripe's recalculation after a payment refund. A Free override clears the manual grant; subsequent billing events may restore paid entitlement from surviving purchases. The dashboard cannot grant or revoke administrator access; role changes are rejected to preserve the sole-account allowlist.
 
 Impersonation is limited to ordinary user accounts, lasts 15 minutes, and records the actor/target. The workbench shows a banner with a return-to-admin action. Returning revokes the impersonation session and rechecks the original administrator's access. Impersonating another administrator is blocked.
 
@@ -40,4 +40,4 @@ npm run test:integration
 
 `test:admin` creates a unique PostgreSQL schema, exercises real SQL and authorization, and removes only that schema. It checks pagination, daily totals beyond a feed page, deduplication, recovery, acknowledgment, stale heartbeats, retained AI usage costs, auditing, impersonation and repeated migration. The frontend tests execute the maintained admin JavaScript against hostile-content and polling scenarios.
 
-For a test-only browser preview, run `npx tsx scripts/admin-integration.ts --serve`, use the test-account login, then open `http://127.0.0.1:4175/admin.html`. The preview uses synthetic data and does not start the exchange worker or send provider notifications.
+For a test-only entry-page browser preview, run `npx tsx scripts/admin-integration.ts --serve`, then open `http://127.0.0.1:4175/admin`. The preview uses synthetic data and does not start the exchange worker or send provider notifications. Google credentials are not configured in this fixture; the login page clearly reports that condition. Local test login cannot open Admin. Automated OAuth tests use signed test tokens and mocked Google responses; production Google sign-in must be verified by the authorized account owner. Admin sign-out ends the shared session; no separate admin password or MFA enrollment is introduced.

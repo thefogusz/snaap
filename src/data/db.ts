@@ -8,6 +8,7 @@ export async function migrate(db: pg.Pool) {
     CREATE TABLE IF NOT EXISTS users (id uuid PRIMARY KEY, google_sub text UNIQUE, email text, created_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE IF NOT EXISTS sessions (token_hash text PRIMARY KEY, user_id uuid NOT NULL REFERENCES users, expires_at timestamptz NOT NULL);
     CREATE TABLE IF NOT EXISTS oauth_attempts (state_hash text PRIMARY KEY, verifier_hash text NOT NULL, nonce text NOT NULL, expires_at timestamptz NOT NULL);
+    ALTER TABLE oauth_attempts ADD COLUMN IF NOT EXISTS purpose text NOT NULL DEFAULT 'public';
     CREATE TABLE IF NOT EXISTS rules (id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users, revision integer NOT NULL DEFAULT 1, active boolean NOT NULL DEFAULT false, spec jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE IF NOT EXISTS rule_revisions (rule_id uuid REFERENCES rules, revision integer, spec jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(rule_id,revision));
     CREATE TABLE IF NOT EXISTS conversations (id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users, title text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());

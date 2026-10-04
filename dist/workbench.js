@@ -1104,21 +1104,6 @@ async function refresh({ reuseMe = false } = {}) {
     };
     accountMenu.append(signout);
   }
-  if (state.me?.isAdmin && !$('#auth-admin-link')) {
-    const adminLink = document.createElement('a');
-    adminLink.id = 'auth-admin-link';
-    adminLink.className = 'auth-signout';
-    adminLink.href = '/admin.html';
-    adminLink.style.display = 'flex';
-    adminLink.style.alignItems = 'center';
-    adminLink.style.gap = '8px';
-    adminLink.style.textDecoration = 'none';
-    adminLink.style.color = 'inherit';
-    adminLink.innerHTML = '🛡️ <span>ระบบผู้ดูแล (Admin)</span>';
-    const signout = $('#auth-signout');
-    if (signout) signout.before(adminLink);
-    else accountMenu.append(adminLink);
-  }
   if(state.me?.impersonating && !document.getElementById('admin-impersonation-banner')) {
     const banner=document.createElement('div');
     banner.id='admin-impersonation-banner';
@@ -1134,7 +1119,7 @@ async function refresh({ reuseMe = false } = {}) {
       try {
         const response=await fetch('/api/v1/impersonation/restore',{method:'POST',headers:{'x-snaap-client':'web','content-type':'application/json'},body:'{}'});
         if(!response.ok) throw new Error('กลับบัญชีผู้ดูแลไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่');
-        location.href='/admin.html';
+        location.href='/admin';
       } catch(error) {message.textContent=error.message;restore.disabled=false;}
     });
     banner.append(message,restore);

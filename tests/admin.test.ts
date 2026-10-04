@@ -32,7 +32,7 @@ test("system log buffer records, retrieves, and clears entries", () => {
   assert.equal(getSystemLogs().length, 0);
 });
 
-test("isUserAdmin checks role, email list, and local mode", async () => {
+test("isUserAdmin requires the sole allowed Google identity", async () => {
   const mockDb = (userRow: any) =>
     ({
       query: async () => ({
@@ -62,7 +62,7 @@ test("isUserAdmin checks role, email list, and local mode", async () => {
     "123",
     false,
   );
-  assert.equal(res.isAdmin, true);
+  assert.equal(res.isAdmin, false);
 
   // Local user in local mode
   res = await isUserAdmin(
@@ -74,7 +74,7 @@ test("isUserAdmin checks role, email list, and local mode", async () => {
     "00000000-0000-4000-8000-000000000001",
     true,
   );
-  assert.equal(res.isAdmin, true);
+  assert.equal(res.isAdmin, false);
 
   // User in ADMIN_EMAILS
   const origEnv = process.env.ADMIN_EMAILS;
@@ -85,10 +85,26 @@ test("isUserAdmin checks role, email list, and local mode", async () => {
       "456",
       false,
     );
-    assert.equal(res.isAdmin, true);
+    assert.equal(res.isAdmin, false);
   } finally {
-    process.env.ADMIN_EMAILS = origEnv;
+    if (origEnv === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = origEnv;
   }
+  res = await isUserAdmin(
+    mockDb({
+      id: "allowed",
+      email: "Kirdssadee@gmail.com",
+      google_sub: "google-verified",
+      role: "user",
+    }),
+    "allowed",
+  );
+  assert.equal(res.isAdmin, true);
+  res = await isUserAdmin(
+    mockDb({ id: "fake", email: "kirdssadee@gmail.com", role: "admin" }),
+    "fake",
+  );
+  assert.equal(res.isAdmin, false);
 });
 
 test("admin endpoints enforce permissions and support plan/quota updates", async () => {
@@ -107,7 +123,7 @@ test("admin endpoints enforce permissions and support plan/quota updates", async
       }
       if (
         sql.includes(
-          "SELECT id, email, role, created_at FROM users WHERE id=$1",
+          "SELECT id, email, google_sub, role, created_at FROM users WHERE id=$1",
         )
       ) {
         return {
@@ -115,7 +131,8 @@ test("admin endpoints enforce permissions and support plan/quota updates", async
           rows: [
             {
               id: testUserId,
-              email: "local@snaap.invalid",
+              email: "kirdssadee@gmail.com",
+              google_sub: "verified-google-sub",
               role: "admin",
               created_at: new Date(),
             },

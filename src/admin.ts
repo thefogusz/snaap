@@ -6,6 +6,7 @@ import { ApiError } from "./errors.js";
 import { transaction } from "./data/db.js";
 import { registerAdminEvents, auditAdmin } from "./admin-events.js";
 import { hash } from "./crypto.js";
+import { ADMIN_EMAIL, isAdminIdentity } from "./admin-access.js";
 
 export interface SystemLogEntry {
   id: string;
@@ -48,27 +49,12 @@ export async function isUserAdmin(
 ): Promise<{ isAdmin: boolean; user?: any }> {
   try {
     const result = await db.query(
-      "SELECT id, email, role, created_at FROM users WHERE id=$1",
+      "SELECT id, email, google_sub, role, created_at FROM users WHERE id=$1",
       [userId],
     );
     if (!result.rowCount) return { isAdmin: false };
     const user = result.rows[0];
-    if (user.role === "admin") return { isAdmin: true, user };
-    if (
-      local &&
-      (user.email === "local@snaap.invalid" ||
-        user.id === "00000000-0000-4000-8000-000000000001")
-    ) {
-      return { isAdmin: true, user };
-    }
-    const adminEmails = (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-    if (user.email && adminEmails.includes(user.email.toLowerCase())) {
-      return { isAdmin: true, user };
-    }
-    return { isAdmin: false, user };
+    return { isAdmin: isAdminIdentity(user), user };
   } catch {
     return { isAdmin: false };
   }
@@ -156,14 +142,8 @@ export function registerAdmin(
         "SELECT count(*)::int AS n FROM entitlements WHERE pro_until > now()",
       ),
       db.query(
-        "SELECT count(*)::int AS n FROM users WHERE role='admin' OR lower(email)=ANY($1::text[]) OR ($2 AND (email='local@snaap.invalid' OR id='00000000-0000-4000-8000-000000000001'))",
-        [
-          (process.env.ADMIN_EMAILS ?? "")
-            .split(",")
-            .map((s) => s.trim().toLowerCase())
-            .filter(Boolean),
-          !!options.local,
-        ],
+        "SELECT count(*)::int AS n FROM users WHERE google_sub IS NOT NULL AND lower(email)=$1",
+        [ADMIN_EMAIL],
       ),
       db.query("SELECT count(*)::int AS n FROM rules WHERE deleted_at IS NULL"),
       db.query(
@@ -286,19 +266,16 @@ export function registerAdmin(
       })
       .strict()
       .parse(req.query);
-    const adminEmails = (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
+    const adminEmails = [ADMIN_EMAIL];
 
     const result = await db.query(
       `
       WITH listed AS (SELECT
         u.id, 
         u.email, 
-        u.role, 
+        u.role, u.google_sub,
         u.created_at,
-        (u.role='admin' OR COALESCE(lower(u.email)=ANY($1::text[]),false) OR ($2 AND u.id='00000000-0000-4000-8000-000000000001')) AS is_admin,
+        (u.google_sub IS NOT NULL AND COALESCE(lower(u.email)=ANY($1::text[]),false)) AS is_admin,
         e.pro_until,
         (e.pro_until IS NOT NULL AND e.pro_until > now()) AS is_pro,
         (SELECT count(*)::int FROM rules r WHERE r.owner_id = u.id AND r.deleted_at IS NULL) AS rules_count,
@@ -308,19 +285,12 @@ export function registerAdmin(
         (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'deep' AND ul.created_at >= date_trunc('month', now()) AND ul.status IN ('RESERVED','COMPLETED') AND NOT quota_waived) AS ai_deep_used
       FROM users u
       LEFT JOIN entitlements e ON e.owner_id = u.id
-      WHERE ($3='' OR position(lower($3) IN lower(COALESCE(u.email,'')))>0 OR position(lower($3) IN u.id::text)>0)
-      AND ($4::uuid IS NULL OR (u.created_at,u.id)<(SELECT created_at,id FROM users WHERE id=$4)))
-      SELECT * FROM listed WHERE $5='all' OR ($5='pro' AND is_pro) OR ($5='free' AND NOT is_pro AND NOT is_admin) OR ($5='admin' AND is_admin)
-      ORDER BY created_at DESC,id DESC LIMIT $6
+      WHERE ($2='' OR position(lower($2) IN lower(COALESCE(u.email,'')))>0 OR position(lower($2) IN u.id::text)>0)
+      AND ($3::uuid IS NULL OR (u.created_at,u.id)<(SELECT created_at,id FROM users WHERE id=$3)))
+      SELECT * FROM listed WHERE $4='all' OR ($4='pro' AND is_pro) OR ($4='free' AND NOT is_pro AND NOT is_admin) OR ($4='admin' AND is_admin)
+      ORDER BY created_at DESC,id DESC LIMIT $5
     `,
-      [
-        adminEmails,
-        !!options.local,
-        q.search,
-        q.before ?? null,
-        q.filter,
-        q.limit + 1,
-      ],
+      [adminEmails, q.search, q.before ?? null, q.filter, q.limit + 1],
     );
 
     return {
@@ -328,12 +298,7 @@ export function registerAdmin(
         result.rows.length > q.limit ? result.rows[q.limit - 1].id : null,
       users: result.rows.slice(0, q.limit).map((row) => ({
         ...row,
-        isAdmin:
-          row.role === "admin" ||
-          (!!row.email && adminEmails.includes(row.email.toLowerCase())) ||
-          (!!options.local &&
-            (row.email === "local@snaap.invalid" ||
-              row.id === "00000000-0000-4000-8000-000000000001")),
+        isAdmin: isAdminIdentity(row),
       })),
     };
   });
@@ -354,6 +319,12 @@ export function registerAdmin(
         "ระบุแพ็กเกจหรือสิทธิ์ที่ต้องการเปลี่ยน",
       )
       .parse(req.body);
+    if (body.role)
+      throw new ApiError(
+        409,
+        "ADMIN_ALLOWLIST_LOCKED",
+        "สิทธิ์ผู้ดูแลจำกัดเฉพาะบัญชีที่อนุญาต ไม่สามารถเพิ่มหรือถอนผ่าน Dashboard",
+      );
 
     const updated = await transaction(db, async (c) => {
       const userExists = (
@@ -393,37 +364,6 @@ export function registerAdmin(
           [userId, body.plan],
         );
       }
-      if (body.role) {
-        if (body.role === "user" && userId === req.userId)
-          throw new ApiError(
-            409,
-            "SELF_DEMOTION",
-            "ไม่สามารถถอนสิทธิ์ Admin ของตัวเอง",
-          );
-        if (body.role === "user") {
-          const target = (
-            await c.query("SELECT email FROM users WHERE id=$1", [userId])
-          ).rows[0];
-          const configured = (process.env.ADMIN_EMAILS ?? "")
-            .split(",")
-            .map((s) => s.trim().toLowerCase());
-          if (
-            (target?.email &&
-              configured.includes(target.email.toLowerCase())) ||
-            (options.local && userId === "00000000-0000-4000-8000-000000000001")
-          )
-            throw new ApiError(
-              409,
-              "ADMIN_FROM_CONFIG",
-              "สิทธิ์นี้มาจากการตั้งค่าเซิร์ฟเวอร์ ต้องเปลี่ยน ADMIN_EMAILS ที่เซิร์ฟเวอร์",
-            );
-        }
-        await c.query("UPDATE users SET role=$2 WHERE id=$1", [
-          userId,
-          body.role,
-        ]);
-      }
-
       const updated = (
         await c.query(
           "SELECT u.id, u.email, u.role, e.pro_until FROM users u LEFT JOIN entitlements e ON e.owner_id=u.id WHERE u.id=$1",
