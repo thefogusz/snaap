@@ -508,6 +508,14 @@
 .channel-card-preview.line .channel-card-body {
   padding: 12px;
 }
+.channel-card-preview.line .channel-card-heading {
+  color: #f4f4f5;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
 .channel-card-preview.line .channel-signal-event {
   font-size: 14px;
 }

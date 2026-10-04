@@ -292,6 +292,18 @@ export function renderSignal(
                 paddingAll: "12px",
                 backgroundColor: "#151515",
                 contents: [
+                  ...(appearance.heading
+                    ? [
+                        {
+                          type: "text",
+                          text: clean(appearance.heading, 60),
+                          size: "sm",
+                          weight: "bold",
+                          color: "#F4F4F5",
+                          wrap: true,
+                        },
+                      ]
+                    : []),
                   {
                     type: "box",
                     layout: "horizontal",

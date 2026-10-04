@@ -42,3 +42,19 @@ test("chart appearance does not change for a sample flag; context remains outsid
     await chartPng({ ...signal, test: false }, "lime"),
   );
 });
+
+test("custom LINE heading is visible inside the card while creator stays in header", () => {
+  const card = renderSignal(
+    "LINE",
+    demoSignal(),
+    appearanceSchema.parse({
+      heading: "My signals",
+      showCreator: true,
+      creatorName: "Gus",
+    }),
+    "https://snaap.example",
+  ).payload.contents;
+  assert.equal(card.body.contents[0].text, "My signals");
+  assert.equal(card.header.contents[0].text, "snaap.me");
+  assert.equal(card.header.contents[1].text, "Gus");
+});
