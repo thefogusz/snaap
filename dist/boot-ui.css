@@ -3,22 +3,28 @@ html[data-boot="loading"] .app { visibility:hidden; pointer-events:none; }
 html[data-boot="loading"] .startup-status {
   position:fixed; inset:0; z-index:200;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:16px; background:var(--bg); color:var(--muted); font-size:14px;
+  gap:16px; background:#101011; color:#f4f4f5; font-size:14px;
 }
-.startup-logo { display:inline-flex; align-items:baseline; color:var(--ink); font-size:40px; font-weight:800; letter-spacing:-2px; line-height:1; }
-.startup-letter { display:inline-block; animation:startup-wave 1.8s ease-in-out infinite; animation-delay:calc(var(--letter) * .12s); }
-.startup-star { display:inline-block; margin-left:3px; color:var(--lime); transform-origin:50% 38%; animation:startup-spark 1.8s ease-in-out infinite; animation-delay:.6s; }
+.startup-logo { display:inline-flex; align-items:baseline; color:#f4f4f5; font-size:40px; font-weight:800; letter-spacing:-2px; line-height:1; }
+.startup-letter { display:inline-block; animation:startup-wave .4s ease-in-out both; animation-delay:calc(.18s + var(--letter) * .12s); }
+.startup-star {
+  display:inline-block; margin-left:3px;
+  background:linear-gradient(to bottom, #f4f4f5 50%, var(--lime) 50%);
+  background-size:100% 200%; background-position:0 0;
+  background-clip:text; -webkit-background-clip:text; color:transparent;
+  animation:startup-fill .45s ease-out .78s both;
+}
 @keyframes startup-wave {
-  0%, 35%, 100% { color:var(--ink); transform:translateY(0); text-shadow:none; }
-  14% { color:var(--lime); transform:translateY(-2px); text-shadow:0 0 16px rgb(208 246 76 / 35%); }
+  0%, 100% { color:#f4f4f5; text-shadow:none; }
+  45% { color:var(--lime); text-shadow:0 0 12px rgb(208 246 76 / 25%); }
 }
-@keyframes startup-spark {
-  0%, 35%, 100% { transform:rotate(0) scale(1); text-shadow:none; }
-  14% { transform:rotate(60deg) scale(1.18); text-shadow:0 0 18px rgb(208 246 76 / 65%); }
+@keyframes startup-fill {
+  from { background-position:0 0; }
+  to { background-position:0 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .startup-letter, .startup-star { animation:none; }
-  .startup-letter { color:var(--lime); }
+  .startup-star { background-position:0 100%; }
 }
 /* Suppress automatic CSS entrances during recovery. Navigation owns its motion. */
 .app .view:not([hidden]),
