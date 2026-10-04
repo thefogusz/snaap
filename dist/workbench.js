@@ -280,7 +280,7 @@ const chatPromptSamples = [
   'ช่วยออกแบบเซตอัปรอราคาย่อตัวในแนวโน้มขาขึ้น',
   'ตลาดออกข้าง ควรออกแบบเงื่อนไขแบบไหน?',
   'ช่วยออกแบบเซตอัป Long และ Short ให้มีเงื่อนไขชัดเจน',
-  'ช่วยย่อไอเดียเทรดของฉันให้เป็นเซตอัปไม่เกิน 6 เงื่อนไข',
+  'ช่วยย่อไอเดียเทรดของฉันให้เป็นเซตอัปไม่เกิน 20 เงื่อนไข',
   'ฉันดูกราฟได้วันละนิด ควรเลือกกรอบเวลาแบบไหน?',
   'ช่วยเปรียบเทียบการเล่นสั้นกับการถือหลายวัน',
   'จากประวัติที่ซิงก์ไว้ ฉันซื้อขายคู่ไหนและฝั่งไหนบ่อยที่สุด?',
@@ -882,9 +882,10 @@ function conditionUI(c, path) {
     return `<div class="condition-group"><select aria-label="เงื่อนไขกลุ่ม" data-path="${path}.op">${options(["AND", "OR"], c.op)}</select>${c.children.map((x, i) => `<details class="group-condition" data-condition-editor="${path}.children.${i}"><summary>ข้อ ${i + 1}<span>${esc(conditionText(x))}</span></summary><div>${conditionUI(x, `${path}.children.${i}`)}${c.children.length > 1 ? `<button class="text-button" data-remove="${path}.children.${i}">ลบข้อ ${i + 1}</button>` : ""}</div></details>`).join("")}<button class="text-button" data-add="${path}">เพิ่มเงื่อนไข</button></div>`;
   if (c.kind === "HOLD")
     return `<label>ต่อเนื่องกี่แท่ง<input type="number" min="1" max="30" data-path="${path}.bars" value="${c.bars}"></label>${conditionUI(c.condition, path + ".condition")}`;
-  return `<div class="condition-line">${operandUI(c.left, path + ".left", "ค่าที่ตรวจ")}<label class="comparison-field">การเปรียบเทียบ<select class="operator" data-path="${path}.op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], c.op)}</select></label>${operandUI(c.right, path + ".right", "เทียบกับ")}</div><div class="condition-tools"><button class="text-button" data-group="${path}">จัดกลุ่ม AND / OR</button><button class="text-button" data-hold="${path}">ต่อเนื่องหลายแท่ง</button></div>`;
+  const chartLinks = [...new Set([c.left.timeframe,c.right.timeframe].filter(Boolean))].map(frame => `<button type="button" class="secondary" data-open-condition-chart="${esc(frame)}">ดูกราฟ ${esc(frame)}</button>`).join('');
+  return `<div class="condition-chart-links">${chartLinks}</div><div class="condition-line">${operandUI(c.left, path + ".left", "ค่าที่ตรวจ")}<label class="comparison-field">การเปรียบเทียบ<select class="operator" data-path="${path}.op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], c.op)}</select></label>${operandUI(c.right, path + ".right", "เทียบกับ")}</div><div class="condition-tools"><button class="text-button" data-group="${path}">จัดกลุ่ม AND / OR</button><button class="text-button" data-hold="${path}">ต่อเนื่องหลายแท่ง</button></div>`;
 }
-const MAX_SETUP_CONDITIONS = 6;
+const MAX_SETUP_CONDITIONS = 20;
 function setupConditionCount(spec) {
   const count = c => !c ? 0 : c.kind === "GROUP" ? c.children.reduce((n, child) => n + count(child), 0) : c.kind === "HOLD" ? count(c.condition) : 1;
   const branch = b => !b ? 0 : count(b.entry) + count(b.exit) + count(b.cancel) + (b.stages ?? []).reduce((n, stage) => n + count(stage.condition), 0);
@@ -892,7 +893,7 @@ function setupConditionCount(spec) {
 }
 function canAddSetupCondition() {
   if (setupConditionCount(state.draft) < MAX_SETUP_CONDITIONS) return true;
-  toast("ครบ 6 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่");
+  toast("ครบ 20 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่");
   return false;
 }
 function renderDesigner() {
@@ -932,7 +933,7 @@ function renderDesigner() {
   panel.querySelector(".design-toolbar").after(limitLabel);
   if (conditionCount >= MAX_SETUP_CONDITIONS) panel.querySelectorAll("[data-add], [data-group], [data-stage], [data-optional]").forEach(button => {
     button.disabled = true;
-    button.title = "ครบ 6 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
+    button.title = "ครบ 20 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
   });
   if (d.stages.length >= 5) panel.querySelector("[data-stage]").disabled = true;
   const draftLabel = document.createElement("p");
@@ -988,7 +989,7 @@ function showEditorFeedback(text, success = false, focus = true) {
 }
 function validateEditor() {
   if (setupConditionCount(state.draft) > MAX_SETUP_CONDITIONS) {
-    showEditorFeedback("เซตอัปมีได้สูงสุด 6 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
+    showEditorFeedback("เซตอัปมีได้สูงสุด 20 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
     return false;
   }
   panel
@@ -1177,6 +1178,7 @@ async function chat(text) {
   showDesigner();
   location.hash = "home";
   message(text, true);
+  appendChatImages([...state.images, ...(state.useMyData ? state.libraryImages : [])]);
   followingChat=true;
   requestAnimationFrame(scrollChatToLatest);
   $("#chat-input").value = "";
@@ -1243,9 +1245,9 @@ async function chat(text) {
         if(matchMedia('(min-width: 1100px)').matches)setWorkbenchTab('split');
       }
     }
-    state.images = [];
     state.crop = null;
     renderImages();
+    persistRecovery();
     await refresh();
   } catch (error) {
     message(error.message);
@@ -1262,11 +1264,45 @@ async function chat(text) {
     await refresh().catch(() => {});
   }
 }
+function appendChatImages(images) {
+  const unique = [...new Map(images.map(image => [image.id, image])).values()];
+  if (!unique.length) return;
+  const gallery = document.createElement('div');
+  gallery.className = 'chat-image-gallery user';
+  gallery.setAttribute('role', 'group');
+  gallery.setAttribute('aria-label', 'ภาพที่ผู้ใช้ส่ง');
+  for (const image of unique) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chat-image-thumbnail';
+    button.setAttribute('aria-haspopup', 'dialog');
+    const name = image.name ?? 'ภาพในบทสนทนา';
+    button.setAttribute('aria-label', 'ดูภาพเต็ม: ' + name);
+    const img = document.createElement('img');
+    img.src = '/api/v1/images/' + image.id;
+    img.alt = name;
+    img.className = 'chat-saved-image';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    button.onclick = () => import('./chat-images.js').then(({openChatImage}) => openChatImage(img.src, name, button));
+    button.append(img);
+    gallery.append(button);
+  }
+  $('#messages').append(gallery);
+}
+async function restoreChatImages(selectedIds) {
+  if (!state.conversation) return;
+  const conversationId = state.conversation;
+  const images = await api(`/conversations/${conversationId}/images`);
+  if (state.conversation !== conversationId) return;
+  state.images = selectedIds ? images.filter(image => selectedIds.includes(image.id)).slice(-5) : images.slice(-5);
+  renderImages();
+}
 function renderImages() {
   previews.innerHTML = state.images
     .map(
       (i) =>
-        `<span><img src="${i.url}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
+        `<span><img src="/api/v1/images/${i.id}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
     )
     .join("");
 }
@@ -1548,7 +1584,7 @@ panel.addEventListener("change", (e) => {
   } else if(t.hasAttribute('data-mirror-short')){
     const nextDraft=directionTools.setShortMirroring(state.draft,t.checked);
     if (setupConditionCount(nextDraft) > MAX_SETUP_CONDITIONS) {
-      toast("ตั้ง Long และ Short แยกกันได้รวมสูงสุด 6 เงื่อนไข ลดเงื่อนไขก่อนแยกฝั่ง");
+      toast("ตั้ง Long และ Short แยกกันได้รวมสูงสุด 20 เงื่อนไข ลดเงื่อนไขก่อนแยกฝั่ง");
       renderDesigner();
       return;
     }
@@ -1651,14 +1687,7 @@ async function loadChatHistory(){
       if (m.setup_changes?.length) await showSetupChanges(null, null, m.setup_changes);
       if (m.sources?.some((s) => !s.available))
         message("ข้อมูลอ้างอิงบางส่วนถูกลบแล้ว ข้อสรุปเดิมอาจใช้ต่อไม่ได้");
-      for (const source of m.sources ?? [])
-        if (source.type === "image" && source.available) {
-          const img = document.createElement("img");
-          img.src = "/api/v1/images/" + source.id;
-          img.alt = "ภาพในบทสนทนา";
-          img.className = "chat-saved-image";
-          $("#messages").append(img);
-        }
+      if(m.role === 'user')appendChatImages((m.sources ?? []).filter(source => source.type === 'image' && source.available));
     }};
     await paintPage(chatPage);
     requestAnimationFrame(scrollChatToLatest);
@@ -1710,6 +1739,7 @@ conversations.addEventListener("change", async () => {
     $("#messages").replaceChildren();
     showDesigner();
     await loadChatHistory();
+    await restoreChatImages();
   } catch (error) {
     toast(error.message);
   }
@@ -2009,7 +2039,7 @@ function persistRecovery() {
       savedId:state.saved?.id??null,draftRevision:state.draftRevision,persistedDraft:state.persistedDraft,
       chatText:$('#chat-input').value,followupText:$('#followup-input').value,
       tab:requestedWorkbenchMode??workbench.dataset.tab,designerOpen:!workbench.hidden,useMyData:state.useMyData,
-      aiMode:$('#ai-mode').value};
+      aiMode:$('#ai-mode').value,imageIds:state.images.map(image=>image.id)};
     const fingerprint=key+JSON.stringify(snapshot);
     if(fingerprint!==recoveryFingerprint){
       localStorage.setItem(key,JSON.stringify({...snapshot,updatedAt:Date.now()}));
@@ -2044,6 +2074,7 @@ async function restoreRecovery() {
       }
     }
     if(stored.useMyData){try{await setMyData(true);}catch{}}
+    if(state.conversation){try{await restoreChatImages(Array.isArray(stored.imageIds)?stored.imageIds:undefined);}catch{}}
   }
   recoveryReady=true;
   if(state.draft)queueDraftSave();

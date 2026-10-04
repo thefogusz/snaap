@@ -372,26 +372,24 @@ export function registerMarkets(
       .object({
         spec: strategySchema,
         indicators: z.array(operand).max(8).default([]),
+        chartFrame: z.enum(["5m", "15m", "1h", "4h", "1d"]).optional(),
       })
       .strict()
       .parse(req.body);
     const spec = input.spec;
+    const chartFrame = input.chartFrame ?? spec.timeframe;
+    if (!neededFrames(spec).includes(chartFrame))
+      throw new ApiError(400, "CHART_FRAME", "เลือกกรอบเวลาที่ใช้ในเงื่อนไขเซตอัป");
     if (spec.exchange.length !== 1 || spec.pairs.length !== 1)
       throw new ApiError(
         400,
         "PREVIEW_TARGET",
         "เลือกหนึ่งกระดานและหนึ่งคู่เทรดสำหรับกราฟนี้",
       );
-    const series = await strategySeries(
-      spec,
-      spec.exchange[0],
-      spec.pairs[0],
-      input.indicators,
-    );
     for (const o of input.indicators) {
       if (
         o.kind !== "INDICATOR" ||
-        o.timeframe !== spec.timeframe ||
+        o.timeframe !== chartFrame ||
         (o.name === "CUSTOM") !== !!o.formula
       )
         throw new ApiError(
@@ -400,12 +398,19 @@ export function registerMarkets(
           "อินดิเคเตอร์เสริมใช้กรอบเวลาของกราฟ",
         );
     }
+    const series = await strategySeries(
+      spec,
+      spec.exchange[0],
+      spec.pairs[0],
+      input.indicators,
+    );
     return {
-      ...preview(spec, series, input.indicators),
+      ...preview(spec, series, input.indicators, chartFrame),
       source: {
         exchange: spec.exchange[0],
         pair: spec.pairs[0],
-        frame: spec.timeframe,
+        frame: chartFrame,
+        evaluationFrame: spec.timeframe,
         asOf: new Date().toISOString(),
       },
     };

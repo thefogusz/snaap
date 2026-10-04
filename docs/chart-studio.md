@@ -4,6 +4,9 @@ The editor now selects one exchange and one chart pair. Existing multi-target re
 
 ## Shipped
 
+- Condition timeframe views: the chart has one button per timeframe used by the setup, including confirmation, exit, cancel and independent Short conditions. Each comparison also offers a direct “ดูกราฟ” shortcut. Selecting a view changes candles and visible indicators only; the draft and evaluation timeframe remain unchanged.
+- Preview accepts optional `chartFrame` restricted to the setup's required frames. `source.frame` identifies the displayed candles and `source.evaluationFrame` identifies the signal clock. Raw `timeline` and `events` remain evaluated on the original strategy. Separate `chartTimeline` uses the most recent non-stale evaluation at or before each displayed close; `chartEvents` places signals on their containing displayed closed candle, retaining the original `signalTime`. Gaps have no invented evidence or markers.
+
 - Locally served Lightweight Charts 5.2.0, Apache 2.0 license/NOTICE and TradingView attribution.
 - Candles, condition indicator overlays/panes, entry/exit/cancel/expiry markers, zoom/pan, play/pause, step, timeline scrub, and per-bar evidence.
 - Debounced automatic preview after editor or agent draft updates; response generations reject stale results. Preview is authenticated and does not persist replay rows on every keystroke.
@@ -14,6 +17,8 @@ The editor now selects one exchange and one chart pair. Existing multi-target re
 - Agent can search actual instruments and must validate a proposed instrument before returning a draft.
 
 ## Verification
+
+- Harness compatibility (2026-10-05): deterministic provider and public-candle fixtures run through the actual authenticated turn, draft-save and preview routes. The harness creates a 20-condition 4h/1h/15m/5m draft; all four chart views retain the same original evaluation timeline and events; replay_strategy uses the current draft's 5m clock; a follow-up changes only the 5m RSI threshold. View-only chat questions do not force proposal tools, and invalid proposals containing chartFrame are rejected without changing the stored draft/revision. Existing image, context, refund and budget contract groups still pass. This verifies runtime contracts, not a guarantee that a live model always follows instructions.
 
 - 21 unit tests passed, including shared-engine preview parity, higher-timeframe future exclusion, and insufficient data. TypeScript check passed.
 - Read-only Spot catalog probes returned Binance 1372, Bybit 530, OKX 1143, Bitget 3387, MEXC 1822 pairs at test time (counts change).

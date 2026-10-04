@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 import pg from "pg";
 export async function localDatabase() {
   const directory = path.resolve(".local");
+  const port = Number(process.env.SNAAP_LOCAL_DB_PORT ?? 55432);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid SNAAP_LOCAL_DB_PORT');
   await mkdir(directory, { recursive: true });
   const secretFile = path.join(directory, "database-password");
   let password: string;
@@ -16,7 +18,7 @@ export async function localDatabase() {
     password = randomBytes(32).toString("hex");
     await writeFile(secretFile, password, { mode: 0o600 });
   }
-  const url = `postgresql://snaap:${password}@127.0.0.1:55432/snaap_utf8`;
+  const url = `postgresql://snaap:${password}@127.0.0.1:${port}/snaap_utf8`;
   const probe = new pg.Client({
     connectionString: url,
     connectionTimeoutMillis: 1500,
@@ -34,7 +36,7 @@ export async function localDatabase() {
     databaseDir,
     user: "snaap",
     password,
-    port: 55432,
+    port,
     persistent: true,
     authMethod: "scram-sha-256",
     initdbFlags: ["--encoding=UTF8", "--locale=C"],

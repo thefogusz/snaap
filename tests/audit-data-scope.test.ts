@@ -6,12 +6,20 @@ import {registerFiles} from '../src/files.js';
 import {protectHistoryTransport,historyExchanges} from '../src/history.js';
 import {strategySchema} from '../src/domain/engine.js';
 
-test('six leaf conditions are accepted and seven are rejected, including across lifecycle stages',()=>{
+test('twenty leaf conditions are accepted and twenty-one rejected across lifecycle and short branches',()=>{
  const condition={kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe:'5m'},right:{kind:'CONSTANT',value:100}};
  const spec={schemaVersion:2,name:'Audit limits',exchange:['MEXC'],market:'Spot',pairs:['BTC/USDT'],timeframe:'5m',entry:condition,stages:[],cooldownBars:0,destinations:[]};
- assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(6).fill(condition)}}).success,true);
- assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(7).fill(condition)}}).success,false);
- assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(5).fill(condition)},exit:condition,cancel:condition}).success,false);
+ assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(20).fill(condition)}}).success,true);
+ assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(21).fill(condition)}}).success,false);
+ const group=(n:number)=>({kind:'GROUP',op:'AND',children:Array(n).fill(condition)});
+ assert.equal(strategySchema.safeParse({...spec,entry:group(18),exit:condition,cancel:condition}).success,true);
+ assert.equal(strategySchema.safeParse({...spec,entry:group(19),exit:condition,cancel:condition}).success,false);
+ assert.equal(strategySchema.safeParse({...spec,entry:group(19),stages:[{condition,withinBars:3}]}).success,true);
+ const futures={...spec,market:'Perpetual Futures',side:'BOTH',entry:group(10),short:{entry:group(10),stages:[],cooldownBars:0}};
+ assert.equal(strategySchema.safeParse(futures).success,true);
+ assert.equal(strategySchema.safeParse({...futures,short:{entry:group(11),stages:[],cooldownBars:0}}).success,false);
+ assert.equal(strategySchema.safeParse({...spec,market:'Perpetual Futures',side:'BOTH',mirrorShort:true,entry:group(20)}).success,true);
+ assert.equal(strategySchema.safeParse({...spec,entry:{kind:'HOLD',bars:2,condition:group(20)}}).success,true);
 });
 
 test('image deletion honors owner and selected workspace scope',async()=>{

@@ -8,6 +8,41 @@
   const status = studio.querySelector("[data-chart-status]");
   const canvas = studio.querySelector(".studio-canvas");
   const scrub = studio.querySelector("[data-scrub]");
+  const framePicker = document.createElement('div');
+  framePicker.className = 'studio-frame-picker';
+  framePicker.setAttribute('role', 'group');
+  framePicker.setAttribute('aria-label', 'กราฟตามไทม์เฟรมของเงื่อนไข');
+  studio.querySelector('header').after(framePicker);
+  let chartFrame = null;
+  function conditionFrames(draft) {
+    const used = new Set([draft.timeframe]);
+    function walk(c) {
+      if (!c) return;
+      if (c.kind === 'GROUP') c.children.forEach(walk);
+      else if (c.kind === 'HOLD') walk(c.condition);
+      else [c.left,c.right].forEach(o => { if (o.timeframe) used.add(o.timeframe); });
+    }
+    [draft,draft.short].filter(Boolean).forEach(b => {
+      walk(b.entry); b.stages.forEach(s => walk(s.condition)); walk(b.exit); walk(b.cancel);
+    });
+    return tf.filter(frame => used.has(frame));
+  }
+  function selectFrame(frame) {
+    if (!state.draft || !conditionFrames(state.draft).includes(frame)) return;
+    chartFrame = frame;
+    clear();
+    update(true);
+  }
+  framePicker.onclick = e => {
+    const button = e.target.closest('[data-chart-frame]');
+    if (button) selectFrame(button.dataset.chartFrame);
+  };
+  panel.addEventListener('click', e => {
+    const button = e.target.closest('[data-open-condition-chart]');
+    if (!button) return;
+    selectFrame(button.dataset.openConditionChart);
+    studio.scrollIntoView({block:'start',behavior:'smooth'});
+  });
   let chartPair=null;
   const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector("header").append(chartPickerWrap);
   chartPicker.onchange=()=>{chartPair=chartPicker.value;update(true);};
@@ -79,8 +114,8 @@
       ),
     );
     markers.setMarkers(
-      result.events
-        .filter((e) => e.time <= cut)
+      result.chartEvents
+        .filter((e) => e.time <= cut && e.signalTime <= cut)
         .map((e) => ({
           time: e.time / 1000,
           position: (e.kind === "ENTRY") !== (e.side === "SHORT") ? "belowBar" : "aboveBar",
@@ -94,14 +129,14 @@
           }[e.kind] + " · " + ({SPOT:"Spot",LONG:"Long",SHORT:"Short"}[e.side] ?? "ไม่ระบุฝั่ง"),
         })),
     );
-    const bar = result.timeline[at];
+    const bar = result.chartTimeline[at];
     studio.querySelector("[data-chart-evidence]").innerHTML =
-      barEvidence(bar) +
-      (bar.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+      (barEvidence(bar) || '<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>') +
+      (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
     if (fit) fitFrame();
   }
   function render(data) {
-    const oldRange = chart?.timeScale().getVisibleLogicalRange();
+    const oldRange = result?.source.frame === data.source.frame ? chart?.timeScale().getVisibleLogicalRange() : null;
     const selectedTime = result?.candles[at]?.time;
     const paused = result && at < result.candles.length - 1;
     clear();
@@ -171,37 +206,45 @@
     if (oldRange) chart.timeScale().setVisibleLogicalRange(oldRange);
     chart.subscribeClick((p) => {
       if (!p.time) return;
-      const index = data.timeline.findIndex((b) => b.time / 1000 === p.time);
+      const index = data.candles.findIndex((b) => b.time / 1000 === p.time);
       if (index < 0) return;
-      const bar = data.timeline[index];
+      const bar = data.chartTimeline[index];
       studio.querySelector("[data-chart-evidence]").innerHTML =
-        barEvidence(bar) +
-        (bar.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+        (barEvidence(bar) || '<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>') +
+        (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
       studio.querySelector(".chart-evidence").open = true;
     });
-    status.textContent = `${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
+    status.textContent = `${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · ตรวจทุก ${data.source.evaluationFrame} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
   }
   async function update(force = false) {
     if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;
+    const availableFrames = conditionFrames(state.draft);
+    if (!availableFrames.includes(chartFrame)) chartFrame = state.draft.timeframe;
+    if (framePicker.dataset.frames !== availableFrames.join(',')) {
+      framePicker.dataset.frames = availableFrames.join(',');
+      framePicker.innerHTML = '<span>กราฟเงื่อนไข</span>' + availableFrames.map(frame => `<button type="button" data-chart-frame="${frame}">${frame}</button>`).join('');
+    }
+    framePicker.querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.chartFrame === chartFrame)));
     if(!state.draft.pairs.includes(chartPair))chartPair=state.draft.pairs[0];
     chartPickerWrap.hidden=state.draft.pairs.length<2;
     chartPicker.innerHTML=state.draft.pairs.map(pair=>`<option value="${esc(pair)}">${esc(pair)}</option>`).join("");chartPicker.value=chartPair;
-    const next = JSON.stringify({...state.draft,pairs:[chartPair]});
+    const spec = {...state.draft,pairs:[chartPair]};
+    const next = JSON.stringify({spec,chartFrame});
     const draftAtRequest=JSON.stringify(state.draft);
     if (!force && next === key && result) return;
     key = next;
     const token = ++generation;
     stop();
     studio.querySelector("[data-chart-title]").textContent =
-      `${state.draft.exchange.join(", ")} · ${chartPair} · ${state.draft.timeframe} · ${directionLabel(state.draft.side,state.draft.market)}`;
+      `${state.draft.exchange.join(", ")} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
     if (state.draft.exchange.length !== 1 || !state.draft.pairs.length) {
       status.textContent = "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ";
       return;
     }
     status.textContent = "กำลังคำนวณกราฟและสัญญาณ…";
     try {
-      const data = await api("/preview", "POST", {spec:JSON.parse(next)});
-      if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==JSON.parse(next).pairs[0]) return;
+      const data = await api("/preview", "POST", JSON.parse(next));
+      if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==spec.pairs[0]) return;
       render(data);
     } catch (e) {
       if (token === generation) {
@@ -211,7 +254,7 @@
     }
   }
   function schedule() {
-    if (JSON.stringify({...state.draft,pairs:[chartPair]}) === key && result) return;
+    if (JSON.stringify({spec:{...state.draft,pairs:[chartPair]},chartFrame}) === key && result) return;
     generation++;
     stop();
     studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);

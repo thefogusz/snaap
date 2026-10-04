@@ -11,11 +11,18 @@ import {
   strategyConditions,
   strategyBranches,
   signalSide,
+  frames,
 } from "./engine.js";
 
 // Rendering and alerts deliberately use the same evaluator, including closed-HTF rules.
-export function preview(spec: Strategy, series: Series, extra: Operand[] = []) {
+export function preview(
+  spec: Strategy,
+  series: Series,
+  extra: Operand[] = [],
+  chartFrame?: keyof typeof frames,
+) {
   const candles = series[spec.timeframe] ?? [];
+  const chartCandles = chartFrame ? (series[chartFrame] ?? []) : candles;
   const operands = new Map<string, Operand>();
   extra.forEach((o) => {
     if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
@@ -28,13 +35,19 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = []) {
         if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
   };
   strategyConditions(spec).forEach(walk);
-  const overlays = [...operands.values()].map((o) => ({
-    operand: o,
-    points: candles.map((c) => ({
-      time: c.time,
-      value: value(o, series, c.time, undefined, spec.timeframe) ?? null,
-    })),
-  }));
+  const overlays = [...operands.values()]
+    .filter(
+      (o) => !chartFrame || ("timeframe" in o && o.timeframe === chartFrame),
+    )
+    .map((o) => ({
+      operand: o,
+      points: chartCandles.map((c) => ({
+        time: c.time,
+        value:
+          value(o, series, c.time, undefined, chartFrame ?? spec.timeframe) ??
+          null,
+      })),
+    }));
   let state = emptyLifecycle();
   const timeline = candles.map((bar) => {
     const branches = strategyBranches(spec).map((branch) => {
@@ -86,5 +99,27 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = []) {
       }),
     };
   });
-  return { candles, overlays, timeline, events: replay(spec, series) };
+  // Viewing another timeframe must never change the strategy's evaluation clock.
+  let index = -1;
+  const chartTimeline = chartCandles.map((c) => {
+    while (index + 1 < timeline.length && timeline[index + 1].time <= c.time)
+      index++;
+    const bar = timeline[index];
+    return bar && c.time - bar.time < frames[spec.timeframe] ? bar : null;
+  });
+  const events = replay(spec, series);
+  const chartEvents = events.flatMap((e) => {
+    const bar = chartCandles.find((c) => c.time >= e.time);
+    return bar && bar.time - e.time < frames[chartFrame ?? spec.timeframe]
+      ? [{ ...e, time: bar.time, signalTime: e.time }]
+      : [];
+  });
+  return {
+    candles: chartCandles,
+    overlays,
+    timeline,
+    chartTimeline,
+    events,
+    chartEvents,
+  };
 }
