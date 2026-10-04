@@ -21,11 +21,10 @@ export function outputLimit(mode: "standard" | "deep") {
     throw new Error("AI_OUTPUT_CONFIGURATION_REQUIRED");
   return value;
 }
-/** Conservative UTF8-byte token bound plus a reserved allowance for each normalized image. */
+/** Text/output estimate only. Image tokens are recorded from provider usage, not reserved here. */
 export function boundCost(
   instructions: string,
   messages: unknown,
-  images: number,
   rate: ReturnType<typeof pricing>,
   maxOutputTokens = 2000,
 ) {
@@ -35,7 +34,7 @@ export function boundCost(
       : value,
   );
   return (
-    ((Buffer.byteLength(instructions + redacted) + images * 20000 + 1024) *
+    ((Buffer.byteLength(instructions + redacted) + 1024) *
       rate.input +
       maxOutputTokens * rate.output) /
     1e6

@@ -23,6 +23,6 @@ test('compatible provider spec wrapper is normalized without inventing fields',(
 });
 test('output reservation includes the configured reasoning/output limit',()=>{
   const rate={input:0.25,output:2,cap:0.03};
-  assert.equal(Number((boundCost('',[],0,rate,6000)-boundCost('',[],0,rate,2000)).toFixed(6)),0.008);
+  assert.equal(Number((boundCost('',[],rate,6000)-boundCost('',[],rate,2000)).toFixed(6)),0.008);
   assert.equal(outputLimit('standard'),6000);
 });

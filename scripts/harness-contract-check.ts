@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import { localDatabase } from "./postgres.js";
-import { database } from "../src/data/db.js";
+import { database, migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
 const requests: any[] = [];
 let reply: (body: any) => Promise<any> = async () => response("complete");
@@ -47,9 +48,12 @@ process.env.AI_API_KEY = "test-fixture";
 process.env.AI_STANDARD_INPUT_USD_PER_MILLION = "0.25";
 process.env.AI_STANDARD_OUTPUT_USD_PER_MILLION = "2";
 process.env.AI_STANDARD_MAX_USD = "0.03";
-const pg = await localDatabase(),
-  db = database(pg.url),
-  { app } = await buildApp(db, { local: true });
+const pg = process.env.TEST_DATABASE_URL
+    ? { url: process.env.TEST_DATABASE_URL, stop: async () => {} }
+    : await localDatabase(),
+  db = database(pg.url);
+if (process.env.TEST_DATABASE_URL) await migrate(db);
+const { app } = await buildApp(db, { local: true });
 const owner = randomUUID(),
   token = randomUUID(),
   headers = {
@@ -321,6 +325,43 @@ try {
   console.log(
     "PASS library image blocked with personal data off before provider call",
   );
+  const imageBytes = await sharp({ create: { width: 40, height: 80, channels: 3, background: '#123456' } }).png().toBuffer();
+  const imageIds: string[] = [];
+  for (let index = 0; index < 5; index++) {
+    const boundary = 'fixture-' + randomUUID();
+    const upload = await app.inject({
+      method: 'POST', url: `/api/v1/images?purpose=chat&conversationId=${id}`,
+      headers: { ...headers, 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="chart-${index}.png"\r\nContent-Type: image/png\r\n\r\n`),
+        imageBytes, Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]),
+    });
+    assert.equal(upload.statusCode, 201);
+    imageIds.push(upload.json().id);
+  }
+  reply = async () => response('เห็นภาพทั้งห้าภาพ');
+  const fiveImages = await app.inject({
+    method: 'POST', url: `/api/v1/conversations/${id}/turns`, headers,
+    payload: { text: 'เห็นภาพนี้ไหม', mode: 'standard', imageIds },
+  });
+  assert.equal(fiveImages.statusCode, 200, fiveImages.body);
+  assert.equal(requests.at(-1).input.at(-1).content.filter((item: any) => item.type === 'input_image').length, 5);
+  const beforeTooMany = requests.length;
+  const sixImages = await app.inject({
+    method: 'POST', url: `/api/v1/conversations/${id}/turns`, headers,
+    payload: { text: 'six images', mode: 'standard', imageIds: [...imageIds, randomUUID()] },
+  });
+  assert.equal(sixImages.statusCode, 400);
+  assert.equal(requests.length, beforeTooMany);
+  const mixedImages = await app.inject({
+    method: 'POST', url: `/api/v1/conversations/${id}/turns`, headers,
+    payload: { text: 'mixed images', mode: 'standard', imageIds, useMyData: true },
+  });
+  assert.equal(mixedImages.statusCode, 400);
+  assert.equal(mixedImages.json().error.code, 'IMAGE_LIMIT');
+  assert.equal(requests.length, beforeTooMany);
+  console.log('PASS five uploaded images reach provider; six and mixed overflow rejected without silent truncation');
 } finally {
   await app.close();
   await db.end();

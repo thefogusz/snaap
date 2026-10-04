@@ -114,7 +114,7 @@ tabs.hidden = true;
 const chatTools = document.createElement("div");
 chatTools.className = "chat-tools";
 chatTools.innerHTML =
-  '<button class="secondary" data-attach-image>แนบภาพ</button><input id="image-upload" type="file" accept="image/png,image/jpeg,image/webp" hidden><select id="ai-mode" aria-label="โหมด AI"><option value="standard">ปกติ</option><option value="deep">วิเคราะห์ละเอียด · Pro</option></select><button type="button" class="text-button my-data-toggle" data-context role="switch" aria-checked="false" aria-label="ใช้ข้อมูลของฉัน"><span>ใช้ข้อมูลของฉัน</span><span class="switch-track" aria-hidden="true"></span></button>';
+  '<button class="secondary" data-attach-image>แนบภาพ</button><input id="image-upload" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><select id="ai-mode" aria-label="โหมด AI"><option value="standard">ปกติ</option><option value="deep">วิเคราะห์ละเอียด · Pro</option></select><button type="button" class="text-button my-data-toggle" data-context role="switch" aria-checked="false" aria-label="ใช้ข้อมูลของฉัน"><span>ใช้ข้อมูลของฉัน</span><span class="switch-track" aria-hidden="true"></span></button>';
 $("#followup-form").before(chatTools);
 chatTools.querySelector('option[value="deep"]').disabled = true;
 chatTools.querySelector('option[value="deep"]').textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
@@ -220,6 +220,10 @@ const chatComposer = document.createElement("div");
 chatComposer.className = "chat-composer";
 $("#followup-form").before(chatComposer);
 chatComposer.append(previews, $("#followup-form"), chatTools, sources);
+const attachmentHint=document.createElement('p');
+attachmentHint.className='field-note attachment-hint';
+attachmentHint.textContent='แนบได้สูงสุด 5 ภาพ · Ctrl+V หรือลากภาพมาวาง · PNG / JPEG / WebP ไม่เกิน 5 MB ต่อภาพ';
+chatComposer.append(attachmentHint);
 const presetsReady=import('./presets.js').then(m=>m.initPresets({state,api,esc,toast,chatComposer,showDesigner,setWorkbenchTab,ensureConversation,saveDraft,renderDesigner,refresh,fullSummary,message,scrollChatToLatest,persistRecovery,chatEmpty}));
 chatTools.querySelector('[data-attach-image]').setAttribute('aria-label','แนบภาพ');
 chatTools.querySelector('[data-attach-image]').title='แนบภาพกราฟ';
@@ -1142,6 +1146,9 @@ async function refreshContext() {
 async function chat(text) {
   if (!text.trim() || state.busy) return;
   if(state.uploading){toast('กำลังแนบภาพ รอให้พรีวิวปรากฏก่อนส่ง');return;}
+  if(new Set([...state.images,...(state.useMyData?state.libraryImages:[])].map(image=>image.id)).size>5){
+    toast('ใช้ภาพรวมได้สูงสุด 5 ภาพต่อข้อความ รวมภาพจากข้อมูลของฉัน กรุณาลดภาพหรือปิดใช้ข้อมูลของฉัน');return;
+  }
   if (!state.health?.ai) {
     toast("AI ยังไม่พร้อมใช้งาน คุณตั้งเงื่อนไขเองได้");
     return;
@@ -1194,7 +1201,7 @@ async function chat(text) {
         selection,
         draft: state.draft,
         useMyData:state.useMyData,
-        imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))].slice(0,8),
+        imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))],
 
       },
     );
@@ -1242,6 +1249,63 @@ function renderImages() {
         `<span><img src="${i.url}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
     )
     .join("");
+}
+async function attachChatImages(files) {
+  if(state.busy||state.uploading)return toast('รอให้ข้อความหรือภาพก่อนหน้าเสร็จก่อน');
+  const valid=[];
+  for(const file of files){
+    if(!['image/png','image/jpeg','image/webp'].includes(file.type)){
+      toast(`${file.name || 'ไฟล์นี้'}: รองรับ PNG, JPEG และ WebP`);continue;
+    }
+    if(file.size>5*1024*1024){toast(`${file.name}: ภาพต้องไม่เกิน 5 MB`);continue;}
+    valid.push(file);
+  }
+  if(!valid.length)return;
+  const remaining=5-state.images.length;
+  if(valid.length>remaining)return toast('แนบได้สูงสุด 5 ภาพต่อข้อความ กรุณาเลือกภาพให้น้อยลงหรือนำภาพเดิมออก');
+  state.uploading=true;
+  const workspaceAtUpload=state.workspaceId;
+  previews.setAttribute('aria-busy','true');
+  const progress=document.createElement('p');progress.setAttribute('role','status');
+  const updateProgress=index=>{progress.textContent=`กำลังแนบภาพ ${index}/${valid.length}…`;previews.append(progress);};
+  updateProgress(1);
+  try{
+    showDesigner();
+    setWorkbenchTab('chat');
+    await ensureConversation('บทสนทนาภาพ');
+    const uploadConversation=state.conversation;
+    for(const [index,file] of valid.entries()){
+      if(state.workspaceId!==workspaceAtUpload||state.conversation!==uploadConversation)break;
+      updateProgress(index+1);
+      const form=new FormData();form.append('file',file);
+      try{
+        const image=await api(`/images?purpose=chat&conversationId=${uploadConversation}`,'POST',form);
+        if(state.workspaceId!==workspaceAtUpload||state.conversation!==uploadConversation){toast('ภาพไม่ได้แนบเข้าบทสนทนาที่เพิ่งเปลี่ยน');break;}
+        state.crop=null;state.images.push(image);renderImages();
+      }catch(error){toast(`${file.name}: ${error.message}`);}
+    }
+  }catch(error){toast(error.message);}
+  finally{state.uploading=false;previews.removeAttribute('aria-busy');progress.remove();}
+}
+for(const target of [chatComposer,$('#chat-form')]){
+  target.addEventListener('paste',event=>{
+    const files=[...(event.clipboardData?.files ?? [])];
+    if(!files.length)return;
+    event.preventDefault();
+    void attachChatImages(files);
+  });
+  target.addEventListener('dragover',event=>{
+    if(!event.dataTransfer?.types.includes('Files'))return;
+    event.preventDefault();event.dataTransfer.dropEffect='copy';target.classList.add('is-image-dragover');
+  });
+  target.addEventListener('dragleave',event=>{
+    if(!target.contains(event.relatedTarget))target.classList.remove('is-image-dragover');
+  });
+  target.addEventListener('drop',event=>{
+    target.classList.remove('is-image-dragover');
+    if(!event.dataTransfer?.files.length)return;
+    event.preventDefault();void attachChatImages([...event.dataTransfer.files]);
+  });
 }
 function renderReplay() {
   const target = $("#replay-result");
@@ -1533,24 +1597,9 @@ $("#chat-input").addEventListener("keydown", (e) => {
 document.addEventListener("change", async (e) => {
   try {
     if (e.target.id === "image-upload") {
-      const file = e.target.files[0];
+      const files = [...e.target.files];
       e.target.value = "";
-      if (!file) return;
-      if (state.images.length >= 3) return toast("แนบได้ครั้งละ 3 ภาพ");
-      const form = new FormData();
-      form.append("file", file);
-      if(state.busy||state.uploading)return toast('รอให้ข้อความหรือภาพก่อนหน้าเสร็จก่อน');
-      state.uploading=true;
-      const workspaceAtUpload=state.workspaceId,conversationAtUpload=state.conversation;
-      previews.setAttribute('aria-busy','true');
-      const progress=document.createElement('p');progress.setAttribute('role','status');progress.textContent='กำลังแนบภาพ…';previews.append(progress);
-      try{
-        await ensureConversation('บทสนทนาภาพ');
-        const uploadConversation=state.conversation;
-        const image=await api(`/images?purpose=chat&conversationId=${uploadConversation}`,"POST",form);
-        if(state.workspaceId!==workspaceAtUpload||state.conversation!==uploadConversation){toast('ภาพไม่ได้แนบเข้าบทสนทนาที่เพิ่งเปลี่ยน');return;}
-        state.crop=null;state.images.push(image);renderImages();
-      }finally{state.uploading=false;previews.removeAttribute('aria-busy');progress.remove();}
+      await attachChatImages(files);
     }
     if (e.target.id === "history-upload") {
       const file = e.target.files[0];
