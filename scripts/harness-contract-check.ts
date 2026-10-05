@@ -393,6 +393,26 @@ try {
   assert.ok(requests.at(-1).instructions.includes('navigation only, not market evidence'));
   console.log('PASS studio context rejects wrong pair/path before provider; inspect tool returns real closed-bar evidence on evaluation timeframe');
 
+  const oldMessageIds:string[]=[];
+  for(let index=0;index<10;index++) {
+    const messageId=randomUUID();oldMessageIds.push(messageId);
+    await db.query("INSERT INTO messages(id,conversation_id,role,content,sources,created_at) VALUES($1,$2,$3,$4,'[]',now()+$5*interval '1 millisecond')",
+      [messageId,id,index%2===0?'user':'assistant','OLD_BUDGET_HISTORY '+ 'เก่า'.repeat(14000),index-20]);
+  }
+  reply = async () => response('Current setup and image preserved');
+  const compactedTurn = await app.inject({
+    method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,
+    payload:{text:'CURRENT_BUDGET_REQUEST',mode:'standard',draft:studioSpec,imageIds:[imageIds[0]]},
+  });
+  assert.equal(compactedTurn.statusCode,200,compactedTurn.body);
+  const compactedRequest=requests.at(-1);
+  assert.ok(compactedRequest.input.filter((item:any)=>typeof item.content==='string' && item.content.includes('OLD_BUDGET_HISTORY')).length<10);
+  assert.ok(JSON.stringify(compactedRequest.input).includes('CURRENT_BUDGET_REQUEST'));
+  assert.equal(compactedRequest.input.at(-1).content.filter((item:any)=>item.type==='input_image').length,1);
+  assert.ok(compactedRequest.instructions.includes('Studio contract'));
+  assert.equal((await db.query('SELECT count(*) n FROM messages WHERE id=ANY($1::uuid[])',[oldMessageIds])).rows[0].n,'10');
+  console.log('PASS budget compaction preserves current draft and image, reaches provider, and does not delete stored history');
+
 } finally {
   await app.close();
   await db.end();

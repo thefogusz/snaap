@@ -17,7 +17,7 @@ import {
 } from "../domain/engine.js";
 import { extendedIndicators } from "../../dist/indicator-catalog.js";
 import { strategySeries, instruments } from "../markets.js";
-import { pricing, boundCost, outputLimit } from "./budget.js";
+import { pricing, boundCost, outputLimit, compactHistoryForBudget } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
 import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
 import { availableTimeframes } from "../../dist/timeframes.js";
@@ -383,16 +383,23 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
             ),
           })),
         ) +
-        ". Put period in operand.period; other parameters in operand.params. Do not use params for legacy indicators. VWAP_SESSION resets at UTC midnight; Ichimoku SPAN_A/B are displaced historical cloud values at the evaluation time. SUPERTREND_DIRECTION is +1 bullish, -1 bearish. No arbitrary Pine execution.";
+        ". For extended indicators put period in operand.period and other parameters in operand.params. Legacy indicators never use params: MACD/MACD_SIGNAL/MACD_HIST use operand.period (fast), operand.slow and operand.signal; BB_* use operand.period and operand.deviation. VWAP_SESSION resets at UTC midnight; Ichimoku SPAN_A/B are displaced historical cloud values at the evaluation time. SUPERTREND_DIRECTION is +1 bullish, -1 bearish. No arbitrary Pine execution.";
       instructions +=
         '\nTool execution is real only when you issue a function_call in THIS request. Describing a call in prose does not execute it. For every requested create/edit/remove operation with known fields, call propose_strategy with the complete updated spec before saying it was changed. destinations may be [] (in-app inbox is always available); never invent destination IDs. Minimal valid example: {"schemaVersion":2,"name":"Example","exchange":["Binance"],"market":"Spot","side":"SPOT","pairs":["BTC/USDT"],"timeframe":"1h","entry":{"kind":"COMPARE","op":">","left":{"kind":"PRICE","field":"close","timeframe":"1h"},"right":{"kind":"INDICATOR","name":"EMA","period":200,"timeframe":"1h"}},"stages":[],"cooldownBars":0,"destinations":[]}. GROUP nodes have kind GROUP, op AND/OR, children. Constants have only kind CONSTANT and value. Omit optional exit/cancel keys to remove them.';
       const maxOutputTokens = outputLimit(input.mode);
       let completed = false;
       let requireProposal = false;
+      let historyCount = history.length;
       for (let round = 0; round < 7; round++) {
         if (deadline.aborted) throw new Error("REQUEST_DEADLINE");
+        const budgetInstructions = instructions + JSON.stringify(toolParameters).repeat(2);
+        const compacted = compactHistoryForBudget(messages, historyCount, budgetInstructions, rate, cost);
+        historyCount = compacted.historyCount;
+        if (compacted.removed) {
+          trace.push({round,contextCompaction:{removedHistoryMessages:compacted.removed}});
+        }
         const inputBound = boundCost(
-          instructions + JSON.stringify(toolParameters).repeat(2),
+          budgetInstructions,
           messages,
           rate,
           0,
@@ -405,7 +412,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
           throw new ApiError(
             422,
             "COST_BOUND",
-            "ข้อมูลเกินขอบเขตงานนี้ กรุณาเลือกบริบทหรือภาพให้น้อยลง คืนโควตาแล้ว",
+            "งบ AI ของคำขอรอบนี้ไม่พอสำหรับวิเคราะห์ต่อ แม้ลดประวัติเก่าแล้ว คืนโควตาแล้ว ลองแบ่งการแก้เซตอัปเป็นขั้นย่อยได้",
           );
         const response = await client.responses.create(
           {
@@ -673,7 +680,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                   );
                 draft = checked.data;
                 result = { valid: true, activation: false };
-              } else result = { valid: false, errors: checked.error.issues };
+              } else result = { valid: false, errors: checked.error.issues, parameterGuide: 'Legacy MACD/MACD_SIGNAL/MACD_HIST use period (fast), slow and signal directly on the operand, not inside params. Legacy BB_* use period and deviation directly. Extended indicators use params for their catalog parameters other than period. Preserve all conditions and repair only the reported errors.' };
             } catch {
               result = {
                 valid: false,

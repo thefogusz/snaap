@@ -40,3 +40,23 @@ export function boundCost(
     1e6
   );
 }
+
+/** Evict complete oldest history turns only. Never touch this request or tool I/O. */
+export function compactHistoryForBudget(
+  messages: {role?: string; [key: string]: unknown}[],
+  historyCount: number,
+  instructions: string,
+  rate: ReturnType<typeof pricing>,
+  spent: number,
+  outputReserve = 2000,
+) {
+  let removed = 0;
+  while (historyCount > 0 && spent + boundCost(instructions, messages, rate, outputReserve) > rate.cap) {
+    let count = 1;
+    while (count < historyCount && messages[count].role !== 'user') count++;
+    messages.splice(0,count);
+    historyCount -= count;
+    removed += count;
+  }
+  return {historyCount,removed};
+}
