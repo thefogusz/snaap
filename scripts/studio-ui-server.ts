@@ -128,7 +128,8 @@ await migrate(db);
 const { app } = await buildApp(db, {
   local: true,
   developerPro: true,
-  monitoring: false,
+  // Expose activation readiness; this fixture never starts a monitor worker.
+  monitoring: true,
   origin: "http://127.0.0.1:4189",
 });
 await app.listen({ host: "127.0.0.1", port: 4189 });

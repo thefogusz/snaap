@@ -1057,6 +1057,30 @@ function watchChannelMark(channel) {
   const logo = { DISCORD: "discord.svg", TELEGRAM: "telegram.svg", LINE: "line.png" }[channel.kind];
   return logo ? `<img src="/assets/brands/${logo}" alt="" width="14" height="14">` : uiIcon("link");
 }
+async function setRuleActivation(r, t, active = !r?.active) {
+  if (!r || t.disabled) return;
+  const original = t.innerHTML;
+  t.disabled = true;
+  t.textContent = active ? "กำลังเปิดใช้งาน…" : "กำลังหยุด…";
+  t.setAttribute("aria-busy", "true");
+  try {
+    const updated = await api(`/rules/${r.id}/activation`, "POST", {
+      active,
+      expectedRevision: r.revision,
+      confirmation: active ? "ACTIVATE" : "PAUSE",
+    });
+    Object.assign(r, updated);
+    if (state.saved?.id === r.id) state.saved = r;
+    renderWatch();
+    if (state.saved?.id === r.id) renderDesigner();
+    document.dispatchEvent(new Event('setup-changed'));
+    toast(active ? "เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป" : "หยุดเซตอัพแล้ว");
+  } finally {
+    t.disabled = false;
+    if (t.isConnected) t.innerHTML = original;
+    t.removeAttribute("aria-busy");
+  }
+}
 function watchChannelPicker(r) {
   const channels = state.destinations.filter(d => d.verified);
   return `<details class="watch-channel-picker"><summary aria-label="เลือกช่องทางแจ้งเตือน ${esc(r.spec.name)}" title="เลือกช่องทางแจ้งเตือน">${uiIcon("bell")}แจ้งเตือน<svg class="ui-icon watch-channel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="watch-channel-menu"><strong>ส่งสัญญาณไปที่</strong><p>รับในเว็บเสมอ · เลือกเพิ่มได้ 5 ช่องทาง</p>${channels.length ? channels.map(d => `<label>${watchChannelMark(d)}<span>${esc(d.name)}</span><input type="checkbox" value="${esc(d.id)}" ${r.spec.destinations.includes(d.id) ? "checked" : ""}></label>`).join("") : '<p class="watch-channel-empty">ยังไม่มีช่องทางที่เชื่อมไว้</p>'}<div class="watch-channel-actions"><a href="#notifications" data-watch-connect-channel>เชื่อมช่องทาง</a><button type="button" class="primary" data-save-rule-channels="${esc(r.id)}">บันทึก</button></div></div></details>`;
@@ -1994,26 +2018,7 @@ document.addEventListener("click", async (e) => {
       if (t.disabled) return;
       const r = state.rules.find((x) => x.id === t.dataset.activateRule);
       if (!r || t.disabled) return;
-      const active = !r.active;
-      const original = t.innerHTML;
-      t.disabled = true;
-      t.textContent = active ? "กำลังเปิดใช้งาน…" : "กำลังหยุด…";
-      t.setAttribute("aria-busy", "true");
-      try {
-        const updated = await api(`/rules/${r.id}/activation`, "POST", {
-          active,
-          expectedRevision: r.revision,
-          confirmation: active ? "ACTIVATE" : "PAUSE",
-        });
-        Object.assign(r, updated);
-        if (state.saved?.id === r.id) state.saved = r;
-        renderWatch();
-        toast(active ? "เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป" : "หยุดเซตอัพแล้ว");
-      } finally {
-        t.disabled = false;
-        if (t.isConnected) t.innerHTML = original;
-        t.removeAttribute("aria-busy");
-      }
+      await setRuleActivation(r, t);
       return;
     }
     if (t.dataset.openRule) {

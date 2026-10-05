@@ -391,11 +391,13 @@
     header.querySelector("[data-studio-draft]").textContent = state.saved
       ? "ร่าง · เวอร์ชัน " + state.saved.revision
       : "ร่างใหม่";
-    const activationDisabled = !state.saved ||
-      JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(state.draft));
+    const savedMatchesDraft = Boolean(state.saved && JSON.stringify(comparableSpec(state.saved.spec)) === JSON.stringify(comparableSpec(state.draft)));
+    const currentSetupActive = savedMatchesDraft && state.saved.active;
+    const activationDisabled = !savedMatchesDraft || currentSetupActive;
     panel.querySelectorAll('[data-studio-activate]').forEach(button=>{
       button.disabled=activationDisabled;
-      button.title=activationDisabled ? 'บันทึกเซตอัปก่อนเปิดใช้งาน' : 'เปิดตรวจและแจ้งเตือนเซตอัปนี้';
+      button.textContent=currentSetupActive ? 'เปิดใช้งานแล้ว' : 'เปิดใช้งาน';
+      button.title=currentSetupActive ? 'เซตอัปนี้กำลังตรวจสัญญาณ' : activationDisabled ? 'บันทึกเซตอัปก่อนเปิดใช้งาน' : 'เปิดตรวจและแจ้งเตือนเซตอัปนี้';
     });
     if (!panel.querySelector(".studio-condition-overview")) {
       const body = panel.querySelector(".design-body");
@@ -819,7 +821,7 @@
     if (b.dataset.openEvent)
       setView(state.draft.timeframe, Number(b.dataset.openEvent));
     if (b.hasAttribute("data-studio-activate") && state.saved) {
-      showActivation(state.saved);
+      setRuleActivation(state.saved, b, true).catch(error => toast(error.message));
     }
     if (b.hasAttribute("data-ask-bar")) {
       selectTab("agent");

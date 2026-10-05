@@ -353,10 +353,14 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       await page.locator(".studio-footer-actions [data-studio-activate]").isEnabled(),
       true,
     );
+    const activation = page.waitForResponse(response => response.url().includes("/activation") && response.request().method() === "POST");
+    const savedDraft = await page.evaluate(() => JSON.stringify(state.draft));
     await page.locator(".studio-footer-actions [data-studio-activate]").click();
-    await page
-      .getByRole("button", { name: "ยังไม่เปิดใช้งาน", exact: true })
-      .click();
+    assert.equal((await activation).status(), 200);
+    await page.locator(".studio-footer-actions [data-studio-activate]").filter({hasText: "เปิดใช้งานแล้ว"}).waitFor();
+    assert.equal(await page.locator(".studio-footer-actions [data-studio-activate]").isEnabled(),false);
+    assert.equal(await page.evaluate(() => state.saved.active),true);
+    assert.equal(await page.evaluate(() => JSON.stringify(state.draft)),savedDraft);
     await page.route('**/api/v1/preview', async route => {
       const response = await route.fetch();
       await new Promise(resolve => setTimeout(resolve, 1200));
