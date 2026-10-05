@@ -1038,6 +1038,14 @@ function set(path, value) {
     last = keys.pop();
   keys.reduce((o, k) => o[k] ?? (o[k] = {}), state.draft)[last] = value;
 }
+function watchChannelMark(channel) {
+  const logo = { DISCORD: "discord.svg", TELEGRAM: "telegram.svg", LINE: "line.png" }[channel.kind];
+  return logo ? `<img src="/assets/brands/${logo}" alt="" width="14" height="14">` : uiIcon("link");
+}
+function watchChannelPicker(r) {
+  const channels = state.destinations.filter(d => d.verified);
+  return `<details class="watch-channel-picker"><summary aria-label="เลือกช่องทางแจ้งเตือน ${esc(r.spec.name)}" title="เลือกช่องทางแจ้งเตือน">${uiIcon("bell")}แจ้งเตือน<svg class="ui-icon watch-channel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="watch-channel-menu"><strong>ส่งสัญญาณไปที่</strong><p>รับในเว็บเสมอ · เลือกเพิ่มได้ 5 ช่องทาง</p>${channels.length ? channels.map(d => `<label>${watchChannelMark(d)}<span>${esc(d.name)}</span><input type="checkbox" value="${esc(d.id)}" ${r.spec.destinations.includes(d.id) ? "checked" : ""}></label>`).join("") : '<p class="watch-channel-empty">ยังไม่มีช่องทางที่เชื่อมไว้</p>'}<div class="watch-channel-actions"><a href="#notifications" data-watch-connect-channel>เชื่อมช่องทาง</a><button type="button" class="primary" data-save-rule-channels="${esc(r.id)}">บันทึก</button></div></div></details>`;
+}
 function watchSetupRow(r) {
   const pairs = r.spec.pairs;
   const pairPreview = pairs.slice(0, 2).join(", ");
@@ -1047,11 +1055,15 @@ function watchSetupRow(r) {
   const status = r.quota_blocked
     ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ"
     : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน";
+  const destinations = r.spec.destinations.map(id => state.destinations.find(d => d.id === id)).filter(Boolean);
+  const channelTags = destinations.map(d => `<span class="watch-tag watch-channel-tag ${r.active && !r.quota_blocked && d.verified ? "is-routing" : ""}" title="${d.verified ? r.quota_blocked ? 'พักส่ง · เกินสิทธิ์แพ็กเกจ' : r.active ? 'เปิดส่งแจ้งเตือน' : 'ส่งเมื่อเปิดใช้งานเซตอัป' : 'ช่องทางตัดการเชื่อมต่อแล้ว'}">${watchChannelMark(d)}<span>${esc(d.name)}</span>${!d.verified ? '<span>· ตัดแล้ว</span>' : ''}</span>`).join("");
   return `<article class="watch-row">
-    <div class="watch-row-heading"><h2>${esc(r.spec.name)}</h2>
-      <div class="watch-setup-meta"><span class="watch-pairs">${esc(pairPreview)}${remaining > 0 ? ` <span class="watch-pair-count">+${remaining} คู่</span>` : ""}</span><span class="watch-tags"><span class="watch-tag">${esc(r.spec.exchange.join(" · "))}</span><span class="watch-tag">${esc(r.spec.market)}</span><span class="watch-tag watch-direction">${esc(direction)}</span></span></div>
+    <div class="watch-row-heading"><div class="watch-title-line"><h2>${esc(r.spec.name)}</h2><span class="status ${r.active && !r.quota_blocked ? "is-active" : "paused"}">${status}</span></div>
+      <div class="watch-setup-meta"><span class="watch-pairs">${esc(pairPreview)}${remaining > 0 ? ` <span class="watch-pair-count">+${remaining} คู่</span>` : ""}</span><span class="watch-tags"><span class="watch-tag">${esc(r.spec.exchange.join(" · "))}</span><span class="watch-tag">${esc(r.spec.market)}</span><span class="watch-tag watch-direction">${esc(direction)}</span>${channelTags}</span></div>
+
     </div>
-    <div class="watch-row-footer"><span class="status ${r.active && !r.quota_blocked ? "is-active" : "paused"}">${status}</span>
+    <div class="watch-row-footer">
+      ${watchChannelPicker(r)}
       <button class="secondary" data-activate-rule="${esc(r.id)}">${uiIcon(r.active ? "pause" : "play")}${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button>
       <button class="secondary watch-edit" data-open-rule="${esc(r.id)}" aria-label="แก้ไข ${esc(r.spec.name)}" title="แก้ไขเซตอัป">${uiIcon("sliders")}<span class="sr-only">แก้ไข</span></button>
     </div>
@@ -1545,30 +1557,6 @@ async function renderHistory() {
     load('images','ภาพอ้างอิง',images=>renderTradingLab(images)),
   ]);
 }
-function showActivation(rule) {
-  const dialog = document.createElement("dialog");
-  dialog.setAttribute("aria-labelledby", "activation-title");
-  dialog.className = "runtime-dialog";
-  dialog.innerHTML = `<h2 id="activation-title">เริ่มแจ้งเตือนเซตอัพนี้?</h2><p>${esc(rule.spec.name)} · เวอร์ชัน ${rule.revision}</p><p>${esc(rule.spec.exchange.join(", "))} · ${esc(rule.spec.pairs.join(", "))}</p><p class="draft-diff">${esc(fullSummary(rule.spec))}</p><p>เริ่มตรวจตั้งแต่ยืนยัน ใช้แท่งปิด สัญญาณเข้า–ออกไม่ใช่คำสั่งซื้อขาย</p><p>ปลายทาง: กล่องแจ้งเตือน${rule.spec.destinations.map((id) => " · " + esc(state.destinations.find((x) => x.id === id)?.name ?? "ไม่พบช่องทาง")).join("")}</p><div class="design-actions"><button class="primary" data-confirm>ยืนยันเปิดใช้งาน</button><button class="secondary" data-cancel autofocus>ยังไม่เปิดใช้งาน</button></div>`;
-  document.body.append(dialog);
-  dialog.showModal();
-  dialog.querySelector("[data-cancel]").onclick = () => dialog.close();
-  dialog.addEventListener("close", () => dialog.remove());
-  dialog.querySelector("[data-confirm]").onclick = async () => {
-    try {
-      await api(`/rules/${rule.id}/activation`, "POST", {
-        active: true,
-        expectedRevision: rule.revision,
-        confirmation: "ACTIVATE",
-      });
-      dialog.close();
-      await refresh();
-      toast("เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป");
-    } catch (e) {
-      toast(e.message);
-    }
-  };
-}
 document.addEventListener("submit", async (e) => {
   if (e.target.id !== "channel-form") return;
   e.preventDefault();
@@ -1796,7 +1784,23 @@ conversations.addEventListener("change", async () => {
     toast(error.message);
   }
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const menu = e.target.closest(".watch-channel-picker[open]");
+  if (!menu) return;
+  menu.open = false;
+  menu.querySelector("summary").focus();
+});
+document.addEventListener("toggle", (e) => {
+  if (!e.target.matches(".watch-channel-picker[open]")) return;
+  document.querySelectorAll(".watch-channel-picker[open]").forEach(menu => {
+    if (menu !== e.target) menu.open = false;
+  });
+}, true);
 document.addEventListener("click", async (e) => {
+  document.querySelectorAll(".watch-channel-picker[open]").forEach(menu => {
+    if (!menu.contains(e.target)) menu.open = false;
+  });
   const t = e.target.closest("button,a");
   if (!t) return;
   if (t.classList.contains("nav-item")) $("#sidebar").classList.remove("is-open");
@@ -1896,16 +1900,51 @@ document.addEventListener("click", async (e) => {
       }finally{t.disabled=false;}
       return;
     }
+    if (t.hasAttribute("data-watch-connect-channel")) {
+      e.preventDefault();
+      notificationSection = "channels";
+      await renderNotifications();
+      return;
+    }
+    if (t.dataset.saveRuleChannels) {
+      const r = state.rules.find(row => row.id === t.dataset.saveRuleChannels);
+      if (!r || t.disabled) return;
+      const menu = t.closest(".watch-channel-picker");
+      const destinations = [...menu.querySelectorAll("input:checked")].map(input => input.value);
+      if (destinations.length > 5) { toast("เลือกได้ไม่เกิน 5 ช่องทาง"); return; }
+      t.disabled = true;
+      try {
+        const saved = await api(`/rules/${r.id}/destinations`, "PUT", { expectedRevision: r.revision, destinations });
+        if (state.saved?.id === r.id) {
+          state.saved = saved;
+          state.draft.destinations = [...saved.spec.destinations];
+          renderDesigner();
+          persistRecovery();
+          await saveDraft();
+        }
+        await refresh();
+        toast(destinations.length ? "บันทึกช่องทางแล้ว · ใช้กับสัญญาณถัดไป" : "รับสัญญาณในเว็บเท่านั้น");
+      } finally { t.disabled = false; }
+      return;
+    }
     if (t.dataset.activateRule) {
       const r = state.rules.find((x) => x.id === t.dataset.activateRule);
-      if (r.active) {
+      if (!r || t.disabled) return;
+      const active = !r.active;
+      t.disabled = true;
+      t.setAttribute("aria-busy", "true");
+      try {
         await api(`/rules/${r.id}/activation`, "POST", {
-          active: false,
+          active,
           expectedRevision: r.revision,
-          confirmation: "PAUSE",
+          confirmation: active ? "ACTIVATE" : "PAUSE",
         });
         await refresh();
-      } else showActivation(r);
+        toast(active ? "เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป" : "หยุดเซตอัพแล้ว");
+      } finally {
+        t.disabled = false;
+        t.removeAttribute("aria-busy");
+      }
       return;
     }
     if (t.dataset.openRule) {

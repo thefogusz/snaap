@@ -112,6 +112,7 @@ async function renderNotifications() {
       api("/monitor"),
     ]);
     if (request !== notificationRequest) return;
+    state.destinations = channels.items;
     notificationData = { signals, channels, deliveries, monitor, more: signals.length === 100 };
     paintNotifications();
   } catch (error) {
@@ -143,7 +144,7 @@ function paintNotifications() {
       .map(([kind, info]) => {
         const available = channels.available[kind];
         const count=channels.items.filter(x=>x.kind===kind&&x.verified).length;
-        return `<article class="channel-option" data-kind="${kind}"><div class="channel-card-top"><span class="channel-mark ${info.logo ? "channel-brand" : ""}" aria-hidden="true">${info.logo ? `<img src="${info.logo}" alt="" width="44" height="44">` : uiIcon(info.icon)}</span><span class="channel-availability" data-ready="${available}">${count?`เชื่อมแล้ว ${count} ช่องทาง`:available?'พร้อมเชื่อมต่อ':'ยังไม่เปิดใช้งาน'}</span></div><h3>${info.name}</h3><p>${info.detail}</p><button type="button" class="secondary" data-connect-channel="${kind}" ${available ? "" : "disabled"}>${available ? "เชื่อมต่อ" : "ยังไม่เปิดให้เชื่อมต่อ"}</button></article>`;
+        return `<article class="channel-option" data-kind="${kind}"><span class="channel-mark ${info.logo ? "channel-brand" : ""}" aria-hidden="true">${info.logo ? `<img src="${info.logo}" alt="" width="32" height="32">` : uiIcon(info.icon)}</span><div class="channel-option-copy"><div class="channel-option-title"><h3>${info.name}</h3><span class="channel-availability" data-ready="${available}">${count?`เชื่อมแล้ว ${count} ช่องทาง`:available?'พร้อมเชื่อมต่อ':'ยังไม่เปิดใช้งาน'}</span></div><p>${info.detail}</p></div>${available ? `<button type="button" class="secondary" data-connect-channel="${kind}">${count ? 'เพิ่ม' : 'เชื่อมต่อ'}</button>` : ''}</article>`;
 
       })
       .join(

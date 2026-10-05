@@ -1,4 +1,17 @@
 /* Compact notification cards: shared information hierarchy, restrained surfaces. */
+.notification-content .channel-options{gap:8px}
+.notification-content .channel-option{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 14px;min-height:68px;border-radius:9px}
+.notification-content .channel-option .channel-mark{width:32px;height:32px;border-radius:9px;flex-shrink:0}
+.notification-content .channel-option .channel-mark img{width:32px;height:32px}
+.notification-content .channel-option .channel-mark .ui-icon{width:17px;height:17px}
+.notification-content .channel-option-copy{min-width:0}
+.notification-content .channel-option-title{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px}
+.notification-content .channel-option h3{font-size:13px;line-height:1.4;margin:0}
+.notification-content .channel-option p{font-size:11px;line-height:1.5;margin:3px 0 0;color:var(--muted)}
+.notification-content .channel-option .channel-availability{font-size:10px;line-height:1.4;margin:0;padding:0;border:0;background:transparent;color:var(--muted);white-space:nowrap}
+.notification-content .channel-option .channel-availability[data-ready=true]{color:var(--accent-ink)}
+.notification-content .channel-option button{align-self:center;justify-self:end;margin:0;min-height:28px;height:28px;min-width:0;width:auto;padding:3px 9px;font-size:11px;line-height:1.5;border-radius:5px;white-space:nowrap}
+@media(max-width:760px){.notification-content .channel-options{grid-template-columns:1fr}.notification-content .channel-option{padding:10px 12px}}
 #view-notifications{padding-top:32px}
 #view-notifications .notification-heading{margin-bottom:20px}
 #view-notifications .notification-setup-actions button{display:inline-flex;align-items:center;justify-content:center;gap:8px}
@@ -10,7 +23,9 @@
 /* Saved setups stay compact; full pairs and conditions are opt-in. */
 .notification-rules #watch-list{display:grid;gap:8px}
 .notification-rules .watch-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 20px;margin:0;padding:14px 16px;border-radius:10px;box-shadow:none;background:var(--white);border:1px solid var(--line)}
-.notification-rules .watch-row-heading{display:block;min-width:0;margin:0;grid-column:1;align-self:center}
+.notification-rules .watch-row-heading{display:block;min-width:0;margin:0;grid-column:1;align-self:start}
+.notification-rules .watch-title-line{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-height:34px}
+.notification-rules .watch-title-line h2{margin:0;min-width:0}
 .notification-rules .watch-row h2{font-size:15px;line-height:1.5;letter-spacing:-.01em;overflow-wrap:anywhere}
 .notification-rules .watch-setup-meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:12px;line-height:1.6;color:var(--muted)}
 .notification-rules .watch-pairs{display:inline-flex;align-items:center;color:var(--ink);overflow-wrap:anywhere}
@@ -18,9 +33,34 @@
 .notification-rules .watch-tags{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px}
 .notification-rules .watch-tag{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--line);font-size:11px;line-height:1.6;color:var(--muted)}
 .notification-rules .watch-direction{color:var(--ink)}
+.notification-rules .watch-channel-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.notification-rules .watch-channel-tag{gap:5px;max-width:210px;color:var(--muted)}
+.notification-rules .watch-channel-tag>span:first-of-type{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notification-rules .watch-channel-tag.is-routing{color:var(--ink);border-color:var(--lime)}
+.watch-channel-tag img,.watch-channel-menu img{object-fit:contain;flex-shrink:0}
+.notification-rules .watch-channel-picker{position:relative;padding:0;margin:0;border:0;flex-shrink:0}
+#main .notification-rules .watch-channel-picker>summary{display:inline-flex;align-items:center;gap:6px;cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:12px;line-height:1.5;min-height:34px;color:var(--ink);white-space:nowrap}
+#main .watch-channel-picker>summary::-webkit-details-marker{display:none}
+#main .notification-rules .watch-channel-picker>summary::marker{content:""}
+#main .watch-channel-picker>summary>.ui-icon{display:block;width:14px;height:14px;flex:none}
+#main .watch-channel-picker>summary>.watch-channel-chevron{width:12px;height:12px;margin-left:2px;color:var(--muted)}
+.watch-channel-picker>summary::before{display:none}
+.watch-channel-picker>summary:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+.watch-channel-picker[open]>summary{background:var(--pale)}
+.notification-rules .watch-channel-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:20;width:280px;max-width:calc(100vw - 56px);padding:14px;background:var(--white);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px #0003;text-align:left}
+.watch-channel-menu>strong{font-size:13px}
+.watch-channel-menu>p{font-size:11px;color:var(--muted);margin:4px 0 10px}
+.watch-channel-menu>label{display:flex;align-items:center;gap:8px;padding:9px 0;font-size:12px;cursor:pointer}
+.watch-channel-menu>label>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.watch-channel-menu input{width:16px;height:16px;margin:0;accent-color:var(--lime)}
+.watch-channel-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:6px;margin-top:4px}
+.watch-channel-actions>a{color:var(--muted);font-size:11px;text-decoration:none}
+.notification-rules .watch-row-footer .watch-channel-actions>button{width:auto;min-width:0;height:24px;min-height:24px;padding:1px 8px;font-size:11px;line-height:1.5;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:5px;box-shadow:none}
+.notification-rules .watch-row-footer .watch-channel-actions>button:hover{background:var(--pale);color:var(--ink)}
+@media(max-width:600px){#main .notification-rules .watch-channel-picker>summary{min-height:40px}.notification-rules .watch-row-footer{position:relative}.notification-rules .watch-channel-picker{position:static}.notification-rules .watch-channel-menu{right:0;left:0;width:auto}}
 .notification-rules .watch-row :is(.status.paused,.status.is-active){font-size:11px;padding:0;background:transparent;box-shadow:none!important;white-space:nowrap;border-radius:0;flex-shrink:0;max-width:none;margin-right:8px}
 .notification-rules .watch-row .status:before{width:5px;height:5px}
-.notification-rules .watch-row-footer{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin:0;padding:0;border:0;grid-column:2;grid-row:1}
+.notification-rules .watch-row-footer{display:flex;align-items:center;align-self:start;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin:0;padding:0;border:0;grid-column:2;grid-row:1}
 .notification-rules :is(.watch-row-footer button,.watch-details button){display:inline-flex;align-items:center;gap:6px;font-size:12px;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:transparent;line-height:1.5;white-space:nowrap}
 .notification-rules :is(.watch-row-footer button,.watch-details button):hover{background:var(--pale)}
 .notification-rules .watch-row-footer .watch-edit{width:34px;flex-shrink:0;padding:7px;justify-content:center;border-color:transparent}
@@ -129,4 +169,39 @@
   .notification-rules .watch-details summary{min-height:44px;min-width:44px}
   .notification-rules .watch-setup-meta{font-size:13px}
   .notification-rules :is(.watch-rule-summary,.watch-all-pairs){font-size:13px}
+}
+/* Shared alignment and subtle feedback for notification controls. */
+.notification-rules .watch-title-line .status{margin:0;line-height:1.5}
+.notification-rules .watch-row-footer>button>.ui-icon{display:block;flex:none}
+#main .notification-rules .watch-channel-picker>summary:hover{background:var(--pale)}
+#main .watch-channel-picker>summary,.notification-rules .watch-row-footer>button,.notification-content .channel-option button,.watch-channel-menu>label{transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}
+#main .watch-channel-picker>summary:active,.notification-rules .watch-row-footer>button:active:not(:disabled){transform:translateY(1px)}
+#main .watch-channel-picker>summary>.watch-channel-chevron{transition:transform .18s ease}
+#main .watch-channel-picker[open]>summary>.watch-channel-chevron{transform:rotate(180deg)}
+.watch-channel-picker[open]>.watch-channel-menu,.watch-details[open]>.watch-details-content{animation:notification-reveal .16s ease-out}
+.watch-channel-menu>label{border-radius:4px}
+.watch-channel-menu>label:hover{background:var(--pale)}
+@keyframes notification-reveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1000px){.notification-rules .watch-title-line{min-height:0}.notification-rules .watch-row-footer{justify-content:flex-start;gap:8px}.notification-rules .watch-details{margin-top:2px}}
+@media(max-width:600px),(pointer:coarse){#main .notification-rules .watch-channel-picker>summary{min-height:44px}}
+@media(prefers-reduced-motion:reduce){#main .watch-channel-picker>summary,#main .watch-channel-picker>summary>.watch-channel-chevron,.notification-rules .watch-row-footer>button,.notification-content .channel-option button,.watch-channel-menu>label{transition:none}.watch-channel-picker[open]>.watch-channel-menu,.watch-details[open]>.watch-details-content{animation:none}}
+@media(max-width:600px){
+  #view-notifications .notification-heading{flex-direction:column;align-items:stretch;gap:12px}
+  #view-notifications .notification-heading p{max-width:none;margin-top:4px}
+  #view-notifications .notification-setup-actions{flex-wrap:nowrap;gap:8px}
+  #view-notifications .notification-setup-actions button{min-height:40px;flex:none}
+  .notification-content .channel-option button{min-height:40px;height:40px}
+  .notification-rules .watch-title-line{gap:4px 8px}
+}
+@media(min-width:601px) and (max-width:1000px){
+  #view-notifications .notification-heading{flex-direction:column;align-items:stretch;gap:12px}
+  #view-notifications .notification-setup-actions{flex-wrap:nowrap;gap:8px}
+}
+@media(max-width:600px){
+  #view-notifications .notification-heading>button{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:12px;min-height:32px;padding:5px 9px}
+  .browser-alert-actions{gap:4px;justify-content:space-between}
+  .browser-alert-toggle,.browser-alert-preview{flex:0 0 auto;gap:4px;padding:5px 4px;font-size:11px;white-space:nowrap}
+  .browser-alert-dot{width:26px;height:16px;flex-basis:26px}
+  .browser-alert-dot::after{top:2px;left:2px}
+  .browser-alert-toggle[aria-pressed="true"] .browser-alert-dot::after{transform:translateX(10px)}
 }

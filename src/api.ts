@@ -23,6 +23,7 @@ import { registerSetupShares } from "./setup-shares.js";
 import { registerPresets } from "./presets.js";
 import { registerRuleRemoval } from "./rule-removal.js";
 import { registerEntryFlexibility } from "./entry-flexibility.js";
+import { registerRuleDestinations } from "./rule-destinations.js";
 import { registerAdmin, recordSystemLog, isUserAdmin } from "./admin.js";
 import { isAdminIdentity } from "./admin-access.js";
 import { recordApiIncident } from "./admin-events.js";
@@ -357,6 +358,7 @@ export async function buildApp(
     };
   });
   registerEntryFlexibility(app, db);
+  registerRuleDestinations(app, db);
   app.get(
     "/api/v1/rules",
     async (req) =>

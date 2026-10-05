@@ -5,7 +5,8 @@ import vm from 'node:vm';
 
 const source=await readFile(new URL('../dist/workbench.js',import.meta.url),'utf8');
 const start=source.indexOf('let historyRenderVersion=0;');
-const end=source.indexOf('function showActivation(',start);
+const end=source.indexOf('document.addEventListener("submit",',start);
+assert.ok(start >= 0 && end > start);
 
 function fixture(api: (url:string,method?:string,body?:unknown,options?:{signal:AbortSignal})=>Promise<unknown>, signals:unknown=AbortSignal) {
   const element=()=>({innerHTML:'',textContent:'',className:'',children:[],tagName:'DIV',
