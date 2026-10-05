@@ -2201,13 +2201,6 @@ async function boot() {
   await Promise.all([directionToolsReady, indicatorCatalogReady, entryFlexReady]);
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
-  showDesigner();
-  setWorkbenchTab('chat');
-  $('#main').inert = true;
-  $('#main').setAttribute('aria-busy', 'true');
-  status.hidden = false;
-  status.textContent = 'กำลังเปิดพื้นที่ของคุณ…';
-  window.SnaapBoot?.finish();
   try {
     try {
       const [health, me] = await Promise.all([api('/health'), api('/me'), initWorkspaces()]);
@@ -2223,13 +2216,11 @@ async function boot() {
     await restoreRecovery();
     status.textContent = `${state.me?.local ? "บัญชีทดสอบ · " : ""}${state.health.ai ? "AI พร้อมเชื่อมต่อ" : "ยังไม่เชื่อม AI · ตั้งเงื่อนไขและดูกราฟได้"}`;
   } catch (error) {
-    status.hidden = false;
     if(error.statusCode===401){location.replace('/login.html?error=expired');return;}
-    status.textContent = error.message;
+    window.SnaapBoot?.fail(error.message);
+    return;
   }
   navigate(location.hash.slice(1) || "home");
-  $('#main').inert = false;
-  $('#main').removeAttribute('aria-busy');
   if(workbench.hidden || !state.draft){showDesigner();setWorkbenchTab('chat');}
   else renderDesigner();
   // Allow restored geometry and fonts to settle before the first visible frame.
