@@ -51,6 +51,10 @@
 .design-body {
   padding: 24px;
 }
+.design-body > .setup-condition-limit {
+  margin: 0 0 20px;
+  overflow-wrap: anywhere;
+}
 .design-body *,
 .condition-group {
   min-width: 0;
