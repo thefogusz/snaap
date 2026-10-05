@@ -353,11 +353,44 @@ followupText.addEventListener('blur', syncChatPromptHint);
 syncChatPromptHint();
 function resizeChatInputs() {
   syncChatPromptHint();
+  $('#conversation').style.removeProperty('--chat-empty-bottom-space');
+  chatComposer.style.removeProperty('--chat-composer-min-height');
   for(const field of [$('#chat-input'),$('#followup-input')]){
     if(!field?.getClientRects().length)continue;
     const style=getComputedStyle(field);
     const minimum=parseFloat(style.minHeight)||76;
-    const maximum=240;
+    let maximum=240;
+    if(field===followupText){
+      const conversation=$('#conversation');
+      const paneStyle=getComputedStyle(conversation);
+      // Only constrain the input when the pane has a bounded viewport layout.
+      if(paneStyle.overflowY!=='visible'){
+        const composerStyle=getComputedStyle(chatComposer);
+        const px=value=>parseFloat(value)||0;
+        const outerHeight=element=>{
+          const computed=getComputedStyle(element);
+          return element.offsetHeight+px(computed.marginTop)+px(computed.marginBottom);
+        };
+        const limit=composerStyle.maxHeight;
+        let available;
+        if(limit!=='none')available=limit.endsWith('%')?conversation.clientHeight*px(limit)/100:px(limit);
+        else{
+          const siblings=[...conversation.children].filter(element=>element!==chatComposer && element.getClientRects().length && !['absolute','fixed'].includes(getComputedStyle(element).position));
+          available=conversation.clientHeight-px(paneStyle.paddingTop)-px(paneStyle.paddingBottom)-siblings.reduce((sum,element)=>sum+outerHeight(element),0)-px(paneStyle.rowGap)*siblings.length-px(composerStyle.marginTop)-px(composerStyle.marginBottom);
+        }
+        const chrome=chatComposer.scrollHeight-field.offsetHeight+px(composerStyle.borderTopWidth)+px(composerStyle.borderBottomWidth);
+        chatComposer.style.setProperty('--chat-composer-min-height',(chrome+minimum)+'px');
+        if(limit!=='none')available=Math.max(available,chrome+minimum);
+        if(limit==='none' && available<chrome+minimum){
+          // Let decorative greeting space yield before scrolling the whole pane.
+          const bottom=px(paneStyle.paddingBottom);
+          const reduced=Math.max(12,bottom-(chrome+minimum-available)-1);
+          conversation.style.setProperty('--chat-empty-bottom-space',reduced+'px');
+          available+=bottom-reduced;
+        }
+        maximum=Math.max(minimum,Math.min(maximum,Math.floor(available-chrome)));
+      }
+    }
     field.style.height='auto';
     const border=(parseFloat(style.borderTopWidth)||0)+(parseFloat(style.borderBottomWidth)||0);
     const height=Math.max(minimum,field.scrollHeight+border);
@@ -367,6 +400,11 @@ function resizeChatInputs() {
 }
 for(const field of [$('#chat-input'),followupText])field.addEventListener('input',resizeChatInputs);
 window.addEventListener('resize',resizeChatInputs);
+// Refit after tab changes, attachments, source controls, or viewport layout changes.
+const chatInputLayoutObserver=new ResizeObserver(resizeChatInputs);
+chatInputLayoutObserver.observe($('#conversation'));
+chatInputLayoutObserver.observe(chatComposer);
+for(const section of chatComposer.children)chatInputLayoutObserver.observe(section);
 followupText.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
