@@ -27,35 +27,29 @@ export function mountFlexibility(
       toggle.disabled = busy;
     }
     function close() {
-      panel.hidePopover();
       panel.hidden = true;
       toggle.setAttribute("aria-expanded", "false");
+      toggle.textContent = "ปรับ";
     }
-    panel.addEventListener("toggle", (event) => {
-      toggle.setAttribute("aria-expanded", String(event.newState === "open"));
-      if (event.newState === "closed") panel.hidden = true;
-    });
     panel.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") toggle.focus();
+      if (event.key === "Escape" && !busy) {
+        close();
+        toggle.focus({ preventScroll: true });
+      }
     });
     toggle.addEventListener("click", () => {
-      if (panel.matches(":popover-open")) {
+      if (!panel.hidden) {
         close();
         return;
       }
       if (!canEdit(rule)) return;
       percent = rule.spec.entryMatchPercent ?? 100;
-      panel.innerHTML = `<div class="flex-controls"><label class="flex-percent-label">ผ่านอย่างน้อย <output data-flex-value></output><input type="range" min="1" max="100" step="1" value="${percent}" data-flex-percent aria-label="ต้องผ่านเงื่อนไขอย่างน้อย (%)"></label><span class="flex-result" data-flex-result aria-live="polite"></span><button type="button" data-flex-save>บันทึก</button><button type="button" class="flex-close" data-flex-cancel aria-label="ยกเลิก" title="ยกเลิก">×</button></div><p class="flex-error" role="alert" hidden></p><button type="button" data-flex-reload hidden>โหลดค่าล่าสุด</button>`;
+      panel.innerHTML = `<div class="flex-slider-row"><input type="range" min="1" max="100" step="1" value="${percent}" data-flex-percent aria-label="ต้องผ่านเงื่อนไขอย่างน้อย (%)"><output data-flex-value></output></div><div class="flex-actions"><span class="flex-result" data-flex-result aria-live="polite"></span><button type="button" data-flex-cancel>ยกเลิก</button><button type="button" data-flex-save>บันทึก</button></div><p class="flex-error" role="alert" hidden></p><button type="button" data-flex-reload hidden>โหลดค่าล่าสุด</button>`;
       update();
       panel.hidden = false;
-      panel.showPopover();
-      const anchor = toggle.getBoundingClientRect();
-      const box = panel.getBoundingClientRect();
-      panel.style.left = Math.max(8, Math.min(anchor.right - box.width, innerWidth - box.width - 8)) + "px";
-      panel.style.top = Math.max(8, anchor.bottom + box.height + 8 <= innerHeight
-        ? anchor.bottom + 6 : anchor.top - box.height - 6) + "px";
       toggle.setAttribute("aria-expanded", "true");
-      panel.querySelector("[data-flex-percent]").focus();
+      toggle.textContent = "ปิด";
+      panel.querySelector("[data-flex-percent]").focus({ preventScroll: true });
     });
     panel.addEventListener("input", (event) => {
       if (busy || !event.target.hasAttribute("data-flex-percent")) return;
@@ -67,7 +61,7 @@ export function mountFlexibility(
       if (!button || busy) return;
       if (button.hasAttribute("data-flex-cancel")) {
         close();
-        toggle.focus();
+        toggle.focus({ preventScroll: true });
         return;
       }
       if (button.hasAttribute("data-flex-reload")) {
@@ -84,6 +78,9 @@ export function mountFlexibility(
           entryMatchPercent: percent,
         });
         await onSaved(saved, rule);
+        [...root.querySelectorAll("[data-flex-rule]")]
+          .find(node => node.dataset.flexRule === rule.id)
+          ?.querySelector("[data-flex-toggle]").focus({ preventScroll: true });
       } catch (error) {
         const box = panel.querySelector(".flex-error");
         box.textContent = error.message;
