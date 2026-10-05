@@ -1,5 +1,7 @@
 "use strict";
 const setupChangesReady = import('./setup-changes.js');
+let entryFlexUI;
+const entryFlexReady = import('./entry-flexibility-ui.js').then(module => entryFlexUI = module);
 const assistantTextReady = import('./assistant-text.js');
 let indicatorCatalog;
 const indicatorCatalogReady=import('./indicator-catalog.js').then(m=>indicatorCatalog=m);
@@ -1054,6 +1056,7 @@ function watchSetupRow(r) {
       <button class="secondary watch-edit" data-open-rule="${esc(r.id)}" aria-label="แก้ไข ${esc(r.spec.name)}" title="แก้ไขเซตอัป">${uiIcon("sliders")}<span class="sr-only">แก้ไข</span></button>
     </div>
     ${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}
+    <div class="watch-flexibility" data-flex-rule="${esc(r.id)}"><div class="flex-summary"><span>${esc(entryFlexUI.flexibilitySummary(r.spec))}</span><button type="button" class="secondary" data-flex-toggle aria-expanded="false" aria-controls="flex-${esc(r.id)}">ปรับความยืดหยุ่น</button></div><div class="flex-panel" id="flex-${esc(r.id)}" data-flex-panel hidden></div></div>
     <details class="watch-details"><summary>รายละเอียด</summary><div class="watch-details-content">
       <p class="watch-all-pairs"><strong>คู่เทรด</strong> ${esc(pairs.join(", "))}</p>
       <p class="watch-rule-summary"><strong>เงื่อนไขเข้า</strong> ${esc(setupEntrySummary(r.spec))}</p>
@@ -1094,6 +1097,19 @@ function renderWatch() {
           "ออกแบบเซตอัพ</button>",
       );
   const footnote = $("#view-watch .demo-footnote");
+  entryFlexUI.mountFlexibility($('#watch-list'), {
+    rules:state.rules, api,
+    canEdit(rule){
+      if(state.busy){toast('รอการวิเคราะห์เสร็จก่อนปรับความยืดหยุ่น');return false;}
+      if(state.saved?.id===rule.id && JSON.stringify(comparableSpec(state.draft))!==JSON.stringify(comparableSpec(rule.spec))){toast('มีร่างที่แก้ค้างอยู่ กรุณาบันทึกเซตอัปจากหน้าออกแบบก่อน');return false;}
+      return true;
+    },
+    async onSaved(saved){
+      if(state.saved?.id===saved.id){state.saved=saved;state.draft=structuredClone(saved.spec);state.replay=null;state.undo=[];renderDesigner();await saveDraft();}
+      await refresh();toast('บันทึกความยืดหยุ่นแล้ว'+(saved.active?' · ยังเปิดใช้งานอยู่':''));
+    },
+    onReload:()=>refresh(),
+  });
   if (footnote)
     footnote.textContent =
       "ประเมินแท่งปิดทุกนาที · ดูสถานะข้อมูลและผลการส่งในหน้าการแจ้งเตือน";
@@ -2122,7 +2138,7 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 // Also checkpoint programmatic updates such as cleared text after sending a message.
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
-  await Promise.all([directionToolsReady, indicatorCatalogReady]);
+  await Promise.all([directionToolsReady, indicatorCatalogReady, entryFlexReady]);
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
   try {

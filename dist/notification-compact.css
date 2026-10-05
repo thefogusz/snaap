@@ -56,6 +56,23 @@
 @media(max-width:1000px){.notification-rules .watch-row{grid-template-columns:minmax(0,1fr);gap:6px}.notification-rules .watch-row-footer{grid-column:1;grid-row:auto;justify-content:flex-start}.notification-rules .watch-row-footer .status{margin-right:auto}#view-notifications .signal-item{grid-template-columns:28px minmax(0,1fr) auto;gap:10px 12px}#view-notifications .signal-item time{grid-column:2/-1;margin:0;font-size:11px}}
 @media(max-width:600px){#view-notifications{padding:24px 16px 40px}.notification-rules .watch-row{padding:12px;border-radius:8px}.notification-rules .watch-row-heading{align-items:flex-start}.notification-rules .watch-row :is(.status.paused,.status.is-active){white-space:normal}.notification-rules .watch-row-footer{gap:6px}.notification-rules .watch-row-footer button{min-height:40px;padding:8px 9px;font-size:11px}#view-notifications .signal-item{padding:14px 12px;gap:8px 10px}.notification-setup-actions{gap:6px}#view-notifications .notification-setup-actions button{padding:9px 10px;font-size:12px}}
 /* Browser alerts: one aligned row with clearly interactive controls. */
+.notification-rules .watch-flexibility{grid-column:1/-1;min-width:0;margin-top:8px}
+.notification-rules .flex-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.notification-rules .watch-flexibility button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:7px 12px;gap:6px;border:1px solid var(--line);border-radius:7px;font:inherit;color:var(--ink);background:transparent}
+.notification-rules .flex-panel{border-top:1px solid var(--line);padding-top:18px;margin-top:14px}
+.notification-rules .flex-panel button.primary{background:var(--lime);color:#17180f;border-color:var(--lime)}
+.notification-rules .flex-percent-label{display:block;max-width:600px;font-size:13px}
+.notification-rules .flex-percent-label output{float:right;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.notification-rules .flex-percent-label input[type="range"]{display:block;width:100%;min-height:32px;margin:8px 0;accent-color:var(--accent-ink)}
+.notification-rules .flex-scale{font-size:12px;color:var(--muted)}
+.notification-rules .flex-scale{display:flex;justify-content:space-between;gap:8px}
+.notification-rules .flex-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px;margin-top:12px}
+.notification-rules .flex-footer p{font-size:13px;margin:0;color:var(--muted);overflow-wrap:anywhere}
+.notification-rules .flex-footer>div{display:flex;gap:8px}
+.notification-rules .flex-error{color:var(--danger,#c63939);font-size:13px;margin-top:12px}
+.notification-rules .watch-flexibility button:focus-visible,.notification-rules .watch-flexibility input:focus-visible,.notification-rules .watch-flexibility select:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px}
+.notification-rules .watch-flexibility button:disabled{opacity:.5}
+@media(max-width:600px){.notification-rules .watch-flexibility button,.notification-rules .flex-percent-label input[type="range"]{min-height:44px}}
 .browser-alert-settings {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 8px 16px; padding: 8px 12px; margin-bottom: 18px;
