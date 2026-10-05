@@ -3,6 +3,9 @@ const setupChangesReady = import('./setup-changes.js');
 const assistantTextReady = import('./assistant-text.js');
 let indicatorCatalog;
 const indicatorCatalogReady=import('./indicator-catalog.js').then(m=>indicatorCatalog=m);
+let timeframeTools;
+const timeframeToolsReady = import('./timeframes.js').then(m => { timeframeTools = m; tf = m.TIMEFRAMES; });
+function setupTimeframes(d = state.draft) { return timeframeTools ? timeframeTools.availableTimeframes(d?.exchange, d?.market) : tf; }
 let directionTools;
 const directionToolsReady=import('./trade-direction.js').then(m=>directionTools=m);
 function directionLabel(side,market){return directionTools.directionLabel(side,market);}
@@ -47,8 +50,8 @@ const state = {
   crop: null,
   editorNotice: null,
 };
-const tf = ["5m", "15m", "1h", "4h", "1d"],
-  names = ["Binance", "Bybit", "OKX", "Bitget", "MEXC"];
+let tf = ["5m", "15m", "1h", "4h", "1d"];
+const names = ["Binance", "Bybit", "OKX", "Bitget", "MEXC"];
 const constant = (value) => ({ kind: "CONSTANT", value });
 const price = () => ({ kind: "PRICE", field: "close", timeframe: "15m" });
 const cmp = () => ({
@@ -792,9 +795,13 @@ const options = (values, selected) =>
         `<option value="${esc(x)}" ${x === selected ? "selected" : ""}>${esc(display[x] ?? x)}</option>`,
     )
     .join("");
+const timeframeOptions = (selected, d = state.draft) => {
+  const values = setupTimeframes(d);
+  return (selected && !values.includes(selected) ? `<option value="${esc(selected)}" selected disabled>${esc(selected)} · ตลาดนี้ไม่รองรับ</option>` : "") + options(values, selected);
+};
 function operandUI(o, path, title) {
   const select = (label, key, values, value) =>
-    `<label>${label}<select data-path="${path}.${key}">${options(values, value)}</select></label>`;
+    `<label>${label}<select data-path="${path}.${key}">${key === "timeframe" ? timeframeOptions(value) : options(values, value)}</select></label>`;
   const number = (label, key, value, attributes = "") =>
     `<label>${label}<input type="number" data-path="${path}.${key}" value="${value}" ${attributes}></label>`;
   let fields = `<label>ชนิดค่า<select data-opkind="${path}">${options(["PRICE", "INDICATOR", "CONSTANT", "ENTRY_RETURN"], o.kind)}</select></label>`;
@@ -879,7 +886,7 @@ function operandUI(o, path, title) {
       );
   }
   if (["PRICE", "INDICATOR"].includes(o.kind))
-    fields += select("กรอบเวลา", "timeframe", tf, o.timeframe);
+   fields += select("กรอบเวลา", "timeframe", setupTimeframes(), o.timeframe);
   return `<div class="operand-block" role="group" aria-label="${title}"><div class="operand-heading"><p class="operand-title">${title}</p>${o.kind === "INDICATOR" ? `<button type="button" class="indicator-import-trigger" data-import-indicator="${path}">${uiIcon("file")}<span>นำเข้าสูตร / TradingView</span></button>` : ""}</div><div class="operand-fields${o.kind === "INDICATOR" ? " indicator-fields" : ""}">${fields}</div>${o.kind === "INDICATOR" ? `<div class="operand-reference"><a href="/indicator-guide.html" target="_blank" rel="noopener">สูตร หน่วย และข้อมูลที่ต้องใช้ ${uiIcon("arrowUpRight")}</a></div>` : ""}</div>`;
 }
 function conditionUI(c, path) {
@@ -921,7 +928,7 @@ function renderDesigner() {
   setWorkbenchTab(requestedWorkbenchMode ?? workbench.dataset.tab);
   queueDraftSave();
   const d = state.draft;
-  panel.innerHTML = `<div class="design-toolbar"><strong>ออกแบบเซตอัพ</strong><span class="saved-label">${state.saved ? "เวอร์ชัน " + state.saved.revision : "ร่างใหม่"}${state.saved && JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(d)) ? " · ยังไม่บันทึก" : ""}</span><button class="text-button" data-undo ${state.undo.length ? "" : "disabled"}>ย้อนกลับ</button></div><div class="design-body"><div id="editor-feedback" tabindex="-1" hidden></div><label>ชื่อเซตอัพ<input data-path="name" value="${esc(d.name)}" maxlength="100"></label><fieldset class="exchange-fieldset"><legend>เลือกกระดาน</legend><div class="exchange-choices">${names.map((x) => `<label><input type="radio" name="setup-exchange" data-exchange="${x}" ${d.exchange.includes(x) ? "checked" : ""}><span class="exchange-check" aria-hidden="true">${uiIcon("check")}</span><span>${x}</span></label>`).join("")}</div></fieldset><div class="field-grid"><label>ตลาด<select data-path="market">${options(["Spot", "Perpetual Futures"], d.market)}</select></label><label>รอบตรวจแท่งปิด<select data-path="timeframe">${options(tf, d.timeframe)}</select></label></div>${directionChoices(d)}<div class="pair-control"><span>คู่เทรด</span><button type="button" class="secondary" data-pair-picker>${esc(d.pairs.length>1?d.pairs.length+" คู่เทรด":d.pairs[0]??"เลือกคู่เทรด")} ▾</button><p class="field-note" data-pair-availability role="status"></p></div><section class="setup-section"><h3>1. ${d.market === "Spot" ? "เงื่อนไขเริ่มต้น" : d.side === "SHORT" ? "เงื่อนไข Short" : d.side ? "เงื่อนไข Long" : "เงื่อนไขเริ่มต้น"}</h3>${conditionUI(d.entry, "entry")}</section><details data-advanced-options ${openAdvanced || d.stages.length || d.exit || d.cancel || d.cooldownBars ? "open" : ""}><summary>เงื่อนไขเพิ่มเติม<span>รอยืนยัน · สัญญาณออก · ยกเลิก · พักสัญญาณ</span></summary><div class="advanced-options">${d.stages.map((s, i) => `<section class="setup-section"><h3>${i + 2}. รอยืนยัน</h3><label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="stages.${i}.withinBars" value="${s.withinBars}"></label>${conditionUI(s.condition, `stages.${i}.condition`)}<button class="text-button" data-remove="stages.${i}">ลบขั้นตอน</button></section>`).join("")}<button class="secondary" data-stage>เพิ่มขั้นตอนรอยืนยัน</button><section class="setup-section"><h3>สัญญาณออก / ยกเลิก</h3>${d.exit ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขสัญญาณออก</h4><button class="text-button" data-remove-optional="exit">ลบเงื่อนไขออก</button></div>${conditionUI(d.exit, "exit")}</div>` : '<button class="text-button" data-optional="exit">เพิ่มเงื่อนไขออก</button>'}${d.cancel ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขยกเลิก</h4><button class="text-button" data-remove-optional="cancel">ลบเงื่อนไขยกเลิก</button></div>${conditionUI(d.cancel, "cancel")}</div>` : '<button class="text-button" data-optional="cancel">เพิ่มเงื่อนไขยกเลิก</button>'}<p class="field-note">วงจรสัญญาณ ไม่ใช่ออเดอร์ที่ถือจริง</p></section><label>พักหลังสัญญาณ (แท่ง)<input type="number" min="0" max="1000" data-path="cooldownBars" value="${d.cooldownBars}"></label></div></details>${d.short?`<details class="setup-custom-short"><summary>เงื่อนไข Short</summary>${conditionUI(d.short.entry,"short.entry")}${d.short.stages.map((s,i)=>`<h4>รอยืนยัน ${i+1}</h4>${conditionUI(s.condition,`short.stages.${i}.condition`)}<label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="short.stages.${i}.withinBars" value="${s.withinBars}"></label>`).join("")}${d.short.exit?`<h4>สัญญาณออก Short</h4>${conditionUI(d.short.exit,"short.exit")}`:""}${d.short.cancel?`<h4>ยกเลิก Short</h4>${conditionUI(d.short.cancel,"short.cancel")}`:""}<label>พักสัญญาณ Short (แท่ง)<input type="number" min="0" max="1000" data-path="short.cooldownBars" value="${d.short.cooldownBars}"></label></details>`:""}<details open class="rule-review"><summary>สรุปเซตอัพ</summary><p class="draft-diff">${esc(fullSummary(d))}</p></details><fieldset class="destination-choices"><legend>แจ้งเตือนไปที่</legend><p>กล่องแจ้งเตือนในเว็บเสมอ</p>${state.destinations
+  panel.innerHTML = `<div class="design-toolbar"><strong>ออกแบบเซตอัพ</strong><span class="saved-label">${state.saved ? "เวอร์ชัน " + state.saved.revision : "ร่างใหม่"}${state.saved && JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(d)) ? " · ยังไม่บันทึก" : ""}</span><button class="text-button" data-undo ${state.undo.length ? "" : "disabled"}>ย้อนกลับ</button></div><div class="design-body"><div id="editor-feedback" tabindex="-1" hidden></div><label>ชื่อเซตอัพ<input data-path="name" value="${esc(d.name)}" maxlength="100"></label><fieldset class="exchange-fieldset"><legend>เลือกกระดาน</legend><div class="exchange-choices">${names.map((x) => `<label><input type="radio" name="setup-exchange" data-exchange="${x}" ${d.exchange.includes(x) ? "checked" : ""}><span class="exchange-check" aria-hidden="true">${uiIcon("check")}</span><span>${x}</span></label>`).join("")}</div></fieldset><div class="field-grid"><label>ตลาด<select data-path="market">${options(["Spot", "Perpetual Futures"], d.market)}</select></label><label>รอบตรวจแท่งปิด<select data-path="timeframe">${timeframeOptions(d.timeframe, d)}</select></label></div>${directionChoices(d)}<div class="pair-control"><span>คู่เทรด</span><button type="button" class="secondary" data-pair-picker>${esc(d.pairs.length>1?d.pairs.length+" คู่เทรด":d.pairs[0]??"เลือกคู่เทรด")} ▾</button><p class="field-note" data-pair-availability role="status"></p></div><section class="setup-section"><h3>1. ${d.market === "Spot" ? "เงื่อนไขเริ่มต้น" : d.side === "SHORT" ? "เงื่อนไข Short" : d.side ? "เงื่อนไข Long" : "เงื่อนไขเริ่มต้น"}</h3>${conditionUI(d.entry, "entry")}</section><details data-advanced-options ${openAdvanced || d.stages.length || d.exit || d.cancel || d.cooldownBars ? "open" : ""}><summary>เงื่อนไขเพิ่มเติม<span>รอยืนยัน · สัญญาณออก · ยกเลิก · พักสัญญาณ</span></summary><div class="advanced-options">${d.stages.map((s, i) => `<section class="setup-section"><h3>${i + 2}. รอยืนยัน</h3><label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="stages.${i}.withinBars" value="${s.withinBars}"></label>${conditionUI(s.condition, `stages.${i}.condition`)}<button class="text-button" data-remove="stages.${i}">ลบขั้นตอน</button></section>`).join("")}<button class="secondary" data-stage>เพิ่มขั้นตอนรอยืนยัน</button><section class="setup-section"><h3>สัญญาณออก / ยกเลิก</h3>${d.exit ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขสัญญาณออก</h4><button class="text-button" data-remove-optional="exit">ลบเงื่อนไขออก</button></div>${conditionUI(d.exit, "exit")}</div>` : '<button class="text-button" data-optional="exit">เพิ่มเงื่อนไขออก</button>'}${d.cancel ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขยกเลิก</h4><button class="text-button" data-remove-optional="cancel">ลบเงื่อนไขยกเลิก</button></div>${conditionUI(d.cancel, "cancel")}</div>` : '<button class="text-button" data-optional="cancel">เพิ่มเงื่อนไขยกเลิก</button>'}<p class="field-note">วงจรสัญญาณ ไม่ใช่ออเดอร์ที่ถือจริง</p></section><label>พักหลังสัญญาณ (แท่ง)<input type="number" min="0" max="1000" data-path="cooldownBars" value="${d.cooldownBars}"></label></div></details>${d.short?`<details class="setup-custom-short"><summary>เงื่อนไข Short</summary>${conditionUI(d.short.entry,"short.entry")}${d.short.stages.map((s,i)=>`<h4>รอยืนยัน ${i+1}</h4>${conditionUI(s.condition,`short.stages.${i}.condition`)}<label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="short.stages.${i}.withinBars" value="${s.withinBars}"></label>`).join("")}${d.short.exit?`<h4>สัญญาณออก Short</h4>${conditionUI(d.short.exit,"short.exit")}`:""}${d.short.cancel?`<h4>ยกเลิก Short</h4>${conditionUI(d.short.cancel,"short.cancel")}`:""}<label>พักสัญญาณ Short (แท่ง)<input type="number" min="0" max="1000" data-path="short.cooldownBars" value="${d.short.cooldownBars}"></label></details>`:""}<details open class="rule-review"><summary>สรุปเซตอัพ</summary><p class="draft-diff">${esc(fullSummary(d))}</p></details><fieldset class="destination-choices"><legend>แจ้งเตือนไปที่</legend><p>กล่องแจ้งเตือนในเว็บเสมอ</p>${state.destinations
     .filter((x) => x.verified)
     .map(
       (x) =>
@@ -2069,7 +2076,7 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 // Also checkpoint programmatic updates such as cleared text after sending a message.
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
-  await Promise.all([directionToolsReady, indicatorCatalogReady, setupLimitsReady]);
+  await Promise.all([directionToolsReady, indicatorCatalogReady, setupLimitsReady, timeframeToolsReady]);
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
   try {

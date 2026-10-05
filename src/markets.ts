@@ -6,8 +6,10 @@ import { randomUUID } from "node:crypto";
 import { ApiError } from "./errors.js";
 import { preview } from "./domain/preview.js";
 import { indicatorByName } from "../dist/indicator-catalog.js";
+import { availableTimeframes, lastClosedBoundary } from "../dist/timeframes.js";
 import {
   frames,
+  timeframe,
   replay,
   evaluate,
   advance,
@@ -172,9 +174,11 @@ export async function candles(
   frame: keyof typeof frames,
   requiredBars = 500,
 ): Promise<Candle[]> {
+  if (!availableTimeframes([exchange], market).includes(frame))
+    throw new ApiError(400, "TIMEFRAME_UNSUPPORTED", `${exchange} ไม่รองรับไทม์เฟรม ${frame} ในตลาดนี้`);
   const key = [exchange, market, pair, frame, requiredBars].join(":");
   const hit = cache.get(key);
-  const expectedClose = Math.floor(Date.now() / frames[frame]) * frames[frame];
+  const expectedClose = lastClosedBoundary(Date.now(), frame);
   const completeHistory = hit?.data.every(
     (bar, index, bars) =>
       index === 0 || bar.time - bars[index - 1].time === frames[frame],
@@ -209,7 +213,7 @@ export async function candles(
         expectedClose - hit.data.at(-1)!.time < requiredBars * frames[frame];
       let since = reusable
         ? hit.data.at(-1)!.time - frames[frame]
-        : Math.floor(now / frames[frame]) * frames[frame] -
+        : lastClosedBoundary(now, frame) -
           requiredBars * frames[frame];
       for (let page = 0; page < 8; page++) {
         const batch: number[][] = await client.fetchOHLCV(
@@ -374,12 +378,14 @@ export function registerMarkets(
       .object({
         spec: strategySchema,
         indicators: z.array(operand).max(8).default([]),
-        chartTimeframe: z.enum(["5m", "15m", "1h", "4h", "1d"]).optional(),
+        chartTimeframe: timeframe.optional(),
       })
       .strict()
       .parse(req.body);
     const spec = input.spec;
     const chartFrame = input.chartTimeframe ?? spec.timeframe;
+    if (!availableTimeframes(spec.exchange, spec.market).includes(chartFrame))
+      throw new ApiError(400, "TIMEFRAME_UNSUPPORTED", `กระดานและตลาดที่เลือกไม่รองรับ ${chartFrame}`);
     if (spec.exchange.length !== 1 || spec.pairs.length !== 1)
       throw new ApiError(
         400,
@@ -399,7 +405,7 @@ export function registerMarkets(
         );
       // Chart-only operands obey the same semantic checks as saved conditions.
       strategySchema.parse({
-        ...spec, market: "Spot", side: "SPOT", short: undefined, mirrorShort: undefined,
+        ...spec, exchange: ["Binance"], market: "Spot", side: "SPOT", short: undefined, mirrorShort: undefined,
         entry: { kind: "COMPARE", op: ">", left: o, right: { kind: "CONSTANT", value: 0 } },
         stages: [], exit: undefined, cancel: undefined,
       });

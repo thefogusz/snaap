@@ -1,3 +1,4 @@
+import { lastClosedBoundary } from "../dist/timeframes.js";
 // Local, isolated interaction fixture. No exchange calls, real AI or monitoring.
 import http from "node:http";
 import { randomUUID } from "node:crypto";
@@ -25,7 +26,7 @@ import { frames } from "../src/domain/engine.js";
     limit: number,
   ) {
     const step = frames[frame],
-      end = Math.floor(Date.now() / step) * step;
+      end = lastClosedBoundary(Date.now(), frame);
     return Array.from({ length: 2400 }, (_, i) => {
       const close = 100 + Math.sin(i / 9) * 8 + i * 0.01;
       return [

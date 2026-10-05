@@ -8,6 +8,15 @@ visual viewport when a software keyboard opens.
 
 ## Draft and chart semantics
 
+- Standard intervals run from 5m through 1w (no 1m/3m/monthly/custom intervals).
+  `dist/timeframes.js` shares durations and native exchange/market availability
+  across the UI, schema and harness. Unsupported operands are rejected, including
+  independent Short branches. Weekly streams and monitor checkpoints use Monday
+  UTC boundaries. Changing exchange preserves draft values and visibly marks an
+  unsupported saved interval; only chart navigation falls back to an available
+  frame. The toolbar scrolls horizontally when its interval list is wider than
+  the chart.
+
 - `StrategySpec v2` remains the saved/evaluated strategy. The shared maximum is
   `MAX_SETUP_CONDITIONS = 24` in `dist/setup-limits.js`, including independently
   authored Short conditions. Mirrored Short templates count once. Existing group,
@@ -80,3 +89,11 @@ require separate evaluation; no live-model or user-study success is claimed.
 Design references: [TradingView multi-condition alerts](https://www.tradingview.com/support/solutions/43000761492-multi-condition-alerts/),
 [TrendSpider Sidekick](https://trendspider.com/blog/sidekick-ai-strategy-builder/),
 [Composer Create with AI](https://help.composer.trade/article/108-create-with-ai).
+
+Interval references: [Binance candles](https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints),
+[Bybit kline](https://bybit-exchange.github.io/docs/v5/market/kline),
+[Bitget Spot](https://www.bitget.com/zh-CN/docs/catalog/classic-spot-market/classic-spot-market),
+[MEXC Spot](https://mexcdevelop.github.io/apidocs/spot_v3_en/) and
+[MEXC Futures](https://mexcdevelop.github.io/apidocs/contract_v1_en/).
+Availability is also checked against the installed CCXT adapter definitions,
+including Bitget's separate Spot/swap maps and OKX's default UTC REST candles.

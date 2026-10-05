@@ -55,6 +55,15 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await page.locator('[data-resize-panel="conditions"]').press("Home");
     assert.equal(Math.round((await panelBox("#conversation")).width), 300);
     console.log("PASS draggable panel widths, chart resizing, session restore and keyboard reset");
+    for (const frame of ["30m", "1w", "15m"]) {
+      await page.locator(`[data-chart-frame="${frame}"]`).click();
+      await page.locator("[data-chart-title]").filter({hasText: `· ${frame} ·`}).waitFor();
+      await page.locator("[data-chart-status]").filter({hasText: /\d+ แท่งปิด/}).waitFor();
+      assert.ok((await page.locator(".studio-condition-overview").innerText()).includes("แท่ง 15M ปิด"));
+    }
+    assert.equal(await page.locator('[data-chart-frame="1m"]').count(), 0);
+    assert.equal(await page.locator('[data-chart-frame="1M"]').count(), 0);
+    console.log("PASS 30m and weekly chart views keep the evaluation timeframe unchanged");
     await page.locator('[data-chart-frame="4h"]').click();
     await page
       .locator("[data-chart-title]")

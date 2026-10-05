@@ -80,6 +80,12 @@ test("preview API loads a new chart timeframe without changing strategy events",
     assert.deepEqual(data.events, original.json().events);
     assert.ok(data.overlays.every((o: any) => o.operand.timeframe === "4h"));
     const beforeInvalid = fetched;
+    const unsupportedNative = await app.inject({
+      method: "POST", url: "/api/v1/preview",
+      payload: { spec: { ...spec, exchange: ["Bybit"] }, chartTimeframe: "8h" },
+    });
+    assert.equal(unsupportedNative.statusCode, 400);
+    assert.match(unsupportedNative.json().message, /ไม่รองรับ 8h/);
     const invalidFrame = await app.inject({
       method: "POST",
       url: "/api/v1/preview",

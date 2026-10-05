@@ -176,11 +176,20 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
 }
 .studio-timeframes {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
   gap: 2px;
 }
 .studio-timeframes button {
   padding-inline: 8px;
+  flex: none;
+}
+.studio-chart-toolbar {
+  flex-wrap: nowrap;
+}
+.studio-chart-toolbar > button {
+  flex: none;
 }
 .workbench[data-tab="split"] .chart-legend {
   max-height: 70px;

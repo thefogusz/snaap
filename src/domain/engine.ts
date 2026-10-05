@@ -6,14 +6,9 @@ import {
 import { extendedValue } from "./extended-indicators.js";
 import { mirrorBranch } from "../../dist/trade-direction.js";
 import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
-export const frames = {
-  "5m": 300000,
-  "15m": 900000,
-  "1h": 3600000,
-  "4h": 14400000,
-  "1d": 86400000,
-};
-const timeframe = z.enum(["5m", "15m", "1h", "4h", "1d"]);
+import { FRAME_MS, TIMEFRAMES, availableTimeframes } from "../../dist/timeframes.js";
+export const frames = FRAME_MS;
+export const timeframe = z.enum(TIMEFRAMES);
 export type Candle = {
   time: number;
   open: number;
@@ -207,6 +202,9 @@ const strategyStructure = z
   })
   .strict()
   .superRefine((s, ctx) => {
+    const supportedFrames = availableTimeframes(s.exchange, s.market);
+    if (!supportedFrames.includes(s.timeframe))
+      ctx.addIssue({ code: "custom", message: `กระดานและตลาดที่เลือกไม่รองรับ ${s.timeframe}` });
     if (s.market === "Spot" && s.side && s.side !== "SPOT")
       ctx.addIssue({
         code: "custom",
@@ -241,6 +239,8 @@ const strategyStructure = z
         return c.children.forEach((x) => validateOperands(x, entryContext));
       if (c.kind === "HOLD") return validateOperands(c.condition, entryContext);
       for (const o of [c.left, c.right]) {
+        if ((o.kind === "PRICE" || o.kind === "INDICATOR") && !supportedFrames.includes(o.timeframe))
+          ctx.addIssue({ code: "custom", message: `กระดานและตลาดที่เลือกไม่รองรับ ${o.timeframe}` });
         if (o.kind === "INDICATOR") {
           const definition = indicatorByName[o.name];
           if (o.params && !definition)

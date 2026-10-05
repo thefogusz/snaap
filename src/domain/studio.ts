@@ -1,17 +1,19 @@
 import { z } from "zod";
 import {
   frames,
+  timeframe,
   strategyConditions,
   type Strategy,
   type Condition,
   type Series,
 } from "./engine.js";
 import { preview } from "./preview.js";
+import { availableTimeframes } from "../../dist/timeframes.js";
 
 export const editorContextSchema = z
   .object({
     pair: z.string().min(1).max(81),
-    chartTimeframe: z.enum(["5m", "15m", "1h", "4h", "1d"]),
+    chartTimeframe: timeframe,
     conditionPath: z.string().max(240).optional(),
     selectedBarTime: z.number().int().nonnegative().optional(),
   })
@@ -42,6 +44,7 @@ export function validEditorContext(
   return (
     !!spec &&
     spec.pairs.includes(context.pair) &&
+    availableTimeframes(spec.exchange, spec.market).includes(context.chartTimeframe) &&
     (!context.conditionPath || !!conditionAtPath(spec, context.conditionPath))
   );
 }

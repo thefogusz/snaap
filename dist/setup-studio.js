@@ -3,6 +3,7 @@
   const { conditionRows, indicatorUses, indicatorKey, evidenceAtPath } =
     await import("./studio-model.js");
   await indicatorCatalogReady;
+  await timeframeToolsReady;
   const chartPane = setupPane.querySelector(".setup-studio");
   const sessions = new Map();
   let sessionKey = "",
@@ -223,14 +224,16 @@
     paintFrames();
   }
   function paintFrames() {
+    const supported = setupTimeframes();
     toolbar
       .querySelectorAll("[data-chart-frame]")
-      .forEach((b) =>
+      .forEach((b) => {
+        b.hidden = !supported.includes(b.dataset.chartFrame);
         b.setAttribute(
           "aria-pressed",
           String(b.dataset.chartFrame === session().frame),
-        ),
-      );
+        );
+      });
   }
   function context() {
     if (!state.draft) return;
@@ -360,6 +363,11 @@
   function decorate() {
     if (!state.draft) return;
     session();
+    const supported = setupTimeframes();
+    if (!supported.includes(view.frame)) {
+      view.frame = supported.includes(state.draft.timeframe) ? state.draft.timeframe : supported[0];
+      persist();
+    }
     header.hidden = workbench.hidden || workbench.dataset.tab === "chat";
     tabsBar.hidden = header.hidden;
     header.querySelector("[data-studio-name]").textContent = state.draft.name;
