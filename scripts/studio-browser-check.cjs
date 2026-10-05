@@ -31,6 +31,11 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .filter({ hasText: /\d+ แท่งปิด/ })
       .waitFor();
     assert.equal(await page.locator(".design-body > .studio-setup-settings").count(), 1);
+    assert.equal(await page.locator('.design-body > .studio-name-field [data-path="name"]').count(), 1);
+    assert.ok(await page.locator('.studio-name-field [data-path="name"]').isVisible());
+    assert.ok(await page.locator('.studio-name-field').evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector('.studio-setup-settings')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+    assert.equal(await page.locator('.studio-setup-details [data-path="name"]').count(), 0);
+    assert.equal(await page.locator('.studio-setup-details > summary').innerText(), 'รอบตรวจสัญญาณ');
     assert.ok(await page.locator(".studio-setup-settings .exchange-fieldset").isVisible());
     assert.equal(await page.locator('.studio-setup-settings [data-path="market"]').count(), 1);
     assert.ok(await page.locator('.studio-setup-settings > label').isVisible());

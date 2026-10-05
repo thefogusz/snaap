@@ -395,6 +395,10 @@
         if (field) settings.append(field);
       body.querySelector(":scope > .field-grid")?.remove();
       body.prepend(settings);
+      if (name) {
+        name.classList.add("studio-name-field");
+        settings.before(name);
+      }
       const feedback = body.querySelector("#editor-feedback");
       if (feedback) body.prepend(feedback);
       const overview = document.createElement("section");
@@ -403,8 +407,7 @@
       overview.after(overlayEditor);
       const details = document.createElement("details");
       details.className = "studio-setup-details";
-      details.innerHTML = "<summary>ชื่อเซตอัปและรอบตรวจสัญญาณ</summary>";
-      if (name) details.append(name);
+      details.innerHTML = "<summary>รอบตรวจสัญญาณ</summary>";
       if (evaluation) details.append(evaluation);
       overlayEditor.after(details);
       // The overview already shows the setup; keep the full review available on demand.

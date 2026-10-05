@@ -251,6 +251,17 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   padding: 0;
   border: 0;
 }
+.workbench[data-tab="split"] .design-body > .studio-name-field {
+  display: block;
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+.studio-name-field input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+}
 .studio-setup-settings .exchange-fieldset {
   margin-top: 0;
 }
