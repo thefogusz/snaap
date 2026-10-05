@@ -70,6 +70,7 @@ export function inspectSetupBar(
   return {
     selectedTime,
     evaluationTimeframe: spec.timeframe,
+    evaluationClosedAtIso: bar ? new Date(bar.time).toISOString() : null,
     bar,
     references: [...used].map((timeframe) => {
       const candles = series[timeframe] ?? [];
@@ -79,6 +80,7 @@ export function inspectSetupBar(
       return {
         timeframe,
         closedAt: reference?.time ?? null,
+        closedAtIso: reference ? new Date(reference.time).toISOString() : null,
         stale:
           !reference ||
           (!!bar && bar.time - reference.time >= frames[timeframe]),
@@ -89,6 +91,8 @@ export function inspectSetupBar(
       bars: series[timeframe]?.length ?? 0,
       firstClosedAt: series[timeframe]?.[0]?.time ?? null,
       lastClosedAt: series[timeframe]?.at(-1)?.time ?? null,
+      firstClosedAtIso: series[timeframe]?.[0] ? new Date(series[timeframe]![0].time).toISOString() : null,
+      lastClosedAtIso: series[timeframe]?.length ? new Date(series[timeframe]!.at(-1)!.time).toISOString() : null,
     })),
     limitation:
       "Closed-candle signal evidence only; insufficient history may yield UNKNOWN. Not returns, executed orders or live monitoring.",

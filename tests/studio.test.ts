@@ -68,6 +68,8 @@ test("inspection uses the preceding closed evaluation bar, never a future HTF ca
     "1h": [bar(3600000, 101), bar(7200000, 9999)],
   };
   const result = inspectSetupBar(spec, series, 3899999);
+  assert.equal(result.evaluationClosedAtIso,new Date(result.bar!.time).toISOString());
+  assert.ok(result.references.every(reference=>reference.closedAtIso=== (reference.closedAt===null ? null : new Date(reference.closedAt).toISOString())));
   assert.equal(result.bar?.time, 3600000);
   assert.equal(result.bar?.entry.result, "TRUE");
   assert.equal(result.bar?.entry.left, 101);

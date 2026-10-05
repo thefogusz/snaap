@@ -19,6 +19,8 @@
     "test:backup": "tsx scripts/backup-check.ts",
     "test:soak": "tsx scripts/soak.ts",
     "test:harness": "tsx scripts/harness-contract-check.ts",
+    "test:harness:provider": "node --env-file-if-exists=.env --import tsx scripts/harness-provider-smoke.ts",
+    "test:integration:isolated": "tsx scripts/isolated-integration-check.ts integration trade-sides-integration workspace-delete-integration setup-files-integration history-integration",
     "eval:prepare": "tsx scripts/eval-cases.ts",
     "eval:agent": "node --env-file-if-exists=.env --import tsx scripts/evaluate-agent.ts"
   },

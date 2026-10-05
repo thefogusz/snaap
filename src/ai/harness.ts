@@ -504,17 +504,25 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
           },
           { signal: deadline },
         );
-        inputTokens += response.usage?.input_tokens ?? 0;
-        outputTokens += response.usage?.output_tokens ?? 0;
-        cost = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
+        const roundInput = response.usage?.input_tokens;
+        const roundOutput = response.usage?.output_tokens;
+        const validUsage = Number.isSafeInteger(roundInput) && roundInput! >= 0 &&
+          Number.isSafeInteger(roundOutput) && roundOutput! >= 0;
         trace.push({
           round,
           model: response.model,
-          inputTokens: response.usage?.input_tokens,
-          outputTokens: response.usage?.output_tokens,
+          inputTokens: validUsage ? roundInput : undefined,
+          outputTokens: validUsage ? roundOutput : undefined,
           status: response.status,
           incomplete: response.incomplete_details,
         });
+        if (!validUsage)
+          throw new ApiError(502, 'AI_USAGE_INVALID', 'AI ส่งข้อมูลการใช้งานไม่ครบ จึงวิเคราะห์ต่อไม่ได้ คืนโควตาแล้ว กรุณาลองใหม่');
+        inputTokens += roundInput!;
+        outputTokens += roundOutput!;
+        cost = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
+        if (cost > rate.cap)
+          throw new ApiError(422, 'COST_BOUND', 'ค่าใช้จ่าย AI ถึงเพดานของคำขอแล้ว หยุดวิเคราะห์และคืนโควตา กรุณาแบ่งคำขอเป็นขั้นย่อย');
         if (response.status !== "completed")
           throw new ApiError(
             502,
@@ -527,10 +535,9 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         if (!calls.length) {
           if (
             !draft &&
-            requestsDraftChange(input.text) &&
             claimsDraftChange(text)
           ) {
-            if (requireProposal)
+            if (requireProposal || !requestsDraftChange(input.text))
               throw new ApiError(
                 502,
                 "AI_ACTION_MISSING",
@@ -546,7 +553,8 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         }
         requireProposal = false;
         for (const call of calls) {
-          if (++toolCount > 6) throw new Error("TOOL_BUDGET");
+          if (++toolCount > 6)
+            throw new ApiError(502, 'AI_TOOL_LIMIT', 'AI ใช้เครื่องมือครบขอบเขตคำขอแล้ว คืนโควตาแล้ว กรุณาแบ่งการวิเคราะห์เป็นขั้นย่อย');
           let result: unknown = { error: "Unknown tool" };
           if (call.name === "read_skill") {
             let skillArguments: unknown;
@@ -848,8 +856,9 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       trace.push({
         failure: {
           code:
-            error instanceof ApiError ? error.code : "PROVIDER_OR_TOOL_FAILURE",
-          status: error instanceof OpenAI.APIError ? error.status : null,
+            error instanceof ApiError ? error.code :
+              error instanceof OpenAI.APIConnectionTimeoutError || deadline.aborted ? 'AI_TIMEOUT' : 'PROVIDER_OR_TOOL_FAILURE',
+          status: error instanceof OpenAI.APIError ? error.status ?? null : null,
         },
       });
       const totals = (trace as any[]).reduce(
@@ -873,6 +882,8 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         [runId, JSON.stringify(trace)],
       );
       if (error instanceof ApiError) throw error;
+      if(error instanceof OpenAI.APIConnectionTimeoutError || deadline.aborted)
+        throw new ApiError(502,'AI_TIMEOUT','AI ตอบกลับไม่ทันเวลา คืนโควตาแล้ว กรุณาลองใหม่หรือแบ่งคำขอเป็นขั้นย่อย');
       throw new ApiError(
         502,
         "AI_UNAVAILABLE",
