@@ -1236,7 +1236,7 @@ async function chat(text) {
   thinking.setAttribute('aria-live','polite');
   thinking.setAttribute('aria-atomic','true');
   thinking.innerHTML =
-    '<div class="thinking-header"><span class="thinking-mark" aria-hidden="true">S</span><div><strong>Snaap</strong><span data-thinking-stage>กำลังเตรียมคำตอบ…</span></div><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></div><div class="thinking-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
+    '<svg class="thinking-mark" viewBox="34 20 128 155" aria-hidden="true" focusable="false"><use href="/assets/snaap-symbol.svg#snaap-symbol"></use></svg><span class="sr-only">Snaap: </span><span data-thinking-stage>กำลังเตรียมคำตอบ…</span><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
   const thinkingStage=thinking.querySelector('[data-thinking-stage]');
   const setThinkingStage=text=>{thinkingStage.textContent=text;};
   let thinkingWaitTimer;

@@ -490,34 +490,21 @@ summary:focus-visible {
   padding: 0 !important;
 }
 .thinking-indicator {
-  display: flex;
-  flex-direction:column;
-  gap: 18px;
-  padding: 18px 20px;
-  width:min(100%,440px);
-  box-sizing:border-box;
-  border:1px solid var(--line);
-  border-radius:18px;
-  background:var(--white);
-  margin:12px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0;
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.6;
 }
-.thinking-header { display:flex; align-items:center; gap:10px; }
-.thinking-mark { display:grid; place-items:center; width:30px; height:30px; flex-shrink:0; border-radius:10px; color:var(--lime); background:var(--pale); font-size:18px; font-weight:700; line-height:1; }
-.thinking-header>div { display:grid; gap:4px; min-width:0; }
-.thinking-header strong { color:var(--ink); font-size:13px; font-weight:600; }
-.thinking-header [data-thinking-stage] { font-size:12px; line-height:1.5; }
-.thinking-header .thinking-dots { margin-left:auto; flex-shrink:0; color:var(--lime); }
-.thinking-skeleton { display:grid; gap:9px; padding-left:40px; }
-.thinking-skeleton span { height:8px; border-radius:8px; background:var(--pale); position:relative; overflow:hidden; }
-.thinking-skeleton span:nth-child(2) { width:88%; }
-.thinking-skeleton span:nth-child(3) { width:62%; }
-.thinking-skeleton span::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--ink) 7%,transparent),transparent); transform:translateX(-100%); animation:snaap-thinking-shimmer 1.8s ease-in-out infinite; }
-.thinking-skeleton span:nth-child(2)::after { animation-delay:120ms; }
-.thinking-skeleton span:nth-child(3)::after { animation-delay:240ms; }
-@keyframes snaap-thinking-shimmer { to { transform:translateX(100%); } }
-@media(prefers-reduced-motion:reduce) { .thinking-skeleton span::after,.thinking-indicator .thinking-dots i { animation:none; } }
+.thinking-mark { display:block; width:22px; height:26px; flex:none; color:var(--ink); }
+.thinking-indicator [data-thinking-stage] { min-width:0; overflow-wrap:anywhere; }
+.thinking-indicator .thinking-dots { flex:none; color:var(--muted); }
+@media(prefers-reduced-motion:reduce) { .thinking-indicator .thinking-dots i { animation:none; } }
 .thinking-dots {
   display: flex;
   gap: 4px;
