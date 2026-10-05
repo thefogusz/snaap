@@ -27,7 +27,7 @@ window.SnaapGuideScenes = (() => {
   function timeframe(key,frame) {
     const parts={'5m':['1m',5],'15m':['5m',3],'1h':['15m',4],'4h':['1h',4],'1d':['4h',6]}, [unit,count]=parts[frame]||parts['15m'];
     const small=Array.from({length:count},(_,i)=>`<g class="guide-candle" style="--delay:${i*200}ms"><path d="M${28+i*40} 30V80" stroke="#7adeb7"/><rect x="${20+i*40}" y="${48-i*2}" width="16" height="24" rx="2" fill="#7adeb7"/><text x="${28+i*40}" y="99" text-anchor="middle" fill="#edf0f4" font-size="12">${unit}</text></g>`).join('');
-    return scene(`${svg(`${small}<path d="M18 113H${28+(count-1)*40}V119" fill="none" stroke="#c9f14a"/><text x="150" y="139" text-anchor="middle" fill="#c9f14a" font-size="14">${count} แท่ง × ${unit} = 1 แท่ง ${frame}</text>`,150)}${steps([card(key==='timeframe'?'จังหวะตรวจเซตอัพ':'ข้อมูลของค่านี้',key==='timeframe'?`ปิดแท่ง ${frame} → ตรวจเงื่อนไข`:`คำนวณจากแท่ง ${frame} ที่ปิดแล้ว`)])}`,key==='timeframe'?'แท่งยังไม่ปิด → รอ · แท่งปิด → ตรวจ':'รวมแท่ง: เปิดแรก / สูงที่สุด / ต่ำที่สุด / ปิดสุดท้าย');
+    return scene(`${svg(`${small}<path d="M18 113H${28+(count-1)*40}V119" fill="none" stroke="#c9f14a"/><text x="150" y="139" text-anchor="middle" fill="#c9f14a" font-size="14">${count} แท่ง × ${unit} = 1 แท่ง ${frame}</text>`,150)}${steps([card(key==='timeframe'?'จังหวะตรวจเซ็ตอัพ':'ข้อมูลของค่านี้',key==='timeframe'?`ปิดแท่ง ${frame} → ตรวจเงื่อนไข`:`คำนวณจากแท่ง ${frame} ที่ปิดแล้ว`)])}`,key==='timeframe'?'แท่งยังไม่ปิด → รอ · แท่งปิด → ตรวจ':'รวมแท่ง: เปิดแรก / สูงที่สุด / ต่ำที่สุด / ปิดสุดท้าย');
   }
   const formulas = {
     SMA:['ราคาปิด 10, 12, 14','(10 + 12 + 14) ÷ 3','SMA 3 = 12'],

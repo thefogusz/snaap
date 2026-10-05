@@ -45,7 +45,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .getByRole("button", { name: "ใช้บัญชีทดสอบ", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "แชท + เซตอัป", exact: true })
+      .getByRole("button", { name: "แชท + เซ็ตอัพ", exact: true })
       .click();
     await page
       .locator("[data-chart-status]")
@@ -347,7 +347,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await page.locator(".studio-footer-actions [data-save]").click();
     await page
       .locator("#editor-feedback")
-      .filter({ hasText: "บันทึกเซตอัปแล้ว" })
+      .filter({ hasText: "บันทึกเซ็ตอัพแล้ว" })
       .waitFor();
     assert.equal(
       await page.locator(".studio-footer-actions [data-studio-activate]").isEnabled(),
@@ -371,7 +371,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await oldPreview;
     await page.getByRole('button', {name:'เริ่มบทสนทนาใหม่',exact:true}).click();
     await page.locator('.workbench[data-tab="chat"]').waitFor({state:'visible'});
-    await page.getByRole('button', {name:'แชท + เซตอัป',exact:true}).click();
+    await page.getByRole('button', {name:'แชท + เซ็ตอัพ',exact:true}).click();
     await page.locator('.studio-overview-heading span').filter({hasText:'0/24'}).waitFor();
     await page.waitForTimeout(1500);
     assert.equal(await page.locator('.studio-condition-card').count(), 0);

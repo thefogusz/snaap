@@ -30,7 +30,7 @@ function paintWorkspacePicker(){
     if(state.busy){toast('รอ snaap ตอบเสร็จก่อนสร้างเวิร์กสเปซ');return;}
     if(state.me?.plan!=='PRO'){toast('Free ใช้พื้นที่หลักได้ สร้างเวิร์กสเปซเพิ่มได้ใน Pro');return;}
     const dialog=document.createElement('dialog');dialog.className='workspace-dialog';
-    dialog.innerHTML='<form><h2>เพิ่มเวิร์กสเปซ</h2><label>ชื่อเวิร์กสเปซ<input name="name" maxlength="60" required placeholder="เช่น MEXC หรือเซตอัประยะสั้น"></label><div class="row-actions"><button type="button" class="secondary" data-close>ยกเลิก</button><button class="primary">สร้าง</button></div></form>';
+    dialog.innerHTML='<form><h2>เพิ่มเวิร์กสเปซ</h2><label>ชื่อเวิร์กสเปซ<input name="name" maxlength="60" required placeholder="เช่น MEXC หรือเซ็ตอัพระยะสั้น"></label><div class="row-actions"><button type="button" class="secondary" data-close>ยกเลิก</button><button class="primary">สร้าง</button></div></form>';
     dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();
     dialog.querySelector('form').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{const row=await api('/workspaces','POST',{name:dialog.querySelector('input').value});state.workspaces.push(row);await switchWorkspace(row.id);dialog.close();}catch(error){toast(error.message);button.disabled=false;}};
     document.body.append(dialog);dialog.showModal();dialog.querySelector('input').focus();
@@ -48,7 +48,7 @@ function paintWorkspacePicker(){
     if(state.busy){toast('รอ Snaap ตอบเสร็จก่อนลบเวิร์กสเปซ');return;}
     const primary=state.workspaces.find(w=>w.is_default);
     const dialog=document.createElement('dialog');dialog.className='workspace-dialog';
-    dialog.innerHTML=`<h2>ลบเวิร์กสเปซ “${esc(space.name)}”?</h2><p>บทสนทนา เซตอัป และการใช้ข้อมูลจะย้ายไป “${esc(primary.name)}”</p><div class="row-actions"><button type="button" class="secondary" data-close autofocus>ยกเลิก</button><button type="button" class="secondary" data-confirm-delete>ลบเวิร์กสเปซ</button></div>`;
+    dialog.innerHTML=`<h2>ลบเวิร์กสเปซ “${esc(space.name)}”?</h2><p>บทสนทนา เซ็ตอัพ และการใช้ข้อมูลจะย้ายไป “${esc(primary.name)}”</p><div class="row-actions"><button type="button" class="secondary" data-close autofocus>ยกเลิก</button><button type="button" class="secondary" data-confirm-delete>ลบเวิร์กสเปซ</button></div>`;
     dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();
     dialog.querySelector('[data-confirm-delete]').onclick=async e=>{
       const button=e.currentTarget;button.disabled=true;
@@ -69,7 +69,7 @@ let workspaceSwitching=false;
 async function switchWorkspace(id){
   if(id===state.workspaceId){paintWorkspacePicker();return;}
   if(workspaceSwitching){paintWorkspacePicker();return;}
-  if(state.saving){paintWorkspacePicker();toast('กำลังบันทึกเซตอัป รอสักครู่');return;}
+  if(state.saving){paintWorkspacePicker();toast('กำลังบันทึกเซ็ตอัพ รอสักครู่');return;}
   if(state.busy){paintWorkspacePicker();toast('รอ snaap ตอบเสร็จก่อนเปลี่ยนเวิร์กสเปซ');return;}
   if(!state.workspaces.some(w=>w.id===id))return;
   workspaceSwitching=true;

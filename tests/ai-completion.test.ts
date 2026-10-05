@@ -5,13 +5,15 @@ import { outputLimit } from '../src/ai/budget.js';
 test('draft success prose is distinguished from questions and advice',()=>{
   assert.equal(claimsDraftChange('ส่งร่างเข้า editor แล้วครับ (valid: true)'),true);
   assert.equal(claimsDraftChange('ลบเงื่อนไขออกแล้ว'),true);
-  assert.equal(claimsDraftChange('ปรับเซตอัปเรียบร้อยแล้วครับ'),true);
+  for (const word of ['เซ็ตอัพ','เซตอัพ','เซตอัป','เซ็ตอัป']) {
+    assert.equal(claimsDraftChange(`ปรับ${word}เรียบร้อยแล้วครับ`),true);
+  }
   assert.equal(claimsDraftChange("I've updated the setup."),true);
   assert.equal(claimsDraftChange('Would you like me to update the setup?'),false);
   assert.equal(claimsDraftChange('อยากให้เพิ่ม exit แบบไหนดีครับ'),false);
   assert.equal(claimsDraftChange('ไม่สามารถเปิดออเดอร์จริงได้'),false);
   assert.equal(requestsDraftChange('เปลี่ยน RSI จาก 30 เป็น 35'),true);
-  assert.equal(requestsDraftChange('แนะนำการปรับพารามิเตอร์ อย่าแก้เซตอัป'),false);
+  assert.equal(requestsDraftChange('แนะนำการปรับพารามิเตอร์ อย่าแก้เซ็ตอัพ'),false);
   assert.equal(requestsDraftChange('ส่งคำสั่งเปิดออเดอร์เงินจริงให้เลย'),false);
 });
 test('compatible provider spec wrapper is normalized without inventing fields',()=>{

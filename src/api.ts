@@ -650,7 +650,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT c.*,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY created_at DESC LIMIT 100",
+          "SELECT c.*,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่','เซ็ตอัพใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY created_at DESC LIMIT 100",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,

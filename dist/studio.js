@@ -2,8 +2,8 @@
 (() => {
   const studio = document.createElement("section");
   studio.className = "setup-studio";
-  studio.setAttribute("aria-label", "กราฟจำลองเซตอัพ");
-  studio.innerHTML = `<header><div class="studio-header-info"><strong data-chart-title>กราฟเซตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class="studio-header-actions"><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></div></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class="setup-insights" data-setup-insights></div><details class="chart-evidence"><summary>รายละเอียดเงื่อนไข · คลิกแท่งบนกราฟเพื่อดูย้อนหลัง</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
+  studio.setAttribute("aria-label", "กราฟจำลองเซ็ตอัพ");
+  studio.innerHTML = `<header><div class="studio-header-info"><strong data-chart-title>กราฟเซ็ตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class="studio-header-actions"><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></div></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class="setup-insights" data-setup-insights></div><details class="chart-evidence"><summary>รายละเอียดเงื่อนไข · คลิกแท่งบนกราฟเพื่อดูย้อนหลัง</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
   setupPane.insertBefore(studio, panel);
   const status = studio.querySelector("[data-chart-status]");
   const canvas = studio.querySelector(".studio-canvas");
@@ -25,8 +25,8 @@
       clear();
       chartPickerWrap.hidden=true;
       scrub.value=0;
-      studio.querySelector('[data-chart-title]').textContent='กราฟเซตอัปใหม่';
-      status.textContent='เพิ่มเงื่อนไขเพื่อดูกราฟและสัญญาณของเซตอัปนี้';
+      studio.querySelector('[data-chart-title]').textContent='กราฟเซ็ตอัพใหม่';
+      status.textContent='เพิ่มเงื่อนไขเพื่อดูกราฟและสัญญาณของเซ็ตอัพนี้';
       canvas.inert=false;canvas.style.opacity='1';
     },
     visibility(){lines.forEach(({series,operand})=>series.applyOptions({visible:!window.SnaapStudio?.isHidden(operand)}));},
@@ -297,7 +297,7 @@
     stop();
     studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
     clearTimeout(timer);
-    status.textContent = "เซตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…";
+    status.textContent = "เซ็ตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…";
     canvas.style.opacity = ".35";canvas.inert=true;
     studio.querySelector("[data-chart-evidence]").textContent="กำลังคำนวณร่างล่าสุด…";
     timer = setTimeout(() => {
@@ -388,7 +388,7 @@
     let mode=state.draft.pairs.length>1?'multiple':'single',selected=new Set(state.draft.pairs),catalog=[];
     let manualSelection=new Set(selected);
     const maxPairs=state.me?.limits?.pairsPerSetup??10;
-    dialog.innerHTML = `<header><h2 id="instrument-dialog-title">เลือกคู่เทรด</h2><button type="button" aria-label="ปิด">${uiIcon("close")}</button></header><p>${esc(source)} · ใช้เงื่อนไขเดียวกัน แยกสัญญาณแต่ละคู่</p><div class="pair-selection-modes" role="group" aria-label="วิธีเลือกคู่เทรด"><button type="button" data-pair-mode="single">คู่เดียว</button><button type="button" data-pair-mode="multiple">หลายคู่</button><button type="button" data-pair-mode="all">ทั้งหมด</button></div><div class="pair-catalog-tools"><input type="search" aria-label="ค้นหาคู่เทรด" placeholder="ค้นหา BTC, ETH หรือชื่อคู่เทรด"><button type="button" class="secondary" data-refresh-catalog>ซิงก์ล่าสุด</button></div><p data-catalog-status role="status">กำลังโหลดจากกระดาน…</p><div class="instrument-list"></div><footer class="pair-selection-footer"><span data-selection-count></span><button type="button" class="text-button" data-clear-pairs>ล้างที่เลือก</button><button type="button" class="primary" data-apply-pairs disabled>ใช้คู่ที่เลือก</button></footer><p class="pair-selection-note">เลือกได้สูงสุด 10 คู่ต่อเซตอัป · เลือกทั้งหมดเร็ว ๆ นี้</p>`;
+    dialog.innerHTML = `<header><h2 id="instrument-dialog-title">เลือกคู่เทรด</h2><button type="button" aria-label="ปิด">${uiIcon("close")}</button></header><p>${esc(source)} · ใช้เงื่อนไขเดียวกัน แยกสัญญาณแต่ละคู่</p><div class="pair-selection-modes" role="group" aria-label="วิธีเลือกคู่เทรด"><button type="button" data-pair-mode="single">คู่เดียว</button><button type="button" data-pair-mode="multiple">หลายคู่</button><button type="button" data-pair-mode="all">ทั้งหมด</button></div><div class="pair-catalog-tools"><input type="search" aria-label="ค้นหาคู่เทรด" placeholder="ค้นหา BTC, ETH หรือชื่อคู่เทรด"><button type="button" class="secondary" data-refresh-catalog>ซิงก์ล่าสุด</button></div><p data-catalog-status role="status">กำลังโหลดจากกระดาน…</p><div class="instrument-list"></div><footer class="pair-selection-footer"><span data-selection-count></span><button type="button" class="text-button" data-clear-pairs>ล้างที่เลือก</button><button type="button" class="primary" data-apply-pairs disabled>ใช้คู่ที่เลือก</button></footer><p class="pair-selection-note">เลือกได้สูงสุด 10 คู่ต่อเซ็ตอัพ · เลือกทั้งหมดเร็ว ๆ นี้</p>`;
     document.body.append(dialog);
     dialog.showModal();
     dialog.querySelector("header button").onclick = () => dialog.close();

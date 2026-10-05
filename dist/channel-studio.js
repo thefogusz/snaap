@@ -25,7 +25,7 @@
         ],
         [
           "ส่งตัวอย่างแล้วเปิดใช้งาน",
-          "กด “เชื่อมและส่งทดสอบ” แล้วดูว่าข้อความถึงปลายทาง จากนั้นปรับหน้าตา บันทึก และเลือกช่องทางนี้ในเซตอัป",
+          "กด “เชื่อมและส่งทดสอบ” แล้วดูว่าข้อความถึงปลายทาง จากนั้นปรับหน้าตา บันทึก และเลือกช่องทางนี้ในเซ็ตอัพ",
         ],
       ],
     },
@@ -47,7 +47,7 @@
         ],
         [
           "ตั้งหน้าตาและเริ่มรับสัญญาณ",
-          "ปรับหน้าตา → บันทึก → ส่งตัวอย่าง แล้วเลือกช่องทางนี้ในเซตอัป การส่งตัวอย่างนับในโควตา LINE",
+          "ปรับหน้าตา → บันทึก → ส่งตัวอย่าง แล้วเลือกช่องทางนี้ในเซ็ตอัพ การส่งตัวอย่างนับในโควตา LINE",
         ],
       ],
     },
@@ -70,7 +70,7 @@
         ],
         [
           "ตั้งหน้าตาและเริ่มรับสัญญาณ",
-          "กด “ปรับหน้าตา” → บันทึก แล้วเลือกช่องทางนี้ในเซตอัป",
+          "กด “ปรับหน้าตา” → บันทึก แล้วเลือกช่องทางนี้ในเซ็ตอัพ",
         ],
       ],
     },
@@ -93,7 +93,7 @@
         ],
         [
           "ตั้งหน้าตาและเริ่มรับสัญญาณ",
-          "ปรับหน้าตา → บันทึก → ส่งตัวอย่าง แล้วเลือกช่องทางนี้ในเซตอัป ระบบของคุณต้องนำข้อมูลหน้าตาที่ได้รับไปแสดงเอง",
+          "ปรับหน้าตา → บันทึก → ส่งตัวอย่าง แล้วเลือกช่องทางนี้ในเซ็ตอัพ ระบบของคุณต้องนำข้อมูลหน้าตาที่ได้รับไปแสดงเอง",
         ],
       ],
     },
@@ -137,7 +137,7 @@
     if (!result) return "";
     const url = safeLink(result.connectUrl);
     if (result.verified)
-      return `<section class="channel-connected-summary" aria-label="เชื่อมต่อ ${guides[session.kind].name} สำเร็จ"><div class="channel-connected-top"><span class="channel-target-mark" aria-hidden="true">${session.kind === "WEBHOOK" ? "{}" : `<img src="${channelInfo[session.kind].logo}" alt="">`}</span><span class="channel-connected-status"><span aria-hidden="true">✓</span> เชื่อมต่อแล้ว</span></div><h3>${esc(session.name)}</h3><p class="channel-connected-description">${guides[session.kind].name} พร้อมรับสัญญาณจากเซตอัปของคุณ</p><div class="channel-connected-next"><span class="channel-connected-next-icon" aria-hidden="true">${uiIcon("sliders")}</span><div><strong>ถัดไป ตั้งหน้าตาสัญญาณ</strong><p>เลือกการ์ดหรือข้อความ แล้วบันทึก จากนั้นเลือกช่องทางนี้ในเซตอัป</p></div></div>${result.signingSecret ? `<div class="channel-connected-secret"><label>Signing Secret · แสดงครั้งเดียว<input type="password" readonly value="${esc(result.signingSecret)}" autocomplete="off"></label><button type="button" class="secondary" data-copy-secret>คัดลอก Secret</button><p class="channel-help">เก็บในระบบปลายทางก่อนปิดหน้านี้ เพื่อใช้ตรวจลายเซ็นของสัญญาณ</p></div>` : ""}<button type="button" class="primary channel-connected-action" data-studio-next>ตั้งหน้าตาสัญญาณ →</button></section>`;
+      return `<section class="channel-connected-summary" aria-label="เชื่อมต่อ ${guides[session.kind].name} สำเร็จ"><div class="channel-connected-top"><span class="channel-target-mark" aria-hidden="true">${session.kind === "WEBHOOK" ? "{}" : `<img src="${channelInfo[session.kind].logo}" alt="">`}</span><span class="channel-connected-status"><span aria-hidden="true">✓</span> เชื่อมต่อแล้ว</span></div><h3>${esc(session.name)}</h3><p class="channel-connected-description">${guides[session.kind].name} พร้อมรับสัญญาณจากเซ็ตอัพของคุณ</p><div class="channel-connected-next"><span class="channel-connected-next-icon" aria-hidden="true">${uiIcon("sliders")}</span><div><strong>ถัดไป ตั้งหน้าตาสัญญาณ</strong><p>เลือกการ์ดหรือข้อความ แล้วบันทึก จากนั้นเลือกช่องทางนี้ในเซ็ตอัพ</p></div></div>${result.signingSecret ? `<div class="channel-connected-secret"><label>Signing Secret · แสดงครั้งเดียว<input type="password" readonly value="${esc(result.signingSecret)}" autocomplete="off"></label><button type="button" class="secondary" data-copy-secret>คัดลอก Secret</button><p class="channel-help">เก็บในระบบปลายทางก่อนปิดหน้านี้ เพื่อใช้ตรวจลายเซ็นของสัญญาณ</p></div>` : ""}<button type="button" class="primary channel-connected-action" data-studio-next>ตั้งหน้าตาสัญญาณ →</button></section>`;
     return `<div class="channel-binding"><h3>${result.verified ? "เชื่อมต่อแล้ว" : "ยืนยันผู้รับ"}</h3><p>${esc(result.instruction)}</p>${result.command ? `<div class="channel-copy-row"><code>${esc(result.command)}</code><button type="button" class="secondary" data-copy-command>คัดลอก</button></div><p class="channel-help">หมดอายุ ${new Date(result.expiresAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} · ห้ามแชร์รหัสนี้</p>` : ""}${url ? `<a class="primary" href="${esc(url)}" target="_blank" rel="noopener noreferrer">เปิด ${guides[session.kind].name} ↗</a>` : ""}${!result.verified ? '<button type="button" class="secondary" data-check-binding>ตรวจสถานะการเชื่อมต่อ</button>' : ""}${result.signingSecret ? `<label>Signing Secret · แสดงครั้งเดียว<input type="password" readonly value="${esc(result.signingSecret)}" autocomplete="off"></label><button type="button" class="secondary" data-copy-secret>คัดลอก Secret</button><p class="channel-help">เก็บในระบบปลายทางก่อนปิดหน้าต่าง หากสูญหายให้เชื่อมช่องทางใหม่</p>` : ""}</div>`;
   }
   function paint() {
@@ -178,7 +178,7 @@
           "",
         )}</fieldset><label>ภาษา<select name="language"><option value="th" ${appearance.language === "th" ? "selected" : ""}>ไทย</option><option value="en" ${appearance.language === "en" ? "selected" : ""}>English</option></select></label><fieldset class="channel-field-options"><legend>ข้อมูลที่แสดง</legend>${[
         ["showPrice", "ราคาอ้างอิง"],
-        ["showSetup", "ชื่อเซตอัป"],
+        ["showSetup", "ชื่อเซ็ตอัพ"],
         ["showTime", "เวลา (UTC+7)"],
         ["showId", "Signal ID"],
         ["showCreator", "ชื่อผู้สร้าง"],
@@ -191,7 +191,7 @@
         .join(
           "",
         )}</fieldset><label data-creator-name ${appearance.showCreator ? "" : "hidden"}>ชื่อผู้สร้างที่แสดง<input name="creatorName" maxlength="13" value="${esc(appearance.creatorName)}" placeholder="เช่น Gus Signals" ${appearance.showCreator ? "required" : ""}></label><p class="channel-help" data-chart-help>กราฟใช้คู่เหรียญ กระดาน และกรอบเวลาของสัญญาณ · สัญญาณเก่าที่ไม่มีข้อมูลกราฟจะแสดงเฉพาะข้อความ</p><p class="channel-help">คู่เทรด ฝั่ง ประเภทสัญญาณ และชื่อ Snaap แสดงเสมอ${kind === "WEBHOOK" ? " · ส่งหน้าตาเป็นข้อมูลให้ระบบปลายทางนำไปแสดง" : ""}</p><button class="primary" type="submit">${session.id ? "บันทึกหน้าตาสัญญาณ" : "ใช้รูปแบบนี้และเชื่อมต่อ"}</button>${session.id && session.row?.verified ? '<button class="secondary" type="button" data-studio-test>ส่งตัวอย่างที่บันทึกแล้ว</button>' : ""}</form>`;
-    dialog.innerHTML = `<header class="channel-studio-header"><div><span class="channel-studio-overline">SNAAP / CHANNEL STUDIO</span><h2 id="channel-studio-title">${guide.name}</h2></div><button type="button" class="icon-button" data-studio-close aria-label="ปิดหน้าต่าง">${uiIcon("close")}</button></header><div class="channel-studio-grid ${step === 2 ? "" : "channel-studio-guide-only"}"><section class="channel-studio-work"><nav class="channel-step-nav" aria-label="ขั้นตอนเชื่อมต่อ">${["เตรียมพร้อม", "เชื่อมต่อ", "หน้าตาสัญญาณ"].map((label, i) => `<button type="button" data-studio-step="${i}" aria-current="${step === i ? "step" : "false"}"><span>${i + 1}</span>${label}</button>`).join("")}</nav>${step === 2 ? `<button class="channel-preview-jump text-button" type="button" data-preview-jump>ดูตัวอย่างสัญญาณ ↓</button>` : ""}<div class="channel-step-body">${content}</div><p data-channel-status role="status" aria-live="polite"></p><footer class="channel-step-footer">${step > 0 ? '<button type="button" class="text-button" data-studio-prev>← ย้อนกลับ</button>' : "<span>เชื่อมครั้งเดียว ใช้กับหลายเซตอัปได้</span>"}${step < 2 && !(step === 1 && (row?.verified || session.result?.verified)) ? `<button type="button" class="secondary" data-studio-next>${step === 0 ? "เริ่มเชื่อมต่อ" : "ปรับหน้าตา"} →</button>` : ""}</footer></section>${step === 2 ? `<aside class="channel-preview-area"><button class="channel-preview-jump text-button" type="button" data-controls-jump>กลับไปปรับหน้าตา ↑</button><div class="channel-preview-label"><span>ตัวอย่างสัญญาณ</span><small>${guide.name}</small></div><div data-channel-preview aria-live="polite"><p>กำลังเตรียมตัวอย่าง…</p></div><p class="channel-preview-note">ข้อมูลตัวอย่าง · รูปแบบจริงอาจต่างตามอุปกรณ์${kind === "LINE" ? " · LINE รับภาพจริงเมื่อ Snaap มีโดเมน HTTPS สาธารณะ" : ""}</p></aside>` : ""}</div>`;
+    dialog.innerHTML = `<header class="channel-studio-header"><div><span class="channel-studio-overline">SNAAP / CHANNEL STUDIO</span><h2 id="channel-studio-title">${guide.name}</h2></div><button type="button" class="icon-button" data-studio-close aria-label="ปิดหน้าต่าง">${uiIcon("close")}</button></header><div class="channel-studio-grid ${step === 2 ? "" : "channel-studio-guide-only"}"><section class="channel-studio-work"><nav class="channel-step-nav" aria-label="ขั้นตอนเชื่อมต่อ">${["เตรียมพร้อม", "เชื่อมต่อ", "หน้าตาสัญญาณ"].map((label, i) => `<button type="button" data-studio-step="${i}" aria-current="${step === i ? "step" : "false"}"><span>${i + 1}</span>${label}</button>`).join("")}</nav>${step === 2 ? `<button class="channel-preview-jump text-button" type="button" data-preview-jump>ดูตัวอย่างสัญญาณ ↓</button>` : ""}<div class="channel-step-body">${content}</div><p data-channel-status role="status" aria-live="polite"></p><footer class="channel-step-footer">${step > 0 ? '<button type="button" class="text-button" data-studio-prev>← ย้อนกลับ</button>' : "<span>เชื่อมครั้งเดียว ใช้กับหลายเซ็ตอัพได้</span>"}${step < 2 && !(step === 1 && (row?.verified || session.result?.verified)) ? `<button type="button" class="secondary" data-studio-next>${step === 0 ? "เริ่มเชื่อมต่อ" : "ปรับหน้าตา"} →</button>` : ""}</footer></section>${step === 2 ? `<aside class="channel-preview-area"><button class="channel-preview-jump text-button" type="button" data-controls-jump>กลับไปปรับหน้าตา ↑</button><div class="channel-preview-label"><span>ตัวอย่างสัญญาณ</span><small>${guide.name}</small></div><div data-channel-preview aria-live="polite"><p>กำลังเตรียมตัวอย่าง…</p></div><p class="channel-preview-note">ข้อมูลตัวอย่าง · รูปแบบจริงอาจต่างตามอุปกรณ์${kind === "LINE" ? " · LINE รับภาพจริงเมื่อ Snaap มีโดเมน HTTPS สาธารณะ" : ""}</p></aside>` : ""}</div>`;
     syncAppearanceOptions();
     if (step === 2) updatePreview();
   }

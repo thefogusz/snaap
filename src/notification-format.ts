@@ -198,7 +198,7 @@ export function renderSignal(
     });
   if (appearance.showSetup)
     fields.push({
-      label: en ? "Setup" : "เซตอัป",
+      label: en ? "Setup" : "เซ็ตอัพ",
       value: `${clean(signal.setup_name || "Setup", 70)} · v${signal.revision}`,
     });
   if (appearance.showTime)
