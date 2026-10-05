@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 
-test("expired cards escape reasons, retain legacy names and stay out of the signal inbox", async () => {
+test("expired cards escape reasons, retain legacy names and stay out of the signal inbox and status view", async () => {
   const view = { innerHTML: "" };
   const row = {
     pair: "QNT/USDT",
@@ -18,7 +18,9 @@ test("expired cards escape reasons, retain legacy names and stay out of the sign
     },
   };
   const context = {
-    document: { querySelector: () => ({ append() {} }), addEventListener() {} },
+    document: { querySelector: () => ({ append() {} }), querySelectorAll: () => [], addEventListener() {} },
+    window: { addEventListener() {} },
+    clearTimeout() {},
     $: () => view,
     esc: (value: unknown) =>
       String(value).replace(
@@ -57,5 +59,7 @@ test("expired cards escape reasons, retain legacy names and stay out of the sign
     `notificationSection='activity';paintNotifications();`,
     context,
   );
-  assert.ok(view.innerHTML.includes('data-signal-kind="EXPIRED"'));
+  assert.ok(!view.innerHTML.includes('data-signal-kind="EXPIRED"'));
+  assert.ok(view.innerHTML.includes("สถานะข้อมูลตลาด"));
+  assert.ok(view.innerHTML.includes("ประวัติการส่งข้อความ"));
 });

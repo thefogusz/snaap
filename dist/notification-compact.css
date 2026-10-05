@@ -45,6 +45,12 @@
 #view-notifications .signal-item h2{font-size:14px;line-height:1.5;font-weight:650;letter-spacing:-.01em}
 #view-notifications .signal-item h2 span{font-size:11px;font-weight:400;margin-left:6px;color:var(--muted)}
 #view-notifications .signal-side{margin:0;padding:2px 6px;font-size:10px;line-height:1.5;border-radius:4px}
+#view-notifications .signal-validity{display:inline-flex;align-items:center;gap:5px;padding:2px 6px;border-radius:4px;font-size:10px;line-height:1.5;font-weight:500;white-space:nowrap;color:var(--muted);background:rgba(128,128,140,.08)}
+#view-notifications .signal-validity-dot{width:6px;height:6px;border-radius:50%;flex:none;background:#8b8b98}
+#view-notifications .signal-validity[data-state="valid"]{color:#137b55;background:rgba(19,123,85,.08)}
+#view-notifications .signal-validity[data-state="valid"] .signal-validity-dot{background:#179c69}
+[data-theme="dark"] #view-notifications .signal-validity[data-state="valid"]{color:#65d5a3;background:rgba(101,213,163,.09)}
+[data-theme="dark"] #view-notifications .signal-validity[data-state="valid"] .signal-validity-dot{background:#65d5a3}
 #view-notifications .signal-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 6px;margin:5px 0 0;font-size:12px;line-height:1.6;color:var(--muted)}
 #view-notifications .signal-meta>span:first-child{color:var(--ink)}
 #view-notifications .signal-setup-name{font-size:12px;overflow-wrap:anywhere}

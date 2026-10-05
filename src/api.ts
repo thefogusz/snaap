@@ -8,6 +8,7 @@ import { z } from "zod";
 import type pg from "pg";
 import { transaction } from "./data/db.js";
 import { strategySchema } from "./domain/engine.js";
+import { signalValidUntil } from "./signal-validity.js";
 import { registerGoogle } from "./auth.js";
 import { registerFiles, cleanupChatImages } from "./files.js";
 import { registerHarness } from "./ai/harness.js";
@@ -677,10 +678,14 @@ export async function buildApp(
       .parse(req.query);
     return (
       await db.query(
-        `SELECT s.*,rv.spec->>'name' AS setup_name,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side FROM signals s LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE s.owner_id=$1 AND ($3::uuid IS NULL OR s.rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$3)) AND ($2::uuid IS NULL OR (s.created_at,s.id)<(SELECT created_at,id FROM signals WHERE id=$2 AND owner_id=$1)) AND ($4::uuid IS NULL OR (s.created_at,s.id)>(SELECT created_at,id FROM signals WHERE id=$4 AND owner_id=$1)) AND ($5::text IS NULL OR ($5='status' AND s.event->>'kind'='EXPIRED') OR ($5='signals' AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED')) ORDER BY s.created_at ${after ? "ASC" : "DESC"},s.id ${after ? "ASC" : "DESC"} LIMIT 100`,
+        `SELECT s.*,rv.spec->>'name' AS setup_name,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side,rv.spec->>'timeframe' AS setup_timeframe FROM signals s LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE s.owner_id=$1 AND ($3::uuid IS NULL OR s.rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$3)) AND ($2::uuid IS NULL OR (s.created_at,s.id)<(SELECT created_at,id FROM signals WHERE id=$2 AND owner_id=$1)) AND ($4::uuid IS NULL OR (s.created_at,s.id)>(SELECT created_at,id FROM signals WHERE id=$4 AND owner_id=$1)) AND ($5::text IS NULL OR ($5='status' AND s.event->>'kind'='EXPIRED') OR ($5='signals' AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED')) ORDER BY s.created_at ${after ? "ASC" : "DESC"},s.id ${after ? "ASC" : "DESC"} LIMIT 100`,
         [req.userId, before ?? null, req.workspaceId ?? null, after ?? null, view ?? null],
       )
-    ).rows;
+    ).rows.map(({ setup_timeframe, ...row }) => ({
+      ...row,
+      signal_valid_until: signalValidUntil(row.event, setup_timeframe),
+      entry_valid_until: row.event.kind === "ENTRY" ? signalValidUntil(row.event, setup_timeframe) : null,
+    }));
   });
   app.get("/api/v1/export", async (req) => ({
     rules: (
