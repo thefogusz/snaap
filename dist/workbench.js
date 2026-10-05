@@ -3,6 +3,7 @@ const setupChangesReady = import('./setup-changes.js');
 let entryFlexUI;
 const entryFlexReady = import('./entry-flexibility-ui.js').then(module => entryFlexUI = module);
 const assistantTextReady = import('./assistant-text.js');
+let healthReady = Promise.resolve();
 let indicatorCatalog;
 const indicatorCatalogReady=import('./indicator-catalog.js').then(m=>indicatorCatalog=m);
 let directionTools;
@@ -1197,6 +1198,8 @@ async function chat(text) {
   if(new Set([...state.images,...(state.useMyData?state.libraryImages:[])].map(image=>image.id)).size>5){
     toast('ใช้ภาพรวมได้สูงสุด 5 ภาพต่อข้อความ รวมภาพจากข้อมูลของฉัน กรุณาลดภาพหรือปิดใช้ข้อมูลของฉัน');return;
   }
+  if (!state.health) await healthReady;
+  if (state.busy || state.uploading) return;
   if (!state.health?.ai) {
     toast("AI ยังไม่พร้อมใช้งาน คุณตั้งเงื่อนไขเองได้");
     return;
@@ -2153,6 +2156,7 @@ function persistRecovery() {
 }
 async function restoreRecovery() {
   recoveryReady=false;
+  const pending = [];
   let stored;
   try{stored=JSON.parse(localStorage.getItem(recoveryKey())??'null');}catch{}
   if(stored?.version===1){
@@ -2172,13 +2176,14 @@ async function restoreRecovery() {
       showDesigner();
       if(state.conversation){
         try{
-          await loadChatHistory();
+          pending.push(loadChatHistory().catch(() => {}));
         }catch{}
       }
     }
-    if(stored.useMyData){try{await setMyData(true);}catch{}}
-    if(state.conversation){try{await restoreChatImages(Array.isArray(stored.imageIds)?stored.imageIds:undefined,Array.isArray(stored.sentImageIds)?stored.sentImageIds:[]);}catch{}}
+    if(stored.useMyData)pending.push(setMyData(true).catch(() => {}));
+    if(state.conversation)pending.push(restoreChatImages(Array.isArray(stored.imageIds)?stored.imageIds:undefined,Array.isArray(stored.sentImageIds)?stored.sentImageIds:[]).catch(() => {}));
   }
+  await Promise.all(pending);
   recoveryReady=true;
   if(state.draft)queueDraftSave();
 }
@@ -2194,13 +2199,14 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 // Also checkpoint programmatic updates such as cleared text after sending a message.
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
-  await Promise.all([directionToolsReady, indicatorCatalogReady, entryFlexReady]);
+  // Companion deferred scripts provide workspace and page helpers.
+  if (document.readyState === 'loading' || document.readyState === 'interactive') await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
   try {
     try {
-      const [health, me] = await Promise.all([api('/health'), api('/me'), initWorkspaces()]);
-      state.health = health;
+      healthReady = api('/health').then(health => { state.health = health; }).catch(() => { state.health = { ai: false, billing: false }; });
+      const [me] = await Promise.all([api('/me'), initWorkspaces(), directionToolsReady, indicatorCatalogReady, entryFlexReady]);
       state.me = me;
     }
     catch(error){

@@ -9,7 +9,7 @@ const boot = workbench.slice(workbench.indexOf('async function boot() {'), workb
 
 test('slow startup keeps the uninitialized application hidden and offers retry', () => {
   const root = {dataset: {} as Record<string,string>};
-  const message = {textContent: ''}, retry = {hidden: true};
+  const message = {textContent: '', classList: {remove() {}}}, retry = {hidden: true};
   let deadline = () => {};
   const context = vm.createContext({
     document: {documentElement: root, addEventListener() {}, querySelector: (selector: string) => selector.includes('message') ? message : retry},
@@ -30,13 +30,14 @@ function deferred() {
   return {promise, resolve};
 }
 function bootFixture(failure = false) {
-  const workspace = deferred(), rules = deferred(), recovery = deferred();
+  const workspace = deferred(), rules = deferred(), recovery = deferred(), health = deferred();
   let revealed = 0;
   const failures: string[] = [];
   const context = vm.createContext({
     directionToolsReady: Promise.resolve(), indicatorCatalogReady: Promise.resolve(), entryFlexReady: Promise.resolve(),
     state: {draft: {}, me: null}, workbench: {hidden: false}, status: {textContent: '', hidden: true},
-    api: async (url: string) => url === '/health' ? {ai: true} : {local: false},
+    healthReady: Promise.resolve(),
+    api: async (url: string) => url === '/health' ? health.promise : {local: false},
     initWorkspaces: () => failure ? Promise.reject(Error('workspace unavailable')) : workspace.promise,
     refresh: () => rules.promise, restoreRecovery: () => recovery.promise,
     $: () => ({textContent: ''}), navigate() {}, showDesigner() {}, setWorkbenchTab() {}, renderDesigner() {},
@@ -45,10 +46,10 @@ function bootFixture(failure = false) {
     window: {SnaapBoot: {finish: () => {revealed++;}, fail: (message: string) => failures.push(message)}},
   });
   vm.runInContext(boot + ';globalThis.start=boot;', context);
-  return {start: context.start as () => Promise<void>, workspace, rules, recovery, revealed: () => revealed, failures};
+  return {start: context.start as () => Promise<void>, workspace, rules, recovery, health, revealed: () => revealed, failures};
 }
 
-test('first real frame waits for workspace, account, rules and recovered view', async () => {
+test('first real frame waits for required data and recovery, without waiting for health', async () => {
   const f = bootFixture();
   const running = f.start();
   await new Promise(done => setImmediate(done));
@@ -69,4 +70,29 @@ test('failed workspace initialization shows an error without revealing demo HTML
   await f.start();
   assert.equal(f.revealed(), 0);
   assert.deepEqual(f.failures, ['workspace unavailable']);
+});
+
+test('recovery starts history, context and images together and waits for them before revealing', async () => {
+  const started: string[] = [];
+  const jobs = [deferred(), deferred(), deferred()];
+  const stored = {version: 1, designerOpen: true, conversation: 'chat', draft: {schemaVersion: 2}, useMyData: true};
+  const context = vm.createContext({
+    recoveryReady: true, localStorage: {getItem: () => JSON.stringify(stored)}, recoveryKey: () => 'key',
+    state: {conversationRows: [{id: 'chat'}], rules: []}, conversations: {},
+    $: () => ({value: '', dispatchEvent() {}}), Event: class {}, setWorkbenchTab() {}, showDesigner() {}, queueDraftSave() {},
+    loadChatHistory: () => {started.push('history'); return jobs[0].promise;},
+    setMyData: () => {started.push('context'); return jobs[1].promise;},
+    restoreChatImages: () => {started.push('images'); return jobs[2].promise;},
+  });
+  const recovery = workbench.slice(workbench.indexOf('async function restoreRecovery() {'), workbench.indexOf("\ndocument.addEventListener('input',event=>"));
+  vm.runInContext(recovery + ';globalThis.restore=restoreRecovery;', context);
+  const running = context.restore();
+  assert.deepEqual(started, ['history', 'context', 'images']);
+  assert.equal(context.recoveryReady, false);
+  jobs[0].resolve(); jobs[1].resolve();
+  await new Promise(done => setImmediate(done));
+  assert.equal(context.recoveryReady, false);
+  jobs[2].resolve();
+  await running;
+  assert.equal(context.recoveryReady, true);
 });
