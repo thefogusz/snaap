@@ -1,6 +1,6 @@
 /** A claim of a completed draft change requires a successful tool result this turn. */
 export function claimsDraftChange(text: string) {
-  return /ร่างที่(?:แก้|ปรับ)|ส่งร่าง[^\n]{0,40}แล้ว|(?:แก้|ปรับ|ลบ|เพิ่ม)[^\n]{0,24}(?:ร่าง|เซตอัป|เซตอัพ|exit|entry|เงื่อนไข)[^\n]{0,24}(?:แล้ว|เรียบร้อย)|ร่าง[^\n]{0,24}ผ่าน[^\n]{0,24}(?:ตรวจ|validate)|\b(?:I(?:'ve| have)?|we(?:'ve| have)?)\s+(?:successfully\s+)?(?:updated|changed|edited|created|removed|added)[^\n]{0,60}\b(?:draft|setup|strategy|condition|entry|exit)\b/i.test(
+  return /ร่างที่(?:แก้|ปรับ)|ส่งร่าง[^\n]{0,40}แล้ว|(?:แก้|ปรับ|ลบ|เพิ่ม)[^\n]{0,24}(?:ร่าง|เซ(?:็)?ตอ(?:ัพ|ัป)|exit|entry|เงื่อนไข)[^\n]{0,24}(?:แล้ว|เรียบร้อย)|ร่าง[^\n]{0,24}ผ่าน[^\n]{0,24}(?:ตรวจ|validate)|\b(?:I(?:'ve| have)?|we(?:'ve| have)?)\s+(?:successfully\s+)?(?:updated|changed|edited|created|removed|added)[^\n]{0,60}\b(?:draft|setup|strategy|condition|entry|exit)\b/i.test(
     text,
   );
 }

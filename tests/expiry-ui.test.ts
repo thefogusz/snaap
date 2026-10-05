@@ -49,7 +49,7 @@ test("expired cards escape reasons, retain legacy names and stay out of the sign
   assert.ok(context.html.includes('title="Original setup · &lt;img'));
   row.event.evidence.reason = "หมดเวลารอ";
   runInNewContext("html=signalCard(row);", context);
-  assert.ok(context.html.includes("เซตอัป: Original setup"));
+  assert.ok(context.html.includes("เซ็ตอัพ: Original setup"));
   runInNewContext(
     `notificationData={signals:[],statusSignals:[row],channels:{},deliveries:[],monitor:[]};notificationSection='inbox';paintNotifications();`,
     context,

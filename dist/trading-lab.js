@@ -76,7 +76,7 @@ async function openLabDesign() {
   location.hash='home';showDesigner();setWorkbenchTab('chat');renderImages();
   await setMyData(true);
   const input=$('#followup-input');
-  input.value='ช่วยออกแบบเทรดเซตอัปจากข้อมูลและภาพที่ฉันเลือก ถ้ายังไม่รู้เป้าหมายหรือเหตุผลเข้าออกให้ถามก่อน หากไม่มีข้อมูลช่วยเสนอทางเลือกอินดิเคเตอร์พร้อมข้อแลกเปลี่ยน';
+  input.value='ช่วยออกแบบเทรดเซ็ตอัพจากข้อมูลและภาพที่ฉันเลือก ถ้ายังไม่รู้เป้าหมายหรือเหตุผลเข้าออกให้ถามก่อน หากไม่มีข้อมูลช่วยเสนอทางเลือกอินดิเคเตอร์พร้อมข้อแลกเปลี่ยน';
   input.focus();
 }
 document.addEventListener('click',e=>{

@@ -191,7 +191,7 @@ try {
   const history = await call(`/conversations/${conv.id}/messages`);
   assert.equal(history[0].ui_card.ruleId, firstId);
   const editedRule = await call(`/rules/${firstId}`, "PUT", {
-    expectedRevision: 1, spec: {...spec, name: "แก้เซตอัปจากภายนอกแชท"},
+    expectedRevision: 1, spec: {...spec, name: "แก้เซ็ตอัพจากภายนอกแชท"},
   });
   const changed = { ...spec, name: "แก้จากแชท" };
   draft = await call(`/conversations/${conv.id}/draft`, "PUT", {

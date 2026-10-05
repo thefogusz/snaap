@@ -7,7 +7,7 @@ export function makeSetupCode() {
 export function normalizeSetupCode(input: string) {
   const value = input.trim().toUpperCase().replace(/[\s-]/g, "");
   if (!/^SNAAP[A-HJ-NP-Z2-9]{12}$/.test(value))
-    throw Error("โค้ดเซตอัปไม่ถูกต้อง");
+    throw Error("โค้ดเซ็ตอัพไม่ถูกต้อง");
   return "SNAAP-" + value.slice(5).match(/.{4}/g)!.join("-");
 }
 export function setupCodeHash(input: string) {

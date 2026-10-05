@@ -101,7 +101,7 @@
           cursor = fresh.at(-1).id;
           const last = fresh.at(-1);
           const kind = { ENTRY: "สัญญาณเข้า", EXIT: "สัญญาณออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลารอ" }[last.event.kind] || "สัญญาณใหม่";
-          const text = fresh.length > 1 ? `มี ${fresh.length} สัญญาณใหม่ · ${last.pair}` : `${kind} · ${last.pair} · ${last.setup_name || "เซตอัป"}`;
+          const text = fresh.length > 1 ? `มี ${fresh.length} สัญญาณใหม่ · ${last.pair}` : `${kind} · ${last.pair} · ${last.setup_name || "เซ็ตอัพ"}`;
           toast(text);
           if (preferences.sound) chime();
           if (preferences.desktop && supported() && Notification.permission === "granted") {

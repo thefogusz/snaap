@@ -11,7 +11,7 @@ const fileSchema = z
   .strict()
   .refine(
     (f) => !f.riskPlans || f.riskPlans.length === f.setups.length,
-    "riskPlans ต้องตรงกับจำนวนเซตอัป",
+    "riskPlans ต้องตรงกับจำนวนเซ็ตอัพ",
   );
 export function setupFile(input: unknown) {
   const file = fileSchema.parse(

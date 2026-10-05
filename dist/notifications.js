@@ -36,7 +36,7 @@ const deliveryLabels = {
   PENDING: "รอส่ง",
   RETRY: "รอส่งใหม่",
   FAILED: "ส่งไม่สำเร็จ",
-  CANCELLED: "ยกเลิก · เซตอัปถูกลบ",
+  CANCELLED: "ยกเลิก · เซ็ตอัพถูกลบ",
   UNKNOWN: "ยังยืนยันผลไม่ได้",
   QUOTA_OR_RATE_LIMIT: "ถึงขีดจำกัดการส่ง",
   DISCONNECTED: "ตัดการเชื่อมต่อแล้ว",
@@ -67,7 +67,7 @@ function signalValidityTag(row) {
   const validity = signalValidity(validUntil);
   if (validity.state === 'unknown') return '';
   const deadline = validUntil;
-  const title = 'มีผลถึง ' + new Date(deadline).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }) + ' · ตามรอบตรวจของเซตอัป';
+  const title = 'มีผลถึง ' + new Date(deadline).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }) + ' · ตามรอบตรวจของเซ็ตอัพ';
   return `<span class="signal-validity" data-valid-until="${deadline}" data-state="${validity.state}" title="${esc(title)}"><span class="signal-validity-dot" aria-hidden="true"></span><span class="signal-validity-label">${validity.label}</span></span>`;
 }
 let signalValidityTimer;
@@ -93,9 +93,9 @@ function signalCard(row) {
   const appearance=signalAppearance(row),directionLabel=signalDirection(row.event,row.setup_market,row.setup_side);
   const expired=row.event.kind==='EXPIRED';
   const label=expired ? `รอเข้า ${directionLabel}` : directionLabel;
-  const setupName = row.setup_name?.trim() || 'ไม่พบชื่อเซตอัป';
+  const setupName = row.setup_name?.trim() || 'ไม่พบชื่อเซ็ตอัพ';
   const kindLabel={ENTRY:'สัญญาณเข้า',EXIT:'สัญญาณออก',CANCEL:'ยกเลิก',EXPIRED:'หมดเวลารอ'}[row.event.kind] ?? row.event.kind;
-  const meta=expired ? (row.event.evidence?.reason && row.event.evidence.reason!=='หมดเวลารอ' ? row.event.evidence.reason : `เซตอัป: ${setupName}`) : `เซตอัป: ${setupName}`;
+  const meta=expired ? (row.event.evidence?.reason && row.event.evidence.reason!=='หมดเวลารอ' ? row.event.evidence.reason : `เซ็ตอัพ: ${setupName}`) : `เซ็ตอัพ: ${setupName}`;
   const metaTitle=expired ? `${setupName} · ${meta}` : meta;
   const stamp=new Date(row.event.time);
   const formattedTime=stamp.toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -160,7 +160,7 @@ function deliveryStatusRow(row) {
   return `<article class="delivery-status-row"><span class="delivery-status-icon" aria-hidden="true">${uiIcon(icon)}</span><div class="delivery-status-content"><h3>${esc(row.name)}</h3>${row.status !== 'SENT' && row.detail ? `<p>${esc(row.detail.replace(/\s*·\s*ไม่ใช่การยืนยันว่าอ่านแล้ว/g, ''))}</p>` : ''}</div><span class="monitor-status-label" data-tone="${monitorTone(row.status)}">${esc(deliveryLabels[row.status] ?? row.status)}</span></article>`;
 }
 function monitorStatusCard(row) {
-  const label = { PAUSED: 'พักการติดตาม', QUOTA_BLOCKED: 'หยุดตรวจ · เกินสิทธิ์แพ็กเกจ', DIRECTION_REQUIRED: 'เลือกฝั่ง Long / Short ในเซตอัป' }[row.status]
+  const label = { PAUSED: 'พักการติดตาม', QUOTA_BLOCKED: 'หยุดตรวจ · เกินสิทธิ์แพ็กเกจ', DIRECTION_REQUIRED: 'เลือกฝั่ง Long / Short ในเซ็ตอัพ' }[row.status]
     ?? freshnessLabels[row.status] ?? 'ข้อมูลขาด / เชื่อมต่อไม่ได้';
   const checked = new Date(row.checked_at);
   const validTime = row.checked_at != null && Number.isFinite(checked.getTime());
@@ -173,7 +173,7 @@ function paintNotifications() {
   const { signals: allSignals, channels, deliveries, monitor } = notificationData;
   const signals = allSignals.filter(canDisplaySignal);
   const tabs = [
-    ["rules", "sliders", "เซตอัพที่ตั้งไว้"],
+    ["rules", "sliders", "เซ็ตอัพที่ตั้งไว้"],
     ["inbox", "inbox", "สัญญาณ"],
     ["channels", "link", "ช่องทาง"],
     ["activity", "clock", "สถานะ"],
@@ -184,7 +184,7 @@ function paintNotifications() {
   } else if (notificationSection === "inbox") {
     content = signals.length
       ? `<div class="signal-list">${signals.map(signalCard).join('')}</div>`
-      : `<div class="inbox-empty"><span class="inbox-illustration" aria-hidden="true">${uiIcon("inbox")}</span><h2>ยังไม่มีสัญญาณ</h2><p>เมื่อเซตอัพที่เปิดไว้เข้าเงื่อนไข สัญญาณจะปรากฏที่นี่<br>ดูได้เสมอ แม้ยังไม่ได้เชื่อมช่องทางภายนอก</p><a class="secondary with-icon" href="#watch">${uiIcon("sliders")}ดูเซตอัพที่ตั้งไว้</a></div>`;
+      : `<div class="inbox-empty"><span class="inbox-illustration" aria-hidden="true">${uiIcon("inbox")}</span><h2>ยังไม่มีสัญญาณ</h2><p>เมื่อเซ็ตอัพที่เปิดไว้เข้าเงื่อนไข สัญญาณจะปรากฏที่นี่<br>ดูได้เสมอ แม้ยังไม่ได้เชื่อมช่องทางภายนอก</p><a class="secondary with-icon" href="#watch">${uiIcon("sliders")}ดูเซ็ตอัพที่ตั้งไว้</a></div>`;
   } else if (notificationSection === "channels") {
     content = `<div class="notification-section-heading"><h2>เลือกช่องทางรับสัญญาณ</h2></div><div class="channel-options">${Object.entries(
       channelInfo,
@@ -197,16 +197,16 @@ function paintNotifications() {
       })
       .join(
         "",
-      )}</div><div id="channel-setup"></div>${channels.items.length ? `<section class="connected-channels"><h2>ช่องทางของคุณ</h2>${channels.items.map((x) => `<div class="connected-channel"><div><strong>${esc(x.name)}</strong><p>${channelInfo[x.kind]?.name ?? esc(x.kind)} · ${x.verified ? "เชื่อมแล้ว" : "รอยืนยันการเชื่อมต่อ"}</p></div><div class="channel-row-actions"><button class="secondary" data-channel-design="${x.id}">ปรับหน้าตา</button>${x.verified?`<button class="secondary" data-channel-test="${x.id}">ส่งทดสอบ</button>`:''}<button class="text-button" data-disconnect="${x.id}">ตัดการเชื่อมต่อ</button></div></div>`).join("")}</section>` : ""}<p class="notification-note">${Object.values(channels.available).some(Boolean) ? "เชื่อมแล้ว เลือกช่องทางในเซตอัปที่ต้องการรับแจ้งเตือน · สัญญาณยังเก็บในเว็บเสมอ" : "ผู้ดูแลยังไม่ได้ตั้งค่าช่องทางภายนอก คุณยังเปิดเซตอัพและรับสัญญาณในเว็บได้"}</p>`;
+      )}</div><div id="channel-setup"></div>${channels.items.length ? `<section class="connected-channels"><h2>ช่องทางของคุณ</h2>${channels.items.map((x) => `<div class="connected-channel"><div><strong>${esc(x.name)}</strong><p>${channelInfo[x.kind]?.name ?? esc(x.kind)} · ${x.verified ? "เชื่อมแล้ว" : "รอยืนยันการเชื่อมต่อ"}</p></div><div class="channel-row-actions"><button class="secondary" data-channel-design="${x.id}">ปรับหน้าตา</button>${x.verified?`<button class="secondary" data-channel-test="${x.id}">ส่งทดสอบ</button>`:''}<button class="text-button" data-disconnect="${x.id}">ตัดการเชื่อมต่อ</button></div></div>`).join("")}</section>` : ""}<p class="notification-note">${Object.values(channels.available).some(Boolean) ? "เชื่อมแล้ว เลือกช่องทางในเซ็ตอัพที่ต้องการรับแจ้งเตือน · สัญญาณยังเก็บในเว็บเสมอ" : "ผู้ดูแลยังไม่ได้ตั้งค่าช่องทางภายนอก คุณยังเปิดเซ็ตอัพและรับสัญญาณในเว็บได้"}</p>`;
   } else {
-    content = `${statusOverview(monitor, deliveries)}<div class="status-workspace"><section class="status-market-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("chart")}การติดตามตลาด</h2><span>${monitor.length} รายการ</span></div><div class="monitor-status-list">${monitor.length ? monitor.map(monitorStatusCard).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('chart')+'</span><h3>ยังไม่มีการติดตาม</h3><p>เปิดเซตอัปเพื่อเริ่มตรวจข้อมูลตลาด</p><a class="secondary" href="#watch">ดูเซตอัปที่ตั้งไว้</a></div>'}</div></section><section class="status-delivery-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("send")}การส่งข้อความ</h2><span>${deliveries.length} รายการ</span></div><div class="delivery-status-list">${deliveries.length ? deliveries.map(deliveryStatusRow).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('send')+'</span><h3>ยังไม่มีประวัติส่ง</h3><p>ข้อความที่ส่งไปยังช่องทางของคุณจะแสดงที่นี่</p></div>'}</div></section></div>`;
+    content = `${statusOverview(monitor, deliveries)}<div class="status-workspace"><section class="status-market-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("chart")}การติดตามตลาด</h2><span>${monitor.length} รายการ</span></div><div class="monitor-status-list">${monitor.length ? monitor.map(monitorStatusCard).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('chart')+'</span><h3>ยังไม่มีการติดตาม</h3><p>เปิดเซ็ตอัพเพื่อเริ่มตรวจข้อมูลตลาด</p><a class="secondary" href="#watch">ดูเซ็ตอัพที่ตั้งไว้</a></div>'}</div></section><section class="status-delivery-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("send")}การส่งข้อความ</h2><span>${deliveries.length} รายการ</span></div><div class="delivery-status-list">${deliveries.length ? deliveries.map(deliveryStatusRow).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('send')+'</span><h3>ยังไม่มีประวัติส่ง</h3><p>ข้อความที่ส่งไปยังช่องทางของคุณจะแสดงที่นี่</p></div>'}</div></section></div>`;
   }
   if(notificationSection === "inbox" && notificationData.more) content += '<button class="secondary" data-more-signals>โหลดสัญญาณก่อนหน้า</button>';
   if (notificationSection !== 'rules' && notificationData.loaded === false) content = '<p role="status">กำลังอัปเดตข้อมูลส่วนนี้…</p>';
   if (notificationSection === "channels") content = `<div data-browser-alert-slot>${window.SnaapBrowserAlerts?.settingsMarkup() ?? ''}</div>` + content;
   parkNotificationRules();
   $("#view-notifications").innerHTML =
-    `<div class="page-heading notification-heading"><div><h1>การแจ้งเตือน</h1><p>ดูเซตอัพ สัญญาณ และช่องทางแจ้งเตือน</p></div><button class="text-button with-icon" data-notification-refresh>${uiIcon("clock")}รีเฟรช</button></div><nav class="notification-tabs" aria-label="มุมมองการแจ้งเตือน">${tabs.map(([id, icon, label]) => `<button type="button" data-notification-tab="${id}" aria-pressed="${notificationSection === id}">${uiIcon(icon)}<span>${label}</span>${id === "inbox" && signals.length ? `<span class="notification-count">${signals.length}</span>` : ""}</button>`).join("")}</nav><div class="notification-content">${content}</div>`;
+    `<div class="page-heading notification-heading"><div><h1>การแจ้งเตือน</h1><p>ดูเซ็ตอัพ สัญญาณ และช่องทางแจ้งเตือน</p></div><button class="text-button with-icon" data-notification-refresh>${uiIcon("clock")}รีเฟรช</button></div><nav class="notification-tabs" aria-label="มุมมองการแจ้งเตือน">${tabs.map(([id, icon, label]) => `<button type="button" data-notification-tab="${id}" aria-pressed="${notificationSection === id}">${uiIcon(icon)}<span>${label}</span>${id === "inbox" && signals.length ? `<span class="notification-count">${signals.length}</span>` : ""}</button>`).join("")}</nav><div class="notification-content">${content}</div>`;
   refreshSignalValidity();
   if (notificationSection === "rules") {
     $("#notification-rules-slot").append(notificationRules);
@@ -215,9 +215,9 @@ function paintNotifications() {
     const add = document.createElement("button");
     add.className = "primary with-icon";
     add.dataset.action = "new-rule";
-    add.innerHTML = uiIcon("plus") + "เพิ่มเซตอัพ";
+    add.innerHTML = uiIcon("plus") + "เพิ่มเซ็ตอัพ";
     const actions=document.createElement('div');actions.className='notification-setup-actions';
-    const importSetup=document.createElement('button');importSetup.type='button';importSetup.className='secondary with-icon';importSetup.dataset.importSetupCode='';importSetup.innerHTML=uiIcon('upload')+'<span>นำเข้าเซตอัป</span>';
+    const importSetup=document.createElement('button');importSetup.type='button';importSetup.className='secondary with-icon';importSetup.dataset.importSetupCode='';importSetup.innerHTML=uiIcon('upload')+'<span>นำเข้าเซ็ตอัพ</span>';
     actions.append(importSetup,add);
     $(".notification-heading [data-notification-refresh]").replaceWith(actions);
   }

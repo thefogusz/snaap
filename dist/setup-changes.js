@@ -1,7 +1,7 @@
 // Shared by the harness and the UI. Changes come from values, never model prose.
 export function diffSetup(before, after) {
   const changes = [];
-  const labels = { name: 'ชื่อเซตอัป', exchange: 'กระดาน', market: 'ตลาด', side:'ฝั่ง', mirrorShort:'สลับเงื่อนไข Short', short:'เงื่อนไข Short', pairs: 'คู่เทรด', timeframe: 'กรอบเวลา', entry: 'เงื่อนไขเข้า', exit: 'เงื่อนไขออก', cancel: 'เงื่อนไขยกเลิก', stages: 'ขั้นตอนรอยืนยัน', cooldownBars: 'พักสัญญาณ (แท่ง)', destinations: 'ช่องทางแจ้งเตือน', condition: 'เงื่อนไข', withinBars: 'เวลารอ (แท่ง)', left: 'ค่าที่ตรวจ', right: 'ค่าที่เปรียบเทียบ', op: 'ตัวเปรียบเทียบ', children: 'เงื่อนไขย่อย', bars: 'ต่อเนื่อง (แท่ง)', source: 'แหล่งราคา', field: 'ค่าราคา', period: 'ระยะ', slow: 'ระยะช้า', signal: 'ระยะสัญญาณ', deviation: 'ส่วนเบี่ยงเบน', value: 'ค่า', formula: 'สูตร', kind: 'ชนิดค่า' };
+  const labels = { name: 'ชื่อเซ็ตอัพ', exchange: 'กระดาน', market: 'ตลาด', side:'ฝั่ง', mirrorShort:'สลับเงื่อนไข Short', short:'เงื่อนไข Short', pairs: 'คู่เทรด', timeframe: 'กรอบเวลา', entry: 'เงื่อนไขเข้า', exit: 'เงื่อนไขออก', cancel: 'เงื่อนไขยกเลิก', stages: 'ขั้นตอนรอยืนยัน', cooldownBars: 'พักสัญญาณ (แท่ง)', destinations: 'ช่องทางแจ้งเตือน', condition: 'เงื่อนไข', withinBars: 'เวลารอ (แท่ง)', left: 'ค่าที่ตรวจ', right: 'ค่าที่เปรียบเทียบ', op: 'ตัวเปรียบเทียบ', children: 'เงื่อนไขย่อย', bars: 'ต่อเนื่อง (แท่ง)', source: 'แหล่งราคา', field: 'ค่าราคา', period: 'ระยะ', slow: 'ระยะช้า', signal: 'ระยะสัญญาณ', deviation: 'ส่วนเบี่ยงเบน', value: 'ค่า', formula: 'สูตร', kind: 'ชนิดค่า' };
   const same = (a, b) => {
     if (a === b) return true;
     if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
