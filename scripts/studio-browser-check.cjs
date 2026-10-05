@@ -90,6 +90,8 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await dragDivider("conditions", -40);
     assert.ok((await panelBox(".design-panel")).width > beforeConditions.width + 30);
     const savedWidth = (await panelBox("#conversation")).width;
+    // Allow the unchanged 180/min limiter to reset before a full asset reload.
+    await page.waitForTimeout(60000);
     await page.reload();
     await page.locator('[data-resize-panel="agent"]').waitFor({ state: "visible" });
     assert.ok(Math.abs((await panelBox("#conversation")).width - savedWidth) < 2);
@@ -335,6 +337,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .locator("#followup-input")
       .fill("ช่วยเปลี่ยนพักสัญญาณเป็น 7 แท่ง");
     await page.getByRole("button", { name: "ส่งข้อความ", exact: true }).click();
+    await page.locator(".setup-change-card").last().locator("summary").click();
     await page.locator("[data-revert-change]").waitFor();
     await page.locator("[data-revert-change]").click();
     await page
@@ -406,7 +409,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     });
     await page.locator('#followup-input').fill('ตรวจภาพที่แนบ');
     await page.locator('.chat-send-button').click();
-    await page.locator('.message.user .message-images img').waitFor();
+    await page.locator('.chat-image-gallery.user img').waitFor();
     assert.equal(await page.locator('.attachment-preview').isVisible(),false);
     await page.locator('.thinking-indicator').waitFor({state:'hidden'});
     assert.equal(await page.locator('.attachment-preview img').isVisible(),true);
@@ -414,10 +417,10 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await page.locator('.chat-send-button').click();
     await page.locator('.thinking-indicator').waitFor({state:'hidden'});
     assert.equal(await page.locator('.attachment-preview img').count(),0);
-    assert.equal(await page.locator('.message.user .message-images img').count(),2);
+    assert.equal(await page.locator('.chat-image-gallery.user img').count(),2);
     assert.equal(await page.locator('.workbench').getAttribute('data-tab'),'split');
     await page.screenshot({path:'.local/audit/studio-sent-image.png'});
-    console.log('PASS sent image appears in user message, clears on success and survives failed-send retry');
+    console.log('PASS sent image appears beside user message, remains reusable and survives failed-send retry');
     assert.deepEqual(errors, []);
     console.log(
       "PASS studio interaction, MTF separation, stale preview rejection, 1440/1024/390 both themes, agent conflicts, receipts/undo and save/activation separation; no JS errors",

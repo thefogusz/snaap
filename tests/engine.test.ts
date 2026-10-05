@@ -190,6 +190,15 @@ test("sequence expires and does not fire after the deadline", () => {
     events.map((e) => e.kind),
     ["EXPIRED"],
   );
+  assert.match(events[0].evidence.reason ?? '', /ภายใน 2 แท่ง \(15m\)/);
+});
+
+test('expiration describes the actual waiting condition without calling AI', () => {
+  const events = replay({...spec, stages:[{withinBars:2,condition:{kind:'COMPARE',op:'CROSS_ABOVE',
+    left:{kind:'INDICATOR',name:'MACD',period:12,slow:26,signal:9,timeframe:'5m'},
+    right:{kind:'INDICATOR',name:'MACD_SIGNAL',period:12,slow:26,signal:9,timeframe:'5m'}}}]}, {'15m':candles});
+  assert.equal(events[0].kind,'EXPIRED');
+  assert.equal(events[0].evidence.reason,'เงื่อนไข MACD ตัดขึ้น เส้นสัญญาณ MACD ไม่ครบภายใน 2 แท่ง (15m)');
 });
 test("indicator source is explicit and ATR uses true ranges", () => {
   const c = {

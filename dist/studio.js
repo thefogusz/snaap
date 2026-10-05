@@ -3,7 +3,7 @@
   const studio = document.createElement("section");
   studio.className = "setup-studio";
   studio.setAttribute("aria-label", "กราฟจำลองเซตอัพ");
-  studio.innerHTML = `<header><div><strong data-chart-title>กราฟเซตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><details class="chart-evidence"><summary>เหตุผลของสัญญาณ · คลิกแท่งบนกราฟเพื่อดู</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
+  studio.innerHTML = `<header><div class="studio-header-info"><strong data-chart-title>กราฟเซตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class="studio-header-actions"><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></div></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class="setup-insights" data-setup-insights></div><details class="chart-evidence"><summary>รายละเอียดเงื่อนไข · คลิกแท่งบนกราฟเพื่อดูย้อนหลัง</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
   setupPane.insertBefore(studio, panel);
   const status = studio.querySelector("[data-chart-status]");
   const canvas = studio.querySelector(".studio-canvas");
@@ -31,7 +31,11 @@
     },
     visibility(){lines.forEach(({series,operand})=>series.applyOptions({visible:!window.SnaapStudio?.isHidden(operand)}));},
   };
-  const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector("header").append(chartPickerWrap);
+  const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector(".studio-header-actions").append(chartPickerWrap);
+  panel.addEventListener('click', e => {
+    const button = e.target.closest('[data-open-condition-chart]');
+    if (button) window.SnaapChart.view(button.dataset.openConditionChart);
+  });
   chartPicker.onchange=()=>{chartPair=chartPicker.value;update(true);};
   let chart,
     candles,
@@ -39,6 +43,7 @@
     lines = [],
     result,
     key = "",
+    pendingKey = "",
     timer,
     playTimer,
     generation = 0,
@@ -60,6 +65,7 @@
     canvas.replaceChildren();
     studio.querySelector(".chart-legend").replaceChildren();
     studio.querySelector("[data-chart-evidence]").replaceChildren();
+    studio.querySelector("[data-setup-insights]").replaceChildren();
     studio
       .querySelectorAll(".replay-controls button,.replay-controls input")
       .forEach((e) => (e.disabled = true));
@@ -79,7 +85,7 @@
   new ResizeObserver(() => {
     const visible = canvas.clientWidth > 0 && canvas.clientHeight > 0;
     if (visible) fitStudyPanes();
-    if (visible && !wasVisible) requestAnimationFrame(fitFrame);
+    if (visible && !wasVisible) requestAnimationFrame(() => { if (chart) fitFrame(); else update(); });
     wasVisible = visible;
   }).observe(canvas);
   document.addEventListener("workbench-mode-changed", () => {
@@ -108,8 +114,8 @@
       ),
     );
     markers.setMarkers(
-      (result.chartTimeframe === result.evaluationTimeframe ? result.events : [])
-        .filter((e) => e.time <= cut)
+      result.chartEvents
+        .filter((e) => e.time <= cut && e.signalTime <= cut)
         .map((e) => ({
           time: e.time / 1000,
           position: (e.kind === "ENTRY") !== (e.side === "SHORT") ? "belowBar" : "aboveBar",
@@ -124,15 +130,18 @@
         })),
     );
     selectedBarTime = cut;
-    const bar = result.timeline.filter(b => b.time <= cut).at(-1);
+    const bar = result.chartTimeline[at];
     document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar,selectedTime:cut,source:result.source}}));
+    const historical=at<result.candles.length-1;
+    const ready=result.freshness?.every(f=>f.status==='CURRENT')??true;
+    studio.querySelector('[data-setup-insights]').innerHTML = freshnessUI(result.freshness) + (historical?'<p>กำลังดูสถานะย้อนหลังตามแท่งที่เลือก</p>':'') + (ready||historical?(bar?.branches??[]).map(b=>`<strong>${esc(directionLabel(b.side,b.side === "SPOT" ? "Spot" : "Perpetual Futures"))}</strong>${progressUI(b.progress)}`).join(''):'<p role="status">รอข้อมูลแท่งปิดให้ครบก่อนแสดงสถานะปัจจุบัน · ยังดูหลักฐานของแท่งย้อนหลังได้</p>');
     studio.querySelector("[data-chart-evidence]").innerHTML =
-      (hasEntryCondition() ? barEvidence(bar) : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
-      (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+      (hasEntryCondition() ? (barEvidence(bar, { showProgress: false }) || "<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>") : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
+      (bar?.cancel && !bar.branches && !bar.explanations ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
     if (fit) fitFrame();
   }
   function render(data) {
-    const oldRange = chart?.timeScale().getVisibleLogicalRange();
+    const oldRange = result?.source.frame === data.source.frame ? chart?.timeScale().getVisibleLogicalRange() : null;
     const selectedTime = result?.candles[at]?.time;
     const paused = result && at < result.candles.length - 1;
     clear();
@@ -238,7 +247,7 @@
         (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
       studio.querySelector(".chart-evidence").open = true;
     });
-    status.textContent = `${data.candles.length} แท่งปิด · ${hasEntryCondition() ? data.events.length + " สัญญาณ" : "ยังไม่มีเงื่อนไขสัญญาณ"} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
+    status.textContent = `${data.freshness?.some(f=>f.status!=="CURRENT")?"ข้อมูลยังไม่พร้อมสำหรับสัญญาณล่าสุด · ":""}${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · ตรวจทุก ${data.source.evaluationFrame} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
   }
   async function update(force = false) {
     if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;
@@ -252,14 +261,15 @@
     const scope={conversation:state.conversation,workspace:state.workspaceId};
     const next = JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:request.indicators},...scope});
     const draftAtRequest=JSON.stringify(state.draft);
-    if (!force && next === key && result) return;
-    key = next;
+    if (!force && ((next === key && result) || next === pendingKey)) return;
+    pendingKey = next;
     const token = ++generation;
     canvas.inert=true;canvas.style.opacity=".35";
     stop();
     studio.querySelector("[data-chart-title]").textContent =
       `${state.draft.exchange.join(", ")} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
     if (state.draft.exchange.length !== 1 || !state.draft.pairs.length) {
+      pendingKey = "";
       status.textContent = "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ";
       return;
     }
@@ -268,15 +278,20 @@
       const data = await api("/preview", "POST", request);
       if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==request.spec.pairs[0] || chartFrame!==request.chartTimeframe || state.conversation!==scope.conversation || state.workspaceId!==scope.workspace) return;
       render(data);
+      key = next;
     } catch (e) {
       if (token === generation) {
         status.textContent = e.message;
         key = "";
       }
+    } finally {
+      if (token === generation) pendingKey = "";
     }
   }
   function schedule() {
-    if (JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]},conversation:state.conversation,workspace:state.workspaceId}) === key && result) return;
+    if (!state.draft) return;
+    const next = JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]},conversation:state.conversation,workspace:state.workspaceId});
+    if ((next === key && result) || next === pendingKey) return;
     generation++;
     selectedBarTime=null;
     stop();
@@ -287,7 +302,7 @@
     studio.querySelector("[data-chart-evidence]").textContent="กำลังคำนวณร่างล่าสุด…";
     timer = setTimeout(() => {
       update();
-    }, 450);
+    }, 120);
   }
   document.addEventListener("setup-rendered", schedule);
   document.addEventListener('studio-refresh',()=>update(true));

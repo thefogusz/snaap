@@ -5,8 +5,14 @@ const fileSchema = z
     format: z.literal("snaap.trade-setups"),
     version: z.literal(1),
     setups: z.array(strategySchema).min(1).max(50),
+    // Accept older files, but discard retired price-tracking settings.
+    riskPlans: z.array(z.unknown()).max(50).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (f) => !f.riskPlans || f.riskPlans.length === f.setups.length,
+    "riskPlans ต้องตรงกับจำนวนเซตอัป",
+  );
 export function setupFile(input: unknown) {
   const file = fileSchema.parse(
     input && typeof input === "object" && "schemaVersion" in input
@@ -14,7 +20,8 @@ export function setupFile(input: unknown) {
       : input,
   );
   return {
-    ...file,
+    format: file.format,
+    version: file.version,
     setups: file.setups.map((spec) => ({ ...spec, destinations: [] })),
   };
 }

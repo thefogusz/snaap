@@ -75,7 +75,7 @@ try {
   ]);
   const series: Series = {
     "15m": [
-      { time: 900000, open: 100, close: 100, high: 100, low: 100, volume: 1 },
+      { time: Math.floor(Date.now()/900000)*900000, open: 100, close: 100, high: 100, low: 100, volume: 1 },
     ],
   };
   const target = {

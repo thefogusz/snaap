@@ -60,7 +60,7 @@ const iconActions = [
   ["[data-stage],[data-add]", "plus"],
   ["[data-optional=exit]", "exit"],
   ["[data-optional=cancel]", "close"],
-  ["[data-open-rule]", "sliders"],
+  ["[data-open-rule]:not(.watch-edit)", "sliders"],
   ["[data-export]", "file"],
   ["[data-checkout=card]", "card"],
   ["[data-checkout=promptpay]", "qr"],

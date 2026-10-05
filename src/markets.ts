@@ -5,6 +5,7 @@ import type pg from "pg";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "./errors.js";
 import { preview } from "./domain/preview.js";
+import { freshness } from "./domain/insights.js";
 import { indicatorByName } from "../dist/indicator-catalog.js";
 import { availableTimeframes, lastClosedBoundary } from "../dist/timeframes.js";
 import {
@@ -251,8 +252,9 @@ export async function candles(
         throw new Error("STALE");
       cache.set(key, { at: now, data: dedup });
       if (cache.size > 500) cache.delete(cache.keys().next().value!);
+      const readiness = freshness(frame, dedup, now).status;
       marketHealth.set(clientKey, {
-        status: "READY",
+        status: readiness === "CURRENT" ? "READY" : readiness,
         lastSuccess: new Date().toISOString(),
       });
       return dedup;
@@ -380,11 +382,12 @@ export function registerMarkets(
         indicators: z.array(operand).max(8).default([]),
         chartTimeframe: timeframe.optional(),
         chartOnly: z.boolean().default(false),
+        chartFrame: timeframe.optional(),
       })
       .strict()
       .parse(req.body);
     const spec = input.spec;
-    const chartFrame = input.chartTimeframe ?? spec.timeframe;
+    const chartFrame = input.chartTimeframe ?? input.chartFrame ?? spec.timeframe;
     if (!availableTimeframes(spec.exchange, spec.market).includes(chartFrame))
       throw new ApiError(400, "TIMEFRAME_UNSUPPORTED", `กระดานและตลาดที่เลือกไม่รองรับ ${chartFrame}`);
     if (spec.exchange.length !== 1 || spec.pairs.length !== 1)
@@ -418,12 +421,13 @@ export function registerMarkets(
       [...input.indicators, { kind: "INDICATOR", name: "SMA", period: 2, timeframe: chartFrame }],
     );
     return {
-      ...preview(spec, series, input.indicators, input.chartTimeframe, input.chartOnly),
+      ...preview(spec, series, input.indicators, chartFrame, input.chartOnly),
       source: {
         exchange: spec.exchange[0],
         pair: spec.pairs[0],
         frame: chartFrame,
         evaluationTimeframe: spec.timeframe,
+        evaluationFrame: spec.timeframe,
         asOf: new Date().toISOString(),
       },
     };
@@ -462,6 +466,7 @@ export function registerMarkets(
       events: simulation.events,
       candles: series[input.spec.timeframe],
       timeline: simulation.timeline.slice(-100),
+      freshness: simulation.freshness,
       source: {
         exchange: input.exchange,
         pair: input.pair,

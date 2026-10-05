@@ -10,5 +10,7 @@
 - Chat attachments support multiple file selection, clipboard image paste (Ctrl+V), and dropping multiple files into the composer. PNG, JPEG, and WebP are accepted, up to 5 MB per file. Each accepted upload gets a preview; failed files do not discard successful uploads in the same batch.
 - The AI estimate includes text and output only. It does not reserve a fixed token allowance per image or count base64 image bytes as text. Actual image input usage is included in the provider's reported input tokens and recorded in the usage ledger.
 - Unfinished conversations retain their temporary uploads until a setup is saved; no idle expiry is currently applied.
+- Successful AI replies keep the selected chat images in the composer for follow-up turns. Removing a preview deselects it for future turns; sent images remain visible under the original user message.
+- Draft recovery stores selected image IDs only. Reload resolves those IDs against the owner's accessible conversation assets, including uploads not yet sent. Opening another existing conversation selects its latest five accessible uploads. Setup-save cleanup still ends the temporary chat-image lifecycle.
 
 Implementation was checked with TypeScript and JavaScript syntax checks. The live library UI displayed the 5-image limit and rename/delete controls. No user images were deleted or renamed during the UI check.

@@ -1,10 +1,10 @@
-async function renderConnections(data) {
+async function renderConnections(host = $("#view-history"), data) {
   data ??= await api("/connections");
   const section = document.createElement("div");
   section.className = "runtime-card";
   section.id = "history-connections";
   section.innerHTML = `<h2>เชื่อมประวัติจากกระดาน</h2><p>ใช้ประวัติจากกระดานมาช่วยออกแบบเซตอัป</p><p class="field-note">Binance / Bybit Spot · ครั้งละไม่เกิน 100 รายการตามคู่และช่วงเวลา<br>OKX / Bitget / MEXC ใช้ไฟล์นำเข้าในระหว่างตรวจรับตัวเชื่อมบัญชี</p>${data.items.map((x) => `<div class="connection-item"><strong>${esc(x.name)} · ${esc(x.exchange)} · ${esc(x.market??'Spot')}</strong><p>${x.last_sync ? "ซิงก์ล่าสุด " + new Date(x.last_sync).toLocaleString("th-TH") : "ยังไม่ซิงก์"} · ${esc(x.status)}</p><div class="connection-auto-status" data-auto-status></div><button class="text-button" data-revoke-key="${x.id}">ยกเลิกการเชื่อม</button></div>`).join("")}<details class="add-history-connection"><summary>เพิ่มการเชื่อมต่อ API</summary><form id="connect-history"><label>กระดาน<select name="exchange"><option>Binance</option><option>Bybit</option></select></label><label>ชื่อเรียกการเชื่อมต่อ<input name="name" required maxlength="80" placeholder="เช่น MEXC เทรดสั้น"></label><label>API key<input name="apiKey" type="password" autocomplete="off" required></label><label>API secret<input name="secret" type="password" autocomplete="off" required></label><p class="field-note">ใช้สิทธิ์ Read-only สำหรับประวัติ · Snaap ไม่อ่านยอดบัญชีหรือสินทรัพย์ และเก็บ key แบบเข้ารหัส</p><button type="submit" class="secondary" ${data.enabled ? "" : "disabled"}>ตรวจสิทธิ์และเชื่อม</button>${data.enabled ? "" : "<p>ผู้ดูแลต้องตั้งค่าการเข้ารหัสบนเซิร์ฟเวอร์ก่อน</p>"}</form></details>`;
-  const previousSection=document.querySelector("#history-connections");
+  const previousSection=host.querySelector("#history-connections");
   const exchangeSelect = section.querySelector('select[name="exchange"]');
   exchangeSelect.innerHTML = ['Binance','Bybit','OKX','Bitget','MEXC'].map(name => `<option>${esc(name)}</option>`).join('');
   const form=section.querySelector('#connect-history');
@@ -15,9 +15,9 @@ async function renderConnections(data) {
     const card=section.querySelectorAll('.connection-item')[index];
     const disconnect=card.querySelector('[data-revoke-key]');
     disconnect.setAttribute('aria-label','ยกเลิกการเชื่อม '+item.name);
-    const imported=[...document.querySelectorAll('#view-history [data-import-connection]')].find(node=>node.dataset.importConnection===item.id);
+    const imported=[...host.querySelectorAll('[data-import-connection]')].find(node=>node.dataset.importConnection===item.id);
     {
-      if(imported)[...document.querySelectorAll('#view-history [data-import-connection]')].filter(node=>node.dataset.importConnection===item.id).forEach(node=>node.remove());
+      if(imported)[...host.querySelectorAll('[data-import-connection]')].filter(node=>node.dataset.importConnection===item.id).forEach(node=>node.remove());
       const header=document.createElement('div');header.className='history-api-header';
       card.prepend(header);header.append(card.querySelector('strong'),disconnect);
     }
@@ -101,7 +101,7 @@ async function renderConnections(data) {
   scope.className = 'field-note connection-scope';
   scope.textContent = 'อ่านเฉพาะประวัติซื้อขาย · ไม่อ่านยอดเงินหรือสินทรัพย์ · เชื่อมแยก Spot / Futures';
   capabilities.after(scope);
-  if(previousSection)previousSection.replaceWith(section);else $("#view-history").append(section);
+  if(previousSection)previousSection.replaceWith(section);else host.append(section);
   scheduleHistorySyncRefresh();
 }
 function confirmHistoryConnection(exchange, market, trigger) {
@@ -168,13 +168,27 @@ document.addEventListener("submit", async (e) => {
   }
 });
 document.addEventListener("click", async (e) => {
+  const refreshButton = e.target.closest('[data-history-refresh]');
+  if (refreshButton) {
+    if (refreshButton.disabled) return;
+    refreshButton.disabled = true;
+    refreshButton.textContent = 'กำลังอัปเดต…';
+    try { await renderHistory(); } finally { refreshButton.disabled = false; refreshButton.textContent = 'รีเฟรชข้อมูล'; }
+    return;
+  }
   const button = e.target.closest("[data-revoke-key]");
-  if (!button) return;
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  button.textContent = 'กำลังยกเลิก…';
   try {
     await api("/connections/" + button.dataset.revokeKey, "DELETE");
+    toast('ยกเลิกการเชื่อมแล้ว');
     await renderHistory();
   } catch (error) {
     toast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'ยกเลิกการเชื่อม';
   }
 });
 
@@ -183,7 +197,7 @@ function scheduleHistorySyncRefresh(){
   clearTimeout(historySyncRefresh);
   if(document.querySelector('#history-connections .history-sync-skeleton'))historySyncRefresh=setTimeout(async()=>{
     if(document.querySelector('#view-history')?.hidden || document.visibilityState!=='visible'){scheduleHistorySyncRefresh();return;}
-    if(document.activeElement?.closest('#view-history input') || document.querySelector('.add-history-connection[open]')){scheduleHistorySyncRefresh();return;}
+    if(document.activeElement?.closest('#view-history input') || document.querySelector('.add-history-connection[open], .history-file-details[open]')){scheduleHistorySyncRefresh();return;}
     try{await renderConnections();if(!document.querySelector('#history-connections .history-sync-skeleton'))await renderHistory();}catch{}finally{scheduleHistorySyncRefresh();}
   },5000);
 }

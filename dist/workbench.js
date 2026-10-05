@@ -1,6 +1,12 @@
 "use strict";
+// Register before dynamic imports can resume after DOMContentLoaded has fired.
+const companionScriptsReady = document.readyState === "complete" ? Promise.resolve() :
+  new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, {once:true}));
 const setupChangesReady = import('./setup-changes.js');
+let entryFlexUI;
+const entryFlexReady = import('./entry-flexibility-ui.js').then(module => entryFlexUI = module);
 const assistantTextReady = import('./assistant-text.js');
+let healthReady = Promise.resolve();
 let indicatorCatalog;
 const indicatorCatalogReady=import('./indicator-catalog.js').then(m=>indicatorCatalog=m);
 let timeframeTools;
@@ -42,6 +48,7 @@ const state = {
   selection: {},
   replay: null,
   busy: false,
+  saving: false,
   filter: "all",
   destinations: [],
   conversationRows: [],
@@ -78,11 +85,6 @@ const blankSetup = () => ({ ...initial(), entry: { kind: "GROUP", op: "AND", chi
 function hasEntryCondition(d = state.draft) {
   return Boolean(d?.entry && !(d.entry.kind === "GROUP" && !d.entry.children.length));
 }
-const status = document.createElement("div");
-status.className = "runtime-status";
-status.setAttribute("role", "status");
-status.hidden = true;
-$(".topbar").after(status);
 // The page content supplies its heading; keep the header utilities in place.
 $("#page-name").classList.add("sr-only");
 const workbench = document.createElement("div");
@@ -321,7 +323,7 @@ function nextChatPrompt() {
   return promptBag.pop();
 }
 function syncChatPromptHint() {
-  const visible = workbench.dataset.tab === 'chat' && !followupText.value;
+  const visible = workbench.dataset.tab === 'chat' && !followupText.value && document.activeElement !== followupText;
   chatPromptHint.hidden = !visible;
   followupText.classList.toggle('has-prompt-hint', visible);
   if (!visible) {
@@ -331,28 +333,23 @@ function syncChatPromptHint() {
 }
 async function rotateChatPrompt() {
   syncChatPromptHint();
-  if (chatPromptHint.hidden || document.hidden || !followupText.getClientRects().length || document.activeElement === followupText) return;
+  if (chatPromptHint.hidden || document.hidden || !followupText.getClientRects().length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const version = ++promptMotionVersion;
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduced) {
-    try {
-      await chatPromptHint.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(10px)'}],{duration:220,easing:'ease-in',fill:'forwards'}).finished;
-    } catch { return; }
-  }
+  try {
+    await chatPromptHint.animate([{opacity:1},{opacity:0}],{duration:300,easing:'ease-in',fill:'forwards'}).finished;
+  } catch { return; }
   if (version !== promptMotionVersion || followupText.value || document.activeElement === followupText) {
     chatPromptHint.getAnimations().forEach(animation => animation.cancel());
     return;
   }
   chatPromptHint.textContent = nextChatPrompt();
   chatPromptHint.getAnimations().forEach(animation => animation.cancel());
-  if (!reduced) chatPromptHint.animate([{opacity:0,transform:'translateX(-10px)'},{opacity:1,transform:'translateX(0)'}],{duration:420,easing:'cubic-bezier(.22,1,.36,1)'});
+  chatPromptHint.animate([{opacity:0},{opacity:1}],{duration:450,easing:'ease-out'});
 }
-setInterval(rotateChatPrompt, 7000);
+setInterval(rotateChatPrompt, 4500);
 followupText.addEventListener('input', syncChatPromptHint);
-followupText.addEventListener('focus', () => {
-  promptMotionVersion++;
-  chatPromptHint.getAnimations().forEach(animation => animation.cancel());
-});
+followupText.addEventListener('focus', syncChatPromptHint);
+followupText.addEventListener('blur', syncChatPromptHint);
 syncChatPromptHint();
 function resizeChatInputs() {
   syncChatPromptHint();
@@ -465,26 +462,10 @@ window.addEventListener("resize", alignToast);
 function toast(text) {
   window.SnaapToast.show(text, alignToast);
 }
-function message(text, user = false, images = []) {
+function message(text, user = false) {
   const el = document.createElement("div");
   el.className = "message " + (user ? "user" : "assistant");
-  if (user) {
-    if (images.length) {
-      const gallery = document.createElement('div');
-      gallery.className = 'message-images';
-      gallery.setAttribute('aria-label', `แนบ ${images.length} ภาพ`);
-      for (const image of images) {
-        const img = document.createElement('img');
-        img.src = image.url ?? '/api/v1/images/' + image.id;
-        img.alt = image.name ?? 'ภาพที่แนบในข้อความ';
-        gallery.append(img);
-      }
-      el.append(gallery);
-    }
-    const body = document.createElement('div');
-    body.textContent = text;
-    el.append(body);
-  }
+  if (user) el.textContent = text;
   else {
     const body = document.createElement("div");
     body.className = "assistant-body";
@@ -495,56 +476,51 @@ function message(text, user = false, images = []) {
   $("#messages").append(el);
 }
 async function showSetupChanges(before, after, historicalChanges = null) {
-  const { diffSetup, describeSetupValue } = await setupChangesReady;
-  const changes = historicalChanges ?? diffSetup(before, after);
-  if (!changes.length) return;
-  const card = document.createElement('section');
-  card.className = 'setup-change-card';
-  card.setAttribute('aria-label', 'สิ่งที่ snaap เปลี่ยนในเซตอัป');
-  const valueText = (value, path) => path === 'destinations' && Array.isArray(value)
-    ? (value.map(id => state.destinations.find(d => d.id === id)?.name ?? 'ช่องทางที่บันทึกไว้').join(', ') || 'กล่องแจ้งเตือนในเว็บ')
-    : describeSetupValue(value);
-  const {setupCardMarkup}=await import('./setup-card.js');
-  if (!historicalChanges) card.classList.add('setup-proposal-card');
-  card.innerHTML=historicalChanges?`<details><summary>ข้อเสนอเซตอัปในข้อความนี้ · ${changes.length} จุด</summary><ul>${changes.map(c=>`<li><span class="change-action">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div>${esc(valueText(c.after??c.before,c.path))}</div></div></li>`).join('')}</ul><small>ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน</small></details>`:setupCardMarkup({spec:after,title:after.name,status:historicalChanges?'ข้อเสนอในบทสนทนา':'ร่าง · ยังไม่บันทึก',channels:`<details class="setup-card-changes"><summary>ดูสิ่งที่ปรับ ${changes.length} จุด</summary><ul>${changes.map(c => `<li><span class="change-action" data-kind="${esc(c.action)}">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div class="change-values">${c.action !== 'add' ? `<span class="change-before">${esc(valueText(c.before,c.path))}</span>` : ''}${c.action !== 'remove' ? `<span class="change-after">${c.action === 'change' ? '<span aria-hidden="true">→</span> ' : ''}${esc(valueText(c.after,c.path))}</span>` : ''}</div></div></li>`).join('')}</ul></details>`,note:historicalChanges?'ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน':'ตรวจร่างก่อนบันทึกและเปิดแจ้งเตือน',actions:historicalChanges?'':'<button type="button" class="secondary" data-revert-change>ย้อนการปรับ</button><button type="button" class="primary" data-review-setup>ตรวจเซตอัป</button>'},{esc,fullSummary});
-  if (!historicalChanges) card.querySelectorAll('.setup-card-changes li').forEach((el,i)=>{
-    const button=document.createElement('button');button.type='button';button.className='text-button';button.textContent='เปิดจุดที่เปลี่ยน';
-    button.onclick=()=>{setWorkbenchTab('split');showDesigner();window.SnaapStudio?.focus(changes[i].path);};el.append(button);
+  const {diffSetup,describeSetupValue}=await setupChangesReady;
+  const changes=historicalChanges??diffSetup(before,after);
+  if(!changes.length)return;
+  const conversation=state.conversation,workspace=state.workspaceId,target=JSON.stringify(after);
+  const card=document.createElement('section');
+  card.className='setup-change-card';
+  card.setAttribute('aria-label','สิ่งที่ snaap เปลี่ยนในเซตอัป');
+  const valueText=(value,path)=>path==='destinations'&&Array.isArray(value)
+    ?(value.map(id=>state.destinations.find(d=>d.id===id)?.name??'ช่องทางที่บันทึกไว้').join(', ')||'กล่องแจ้งเตือนในเว็บ')
+    :describeSetupValue(value);
+  card.innerHTML=`<details><summary>${historicalChanges?'ข้อเสนอเซตอัปในข้อความนี้':'ดูสิ่งที่ปรับในร่าง'} · ${changes.length} จุด</summary><ul>${changes.map(c=>`<li><span class="change-action">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div>${c.action!=='add'?`<span class="change-before">${esc(valueText(c.before,c.path))}</span>`:''}${c.action==='change'?'<span aria-hidden="true"> → </span>':''}${c.action!=='remove'?`<span class="change-after">${esc(valueText(c.after,c.path))}</span>`:''}</div></div></li>`).join('')}</ul><small>${historicalChanges?'ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน':'ปรับเฉพาะร่าง · ยังไม่เปลี่ยนเซตอัปที่กำลังแจ้งเตือน'}</small>${!historicalChanges&&before?'<button class="secondary" type="button" data-revert-change>ย้อนการปรับครั้งนี้</button>':''}</details>`;
+  card.querySelector('[data-revert-change]')?.addEventListener('click',()=>{
+    if(state.busy)return toast('รอขั้นตอนปัจจุบันเสร็จก่อน');
+    if(state.conversation!==conversation||state.workspaceId!==workspace||JSON.stringify(state.draft)!==target)
+      return toast('มีการปรับเซตอัปต่อแล้ว ใช้ย้อนกลับในพื้นที่ออกแบบเพื่อไล่ทีละขั้น');
+    state.draft=structuredClone(before);state.undo.pop();state.replay=null;
+    renderDesigner();queueDraftSave();
+    card.querySelector('small').textContent='ย้อนการปรับครั้งนี้แล้ว';
+    card.querySelector('[data-revert-change]').disabled=true;
   });
-  card.querySelector('[data-review-setup]')?.addEventListener('click',()=>{setWorkbenchTab('split');showDesigner();$('#designer')?.scrollIntoView({block:'start',behavior:'smooth'});});
-  if (!historicalChanges) {
-    const target = JSON.stringify(after), conversation = state.conversation;
-    card.querySelector('[data-revert-change]').onclick = () => {
-      if (state.conversation !== conversation || JSON.stringify(state.draft) !== target) {
-        toast('มีการปรับเซตอัปต่อแล้ว ใช้ย้อนกลับในพื้นที่ออกแบบเพื่อไล่ทีละขั้น');
-        return;
-      }
-      state.draft = structuredClone(before);
-      state.undo.pop();
-      state.replay = null;
-      renderDesigner();
-      queueDraftSave();
-      card.querySelector('header h3').textContent = 'ย้อนการปรับครั้งนี้แล้ว';
-      card.querySelector('.setup-card-footnote').textContent = 'ร่างกลับไปก่อนการปรับครั้งนี้';
-      card.querySelector('.setup-card-conditions').innerHTML = '';
-      card.querySelector('[data-review-setup]').disabled = true;
-      card.querySelector('[data-revert-change]').disabled = true;
-    };
-  }
   $('#messages').append(card);
 }
-let pageNavigationMotion;
-function animatePageNavigation(target) {
-  pageNavigationMotion?.cancel();
-  pageNavigationMotion = null;
-  if (!target || document.documentElement.dataset.boot === 'loading' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  pageNavigationMotion = target.animate(
-    [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
-    { duration: 320, easing: 'cubic-bezier(.22,1,.36,1)' }
-  );
-  pageNavigationMotion.id = 'snaap-page-navigation';
+async function showChatSetupCard() {
+  const conversation=state.conversation,workspace=state.workspaceId;
+  const current=()=>state.conversation===conversation&&state.workspaceId===workspace;
+  try {
+    await saveDraft();
+    if(!current())return;
+    const result=await api(`/conversations/${conversation}/setup-card`,'POST',{
+      expectedRevision:state.draftRevision,...(state.saved?{ruleId:state.saved.id}:{}),
+    });
+    if(!current())return;
+    (await presetsReady).renderCard(result.message);
+    scrollChatToLatest();
+  } catch(error) {
+    if(!current())return;
+    const retry=document.createElement('button');
+    retry.type='button';retry.className='secondary';
+    retry.textContent='แสดงปุ่มบันทึกเซตอัปอีกครั้ง';
+    retry.onclick=async()=>{if(!current())return;retry.remove();await showChatSetupCard();};
+    message('ยังเตรียมปุ่มบันทึกไม่สำเร็จ: '+error.message);
+    $('#messages').append(retry);
+  }
 }
-function navigate(view, load = true, replayMotion = false) {
+function navigate(view, load = true) {
   if (view === "watch") {
     notificationSection = "rules";
     view = "notifications";
@@ -557,10 +533,7 @@ function navigate(view, load = true, replayMotion = false) {
   }
   if (!["home", "watch", "history", "notifications"].includes(view))
     view = "home";
-  const target = $("#view-" + view);
-  const changed = target?.hidden;
   $$(".view").forEach((el) => (el.hidden = el.id !== "view-" + view));
-  if (load && (changed || replayMotion)) animatePageNavigation(target);
   $$(".nav-item").forEach((el) => {
     el.classList.toggle("active", el.dataset.view === view);
     if (el.dataset.view === view) el.setAttribute("aria-current", "page");
@@ -575,10 +548,10 @@ function navigate(view, load = true, replayMotion = false) {
   }[view];
   $("#sidebar").classList.remove("is-open");
   requestAnimationFrame(alignToast);
-  if (!load) return;
+  if (!load || !state.workspaceId) return;
   if (view === "watch") renderWatch();
-  if (view === "history") renderHistory();
-  if (view === "notifications") renderNotifications();
+  if (view === "history" && historyWorkspace !== state.workspaceId && historyLoadingWorkspace !== state.workspaceId) renderHistory();
+  if (view === "notifications") renderNotifications(false);
   if (view === "billing") renderBilling();
 }
 function showDesigner() {
@@ -598,9 +571,7 @@ function setWorkbenchTab(mode) {
   mode = mode === 'chat' ? 'chat' : 'split';
   requestAnimationFrame(resizeChatInputs);
   requestAnimationFrame(alignToast);
-  const changed = (requestedWorkbenchMode ?? workbench.dataset.tab) !== mode;
   requestedWorkbenchMode = mode;
-  if (!changed && workbench.dataset.tab !== mode) return;
   const applyMode = () => {
     if (requestedWorkbenchMode !== mode) return;
     workbench.dataset.tab = mode;
@@ -611,18 +582,7 @@ function setWorkbenchTab(mode) {
     syncChatPromptHint();
     requestAnimationFrame(() => document.dispatchEvent(new Event("workbench-mode-changed")));
   };
-  const animateMode = changed && document.documentElement.dataset.boot !== 'loading' && !matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (animateMode && document.startViewTransition) {
-    window.snaapModeTransition?.skipTransition();
-    window.snaapModeTransition = document.startViewTransition(applyMode);
-  } else {
-    applyMode();
-    if (animateMode) {
-      const target = mode === "chat" ? $("#conversation") : setupPane;
-      target.getAnimations().forEach(animation => animation.cancel());
-      target.animate([{opacity:0, transform:"translateX(14px)"},{opacity:1, transform:"none"}], {duration:360,easing:"cubic-bezier(.22,1,.36,1)"});
-    }
-  }
+  applyMode();
   tabs
     .querySelectorAll("button")
     .forEach((button) =>
@@ -750,6 +710,7 @@ function queueDraftSave() {
   }, 700);
 }
 async function leaveDraft() {
+  if (state.saving) { toast('กำลังบันทึกเซตอัป รอสักครู่'); return false; }
   if (state.busy) {
     toast("รอ snaap ตอบก่อนเปลี่ยนบทสนทนา");
     return false;
@@ -928,7 +889,8 @@ function conditionUI(c, path) {
     return `<div class="condition-group"><select aria-label="เงื่อนไขกลุ่ม" data-path="${path}.op">${options(["AND", "OR"], c.op)}</select>${c.children.map((x, i) => `<details class="group-condition" data-condition-editor="${path}.children.${i}"><summary>ข้อ ${i + 1}<span>${esc(conditionText(x))}</span></summary><div>${conditionUI(x, `${path}.children.${i}`)}${c.children.length > 1 ? `<button class="text-button" data-remove="${path}.children.${i}">ลบข้อ ${i + 1}</button>` : ""}</div></details>`).join("")}<button class="text-button" data-add="${path}">เพิ่มเงื่อนไข</button></div>`;
   if (c.kind === "HOLD")
     return `<label>ต่อเนื่องกี่แท่ง<input type="number" min="1" max="30" data-path="${path}.bars" value="${c.bars}"></label>${conditionUI(c.condition, path + ".condition")}`;
-  return `<div class="condition-line">${operandUI(c.left, path + ".left", "ค่าที่ตรวจ")}<label class="comparison-field">การเปรียบเทียบ<select class="operator" data-path="${path}.op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], c.op)}</select></label>${operandUI(c.right, path + ".right", "เทียบกับ")}</div><div class="condition-tools"><button class="text-button" data-group="${path}">จัดกลุ่ม AND / OR</button><button class="text-button" data-hold="${path}">ต่อเนื่องหลายแท่ง</button></div>`;
+  const chartLinks = [...new Set([c.left.timeframe,c.right.timeframe].filter(Boolean))].map(frame => `<button type="button" class="secondary" data-open-condition-chart="${esc(frame)}">ดูกราฟ ${esc(frame)}</button>`).join('');
+  return `<div class="condition-chart-links">${chartLinks}</div><div class="condition-line">${operandUI(c.left, path + ".left", "ค่าที่ตรวจ")}<label class="comparison-field">การเปรียบเทียบ<select class="operator" data-path="${path}.op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], c.op)}</select></label>${operandUI(c.right, path + ".right", "เทียบกับ")}</div><div class="condition-tools"><button class="text-button" data-group="${path}">จัดกลุ่ม AND / OR</button><button class="text-button" data-hold="${path}">ต่อเนื่องหลายแท่ง</button></div>`;
 }
 let MAX_SETUP_CONDITIONS;
 const setupLimitsReady = import("./setup-limits.js").then(m => MAX_SETUP_CONDITIONS = m.MAX_SETUP_CONDITIONS);
@@ -976,7 +938,7 @@ function renderDesigner() {
   limitLabel.className = "field-note setup-condition-limit";
   limitLabel.setAttribute("role", "status");
   limitLabel.textContent = `เงื่อนไข ${conditionCount}/${MAX_SETUP_CONDITIONS} · รวมเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก`;
-  panel.querySelector(".design-toolbar").after(limitLabel);
+  panel.querySelector("#editor-feedback").after(limitLabel);
   if (conditionCount >= MAX_SETUP_CONDITIONS) panel.querySelectorAll("[data-add], [data-group], [data-stage], [data-optional]").forEach(button => {
     button.disabled = true;
     button.title = "ครบ 24 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
@@ -1091,12 +1053,51 @@ function set(path, value) {
     last = keys.pop();
   keys.reduce((o, k) => o[k] ?? (o[k] = {}), state.draft)[last] = value;
 }
+function watchChannelMark(channel) {
+  const logo = { DISCORD: "discord.svg", TELEGRAM: "telegram.svg", LINE: "line.png" }[channel.kind];
+  return logo ? `<img src="/assets/brands/${logo}" alt="" width="14" height="14">` : uiIcon("link");
+}
+function watchChannelPicker(r) {
+  const channels = state.destinations.filter(d => d.verified);
+  return `<details class="watch-channel-picker"><summary aria-label="เลือกช่องทางแจ้งเตือน ${esc(r.spec.name)}" title="เลือกช่องทางแจ้งเตือน">${uiIcon("bell")}แจ้งเตือน<svg class="ui-icon watch-channel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="watch-channel-menu"><strong>ส่งสัญญาณไปที่</strong><p>รับในเว็บเสมอ · เลือกเพิ่มได้ 5 ช่องทาง</p>${channels.length ? channels.map(d => `<label>${watchChannelMark(d)}<span>${esc(d.name)}</span><input type="checkbox" value="${esc(d.id)}" ${r.spec.destinations.includes(d.id) ? "checked" : ""}></label>`).join("") : '<p class="watch-channel-empty">ยังไม่มีช่องทางที่เชื่อมไว้</p>'}<div class="watch-channel-actions"><a href="#notifications" data-watch-connect-channel>เชื่อมช่องทาง</a><button type="button" class="primary" data-save-rule-channels="${esc(r.id)}">บันทึก</button></div></div></details>`;
+}
+function watchSetupRow(r) {
+  const pairs = r.spec.pairs;
+  const pairPreview = pairs.slice(0, 2).join(", ");
+  const remaining = pairs.length - 2;
+  const direction = r.spec.market === "Spot" ? "ซื้อ"
+    : { LONG: "Long", SHORT: "Short", BOTH: "Long + Short" }[r.spec.side] ?? "ยังไม่ระบุฝั่ง";
+  const status = r.quota_blocked
+    ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ"
+    : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน";
+  const destinations = r.spec.destinations.map(id => state.destinations.find(d => d.id === id)).filter(Boolean);
+  const channelTags = destinations.map(d => `<span class="watch-tag watch-channel-tag ${r.active && !r.quota_blocked && d.verified ? "is-routing" : ""}" title="${d.verified ? r.quota_blocked ? 'พักส่ง · เกินสิทธิ์แพ็กเกจ' : r.active ? 'เปิดส่งแจ้งเตือน' : 'ส่งเมื่อเปิดใช้งานเซตอัป' : 'ช่องทางตัดการเชื่อมต่อแล้ว'}">${watchChannelMark(d)}<span>${esc(d.name)}</span>${!d.verified ? '<span>· ตัดแล้ว</span>' : ''}</span>`).join("");
+  return `<article class="watch-row">
+    <div class="watch-row-heading"><div class="watch-title-line"><h2>${esc(r.spec.name)}</h2><span class="status ${r.active && !r.quota_blocked ? "is-active" : "paused"}">${status}</span></div>
+      <div class="watch-setup-meta"><span class="watch-pairs">${esc(pairPreview)}${remaining > 0 ? ` <span class="watch-pair-count">+${remaining} คู่</span>` : ""}</span><span class="watch-tags"><span class="watch-tag">${esc(r.spec.exchange.join(" · "))}</span><span class="watch-tag">${esc(r.spec.market)}</span><span class="watch-tag watch-direction">${esc(direction)}</span>${channelTags}</span></div>
+
+    </div>
+    <div class="watch-row-footer">
+      ${watchChannelPicker(r)}
+      <button class="secondary" data-activate-rule="${esc(r.id)}">${uiIcon(r.active ? "pause" : "play")}${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button>
+      <button class="secondary watch-edit" data-open-rule="${esc(r.id)}" aria-label="แก้ไข ${esc(r.spec.name)}" title="แก้ไขเซตอัป">${uiIcon("sliders")}<span class="sr-only">แก้ไข</span></button>
+    </div>
+    ${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}
+    <details class="watch-details"><summary>รายละเอียด</summary><div class="watch-details-content">
+      <p class="watch-all-pairs"><strong>คู่เทรด</strong> ${esc(pairs.join(", "))}</p>
+      <div class="watch-flexibility" data-flex-rule="${esc(r.id)}"><div class="flex-summary"><strong>ความยืดหยุ่น</strong><span>${esc(entryFlexUI.flexibilitySummary(r.spec))}</span><button type="button" data-flex-toggle aria-label="ปรับความยืดหยุ่น" aria-expanded="false" aria-controls="flex-${esc(r.id)}">ปรับ</button></div><div class="flex-panel" id="flex-${esc(r.id)}" data-flex-panel hidden></div></div>
+      <p class="watch-rule-summary"><strong>เงื่อนไขเข้า</strong> ${esc(setupEntrySummary(r.spec))}</p>
+      <div class="watch-details-actions"><button class="secondary" data-export-setup-code="${esc(r.id)}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="text-button watch-delete" data-delete-rule="${esc(r.id)}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">${uiIcon("trash")}ลบเซตอัป</button></div>
+    </div></details>
+  </article>`;
+}
 function renderWatch() {
   const notice = $("#view-watch .demo-notice");
   if (notice)
     notice.textContent = state.me?.requiresRuleSelection
       ? "สิทธิ์ Pro หมดแล้ว กรุณาหยุดเซตอัพให้เหลือ 3 รายการ ระบบพักการตรวจจนกว่าจะเลือกครบ"
       : "ประเมินแท่งปิดทุกนาที · ข้อมูลแต่ละกระดานตรวจแยกกัน";
+  if (notice) notice.hidden = !state.me?.requiresRuleSelection;
   const list = state.rules.filter(
     (r) =>
       state.filter === "all" ||
@@ -1108,12 +1109,11 @@ function renderWatch() {
     el.classList.toggle("active", active);
     el.setAttribute("aria-pressed", String(active));
   });
+  const openDetails = new Set([...$("#watch-list").querySelectorAll("[data-flex-rule]")]
+    .filter(host => host.closest("details")?.open).map(host => host.dataset.flexRule));
   $("#watch-list").innerHTML = list.length
     ? list
-        .map(
-          (r) =>
-            `<article class="watch-row"><div class="watch-row-heading"><div><h2>${esc(r.spec.name)}</h2><small>${esc(r.spec.exchange.join(" · "))} · ${esc(r.spec.pairs.join(", "))} · ${esc(directionLabel(r.spec.side,r.spec.market))}</small></div><span class="status paused">${r.quota_blocked ? "หยุดตรวจ · เกินสิทธิ์แพ็กเกจ" : r.active ? "เปิดใช้งาน" : "ยังไม่เปิดใช้งาน"}</span></div><p class="watch-rule-summary">${esc(setupEntrySummary(r.spec))}</p>${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}<div class="watch-row-footer"><button class="text-button" data-delete-rule="${r.id}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">ลบ</button><button class="secondary" data-export-setup-code="${r.id}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="secondary" data-activate-rule="${r.id}">${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button><button class="secondary" data-open-rule="${r.id}">เปิดออกแบบ</button></div></article>`,
-        )
+        .map(watchSetupRow)
         .join("")
     : uiEmpty(
         "bell",
@@ -1125,22 +1125,39 @@ function renderWatch() {
           uiIcon("plus") +
           "ออกแบบเซตอัพ</button>",
       );
-  $$(".watch-row .status").forEach((el) =>
-    {const active=el.textContent === "เปิดใช้งาน";el.classList.toggle("is-active",active);el.classList.toggle("paused",!active);},
-  );
+  $("#watch-list").querySelectorAll("[data-flex-rule]").forEach(host => {
+    if (openDetails.has(host.dataset.flexRule)) host.closest("details").open = true;
+  });
   const footnote = $("#view-watch .demo-footnote");
+  entryFlexUI.mountFlexibility($('#watch-list'), {
+    rules:state.rules, api,
+    canEdit(rule){
+      if(state.busy){toast('รอการวิเคราะห์เสร็จก่อนปรับความยืดหยุ่น');return false;}
+      if(state.saved?.id===rule.id && JSON.stringify(comparableSpec(state.draft))!==JSON.stringify(comparableSpec(rule.spec))){toast('มีร่างที่แก้ค้างอยู่ กรุณาบันทึกเซตอัปจากหน้าออกแบบก่อน');return false;}
+      return true;
+    },
+    async onSaved(saved){
+      if(state.saved?.id===saved.id){state.saved=saved;state.draft=structuredClone(saved.spec);state.replay=null;state.undo=[];renderDesigner();await saveDraft();}
+      await refresh();toast('บันทึกความยืดหยุ่นแล้ว'+(saved.active?' · ยังเปิดใช้งานอยู่':''));
+    },
+    onReload:()=>refresh(),
+  });
   if (footnote)
     footnote.textContent =
       "ประเมินแท่งปิดทุกนาที · ดูสถานะข้อมูลและผลการส่งในหน้าการแจ้งเตือน";
 }
+let refreshGeneration=0;
 async function refresh({ reuseMe = false } = {}) {
+  const generation=++refreshGeneration,workspace=state.workspaceId;
   const [rules, me, rows, destinations] = await Promise.all([
     api("/rules"),
     reuseMe && state.me ? Promise.resolve(state.me) : api("/me"),
     api("/conversations"),
     api("/destinations"),
   ]);
+  if (generation!==refreshGeneration || workspace !== state.workspaceId) return;
   state.rules = rules;
+  state.destinationAvailability = destinations.available;
   if(state.saved)state.saved=rules.find(rule=>rule.id===state.saved.id)??null;
   state.me = me;
   window.dispatchEvent(new Event('snaap-account-ready'));
@@ -1220,11 +1237,14 @@ async function refreshContext() {
     : "ยังไม่มีประวัติหรือเซตอัพที่บันทึกไว้";
 }
 async function chat(text) {
+  if (state.saving) { toast('กำลังบันทึกเซตอัป รอสักครู่'); return; }
   if (!text.trim() || state.busy) return;
   if(state.uploading){toast('กำลังแนบภาพ รอให้พรีวิวปรากฏก่อนส่ง');return;}
   if(new Set([...state.images,...(state.useMyData?state.libraryImages:[])].map(image=>image.id)).size>5){
     toast('ใช้ภาพรวมได้สูงสุด 5 ภาพต่อข้อความ รวมภาพจากข้อมูลของฉัน กรุณาลดภาพหรือปิดใช้ข้อมูลของฉัน');return;
   }
+  if (!state.health) await healthReady;
+  if (state.busy || state.uploading) return;
   if (!state.health?.ai) {
     toast("AI ยังไม่พร้อมใช้งาน คุณตั้งเงื่อนไขเองได้");
     return;
@@ -1232,21 +1252,25 @@ async function chat(text) {
   if(workbench.dataset.tab!=="split")setWorkbenchTab("chat");
   showDesigner();
   location.hash = "home";
-  message(text, true, [...state.images, ...(state.useMyData ? state.libraryImages : [])]);
+  message(text, true);
+  const pendingImages = state.images.filter(image => !image.sent);
+  appendChatImages([...pendingImages, ...(state.useMyData ? state.libraryImages : [])]);
+  pendingImages.forEach(image => { image.sent = true; });
+  renderImages();
+  let requestCompleted = false;
   followingChat=true;
   requestAnimationFrame(scrollChatToLatest);
   $("#chat-input").value = "";
   $("#followup-input").value = "";
   resizeChatInputs();
   state.busy = true;
-  previews.hidden = true;
   const thinking = document.createElement("div");
   thinking.className = "thinking-indicator";
   thinking.setAttribute("role", "status");
   thinking.setAttribute('aria-live','polite');
   thinking.setAttribute('aria-atomic','true');
   thinking.innerHTML =
-    '<div class="thinking-header"><span class="thinking-mark" aria-hidden="true">S</span><div><strong>Snaap</strong><span data-thinking-stage>กำลังเตรียมคำตอบ…</span></div><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></div><div class="thinking-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
+    '<svg class="thinking-mark" viewBox="34 20 128 155" aria-hidden="true" focusable="false"><use href="/assets/snaap-symbol.svg#snaap-symbol"></use></svg><span class="sr-only">Snaap: </span><span data-thinking-stage>กำลังเตรียมคำตอบ…</span><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
   const thinkingStage=thinking.querySelector('[data-thinking-stage]');
   const setThinkingStage=text=>{thinkingStage.textContent=text;};
   let thinkingWaitTimer;
@@ -1283,6 +1307,7 @@ async function chat(text) {
 
       },
     );
+    requestCompleted = true;
     clearTimeout(thinkingWaitTimer);
     thinking.remove();
     message(result.text);
@@ -1296,16 +1321,19 @@ async function chat(text) {
         state.draft = result.draft;
         state.replay = null;
         renderDesigner();
-        queueDraftSave();
-        await showSetupChanges(previousDraft, state.draft);
-        if(matchMedia('(min-width: 1100px)').matches)setWorkbenchTab('split');
+        await showSetupChanges(previousDraft,state.draft);
+        await showChatSetupCard();
       }
     }
-    state.images = [];
     state.crop = null;
     renderImages();
+    persistRecovery();
     await refresh();
   } catch (error) {
+    if (!requestCompleted) {
+      pendingImages.forEach(image => { image.sent = false; });
+      renderImages();
+    }
     message(error.message);
     $("#followup-input").value = text;
     resizeChatInputs();
@@ -1313,7 +1341,6 @@ async function chat(text) {
   } finally {
     clearTimeout(thinkingWaitTimer);
     state.busy = false;
-    previews.hidden = false;
     thinking.remove();
     $$("#chat-form button[type=submit],.chat-send-button").forEach(
       (b) => (b.disabled = false),
@@ -1321,11 +1348,47 @@ async function chat(text) {
     await refresh().catch(() => {});
   }
 }
+function appendChatImages(images) {
+  const unique = [...new Map(images.map(image => [image.id, image])).values()];
+  if (!unique.length) return;
+  const gallery = document.createElement('div');
+  gallery.className = 'chat-image-gallery user';
+  gallery.setAttribute('role', 'group');
+  gallery.setAttribute('aria-label', 'ภาพที่ผู้ใช้ส่ง');
+  for (const image of unique) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chat-image-thumbnail';
+    button.setAttribute('aria-haspopup', 'dialog');
+    const name = image.name ?? 'ภาพในบทสนทนา';
+    button.setAttribute('aria-label', 'ดูภาพเต็ม: ' + name);
+    const img = document.createElement('img');
+    img.src = '/api/v1/images/' + image.id;
+    img.alt = name;
+    img.className = 'chat-saved-image';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    button.onclick = () => import('./chat-images.js').then(({openChatImage}) => openChatImage(img.src, name, button));
+    button.append(img);
+    gallery.append(button);
+  }
+  $('#messages').append(gallery);
+}
+async function restoreChatImages(selectedIds, sentIds = []) {
+  if (!state.conversation) return;
+  const conversationId = state.conversation;
+  const images = await api(`/conversations/${conversationId}/images`);
+  if (state.conversation !== conversationId) return;
+  state.images = selectedIds ? images.filter(image => selectedIds.includes(image.id)).slice(-5) : images.slice(-5);
+  state.images.forEach(image => { image.sent = !selectedIds || sentIds.includes(image.id); });
+  renderImages();
+}
 function renderImages() {
   previews.innerHTML = state.images
+    .filter(image => !image.sent)
     .map(
       (i) =>
-        `<span><img src="${i.url}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
+        `<span><img src="/api/v1/images/${i.id}" alt="${esc(i.name)}"><button class="text-button" data-remove-image="${i.id}">นำออก</button></span>`,
     )
     .join("");
 }
@@ -1449,120 +1512,119 @@ function renderBilling() {
   }
 }
 let historyRenderVersion=0;
+let historyWorkspace;
+let historyLoadingWorkspace;
 let historyLoadController;
 async function renderHistory() {
   const version=++historyRenderVersion;
   historyLoadController?.abort();
-  historyLoadController=new AbortController();
-  // Bound reads, including response-body parsing, without blocking the menu.
-  const signal=AbortSignal.any([historyLoadController.signal,AbortSignal.timeout(12000)]);
-  const view = $("#view-history");
-  view.innerHTML =
-      '<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div><div class="runtime-card history-file-card"><h2>นำเข้าจากไฟล์</h2><p>CSV / XLSX รูปแบบกลาง · ตรวจข้อมูลก่อนบันทึก</p><a class="secondary template-download" href="/assets/trade-import-template.csv" download>ดาวน์โหลดไฟล์ต้นแบบ CSV</a><details class="import-format"><summary>รูปแบบข้อมูลที่รองรับ</summary><p class="field-note">คอลัมน์: time, exchange, market, pair, side, price, quantity, fee, id<br>market: Spot / Futures · ไม่ระบุจะเป็น Spot · quantity: จำนวนเหรียญ · เวลาแบบ ISO · side: buy / sell</p></details><label>ชื่อเรียกชุดประวัติ <input id="account-scope" placeholder="เช่น ประวัติเทรดเดือนตุลาคม"><small class="field-note">ชื่อที่คุณตั้งไว้แยกชุดข้อมูล ไม่ใช่ชื่อบัญชีบนกระดาน</small></label><p class="field-note">รายการไม่มี trade ID จะเก็บทั้งหมด กรุณาตรวจไฟล์ซ้ำก่อนนำเข้า</p><input id="history-upload" type="file" accept=".csv,.xlsx"><div id="import-preview"></div></div>';
-  const fileImport=view.querySelector('#account-scope')?.closest('.runtime-card');
-  if(fileImport){
-    const disclosure=document.createElement('details');disclosure.className='history-file-details';
-    const summary=document.createElement('summary');summary.textContent='เลือกไฟล์ CSV / XLSX หรือดูรูปแบบที่รองรับ';disclosure.append(summary);
-    [...fileImport.children].filter(child=>child.tagName!=='H2').forEach(child=>disclosure.append(child));
-    fileImport.append(disclosure);
-  }
-  const upload = $("#history-upload");
-  const fileLabel = document.createElement("label");
-  fileLabel.className = "file-drop";
-  fileLabel.innerHTML =
-    uiIcon("upload") +
-    "<span><strong>เลือกไฟล์ประวัติ</strong><small>CSV หรือ XLSX · ตรวจข้อมูลก่อนนำเข้า</small></span>";
-  upload.before(fileLabel);
-  fileLabel.append(upload);
-  upload.setAttribute("aria-label", "เลือกไฟล์ประวัติ CSV หรือ XLSX");
-
-  const slots={};
-  for(const [key,label] of [['imports','ประวัติที่นำเข้า'],['connections','การเชื่อมต่อกระดาน'],['images','ภาพอ้างอิง']]){
-    const slot=document.createElement('div');
-    slot.className='runtime-card';
-    slot.innerHTML=`<h2>${label}</h2><p role="status">กำลังโหลด…</p>`;
-    view.append(slot);
-    slots[key]=slot;
-  }
-  let connections;
-  const load=async(key,label,render)=>{
-    try{
-      const data=await api('/'+key,'GET',undefined,{signal});
-      if(version!==historyRenderVersion)return;
-      await render(data);
-      slots[key].remove();
-      const imageLibrary=view.querySelector('.trading-lab-images');
-      const connectionSection=view.querySelector('#history-connections');
-      if(imageLibrary && connectionSection)imageLibrary.after(connectionSection);
-    }catch{
-      if(version!==historyRenderVersion)return;
-      slots[key].innerHTML=`<h2>${label}</h2><p role="status">ยังโหลดข้อมูลส่วนนี้ไม่ได้</p>`;
+  historyLoadController = new AbortController();
+  const signal = AbortSignal.any([historyLoadController.signal, AbortSignal.timeout(12000)]);
+  const workspace = state.workspaceId;
+  historyLoadingWorkspace = workspace;
+  const visibleView = $("#view-history");
+  const view = document.createElement('section');
+  if (historyWorkspace !== workspace) visibleView.innerHTML='<div class="page-heading"><h1>ข้อมูลของฉัน</h1></div><p role="status">กำลังโหลดข้อมูลของฉัน…</p>';
+  visibleView.setAttribute('aria-busy', 'true');
+  try {
+    const loaded = await Promise.allSettled([
+      api('/imports', 'GET', undefined, {signal}),
+      api('/connections', 'GET', undefined, {signal}),
+      api('/images', 'GET', undefined, {signal}),
+    ]);
+    if(version!==historyRenderVersion || workspace !== state.workspaceId)return;
+    const [imports, connections, images] = loaded.map(item => item.status === 'fulfilled' ? item.value : null);
+    view.innerHTML =
+      '<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div><div class="runtime-card history-file-card"><h2>นำเข้าจากไฟล์</h2><p>CSV / XLSX รูปแบบกลาง · ตรวจข้อมูลก่อนบันทึก</p><a class="secondary template-download" href="/assets/trade-import-template.csv" download>ดาวน์โหลดไฟล์ต้นแบบ CSV</a><details class="import-format"><summary>รูปแบบข้อมูลที่รองรับ</summary><p class="field-note">คอลัมน์: time, exchange, market, pair, side, price, quantity, fee, id<br>market: Spot / Futures · ไม่ระบุจะเป็น Spot · quantity: จำนวนเหรียญ · เวลาแบบ ISO · side: buy / sell</p></details><label>ชื่อเรียกชุดประวัติ <input id="account-scope" placeholder="เช่น ประวัติเทรดเดือนตุลาคม"><small class="field-note">ชื่อที่คุณตั้งไว้แยกชุดข้อมูล ไม่ใช่ชื่อบัญชีบนกระดาน</small></label><p class="field-note">รายการไม่มี trade ID จะเก็บทั้งหมด กรุณาตรวจไฟล์ซ้ำก่อนนำเข้า</p><input id="history-upload" type="file" accept=".csv,.xlsx"><div id="import-preview"></div></div>' +
+      (imports ?? [])
+        .map(
+          (i) =>
+            `<div class="runtime-card history-import-entry" data-import-connection="${esc(i.account_scope??'')}"><div class="history-api-header"><h2>${esc(i.name)}</h2><span data-history-api-actions></span></div><p>${i.count} รายการ · ${new Date(i.created_at).toLocaleString("th-TH")}</p></div>`,
+        )
+        .join("");
+    const refreshButton = document.createElement('button');
+    refreshButton.className = 'secondary';
+    refreshButton.dataset.historyRefresh = '';
+    refreshButton.textContent = 'รีเฟรชข้อมูล';
+    view.querySelector('.page-heading').append(refreshButton);
+    const failedSection = (title) => {
+      const section = document.createElement('div'); section.className = 'runtime-card';
+      section.innerHTML = '<h2>'+title+'</h2><p role="status">ยังโหลดข้อมูลส่วนนี้ไม่ได้ · กดรีเฟรชข้อมูลเพื่อลองอีกครั้ง</p>';
+      view.append(section);
+    };
+    if (imports === null) failedSection('ประวัติที่นำเข้า');
+    if (connections === null) failedSection('การเชื่อมต่อกระดาน');
+    else await renderConnections(view, connections);
+    if(version!==historyRenderVersion)return;
+    if (images === null) failedSection('ภาพอ้างอิง');
+    else await renderTradingLab(view, images);
+    if(version!==historyRenderVersion)return;
+    const imageLibrary=view.querySelector('.trading-lab-images');
+    const connectionSection = view.querySelector('#history-connections');
+    if (imageLibrary && connectionSection) imageLibrary.after(connectionSection);
+    const fileImport=view.querySelector('#account-scope')?.closest('.runtime-card');
+    if(fileImport){
+      const disclosure=document.createElement('details');disclosure.className='history-file-details';
+      const summary=document.createElement('summary');summary.textContent='เลือกไฟล์ CSV / XLSX หรือดูรูปแบบที่รองรับ';disclosure.append(summary);
+      [...fileImport.children].filter(child=>child.tagName!=='H2').forEach(child=>disclosure.append(child));
+      fileImport.append(disclosure);
     }
-  };
-  await Promise.all([
-    load('imports','ประวัติที่นำเข้า',imports=>{
-      const list=document.createElement('div');
-      list.innerHTML=imports
-        .filter(i=>!connections?.items.some(c=>c.id===i.account_scope))
-        .map(i=>`<div class="runtime-card history-import-entry" data-import-connection="${esc(i.account_scope??'')}"><div class="history-api-header"><h2>${esc(i.name)}</h2><span data-history-api-actions></span></div><p>${i.count} รายการ · ${new Date(i.created_at).toLocaleString("th-TH")}</p></div>`)
-        .join('');
-      slots.imports.before(list);
-    }),
-    load('connections','การเชื่อมต่อกระดาน',async data=>{
-      connections=data;
-      await renderConnections(data);
-    }),
-    load('images','ภาพอ้างอิง',images=>renderTradingLab(images)),
-  ]);
-}
-function showActivation(rule) {
-  const dialog = document.createElement("dialog");
-  dialog.setAttribute("aria-labelledby", "activation-title");
-  dialog.className = "runtime-dialog";
-  dialog.innerHTML = `<h2 id="activation-title">เริ่มแจ้งเตือนเซตอัพนี้?</h2><p>${esc(rule.spec.name)} · เวอร์ชัน ${rule.revision}</p><p>${esc(rule.spec.exchange.join(", "))} · ${esc(rule.spec.pairs.join(", "))}</p><p class="draft-diff">${esc(fullSummary(rule.spec))}</p><p>เริ่มตรวจตั้งแต่ยืนยัน ใช้แท่งปิด สัญญาณเข้า–ออกไม่ใช่คำสั่งซื้อขาย</p><p>ปลายทาง: กล่องแจ้งเตือน${rule.spec.destinations.map((id) => " · " + esc(state.destinations.find((x) => x.id === id)?.name ?? "ไม่พบช่องทาง")).join("")}</p><div class="design-actions"><button class="primary" data-confirm>ยืนยันเปิดใช้งาน</button><button class="secondary" data-cancel autofocus>ยังไม่เปิดใช้งาน</button></div>`;
-  document.body.append(dialog);
-  dialog.showModal();
-  dialog.querySelector("[data-cancel]").onclick = () => dialog.close();
-  dialog.addEventListener("close", () => dialog.remove());
-  dialog.querySelector("[data-confirm]").onclick = async () => {
-    try {
-      await api(`/rules/${rule.id}/activation`, "POST", {
-        active: true,
-        expectedRevision: rule.revision,
-        confirmation: "ACTIVATE",
-      });
-      dialog.close();
-      await refresh();
-      toast("เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป");
-    } catch (e) {
-      toast(e.message);
-    }
-  };
+    const upload = view.querySelector("#history-upload");
+    const fileLabel = document.createElement("label");
+    fileLabel.className = "file-drop";
+    fileLabel.innerHTML =
+      uiIcon("upload") +
+      "<span><strong>เลือกไฟล์ประวัติ</strong><small>CSV หรือ XLSX · ตรวจข้อมูลก่อนนำเข้า</small></span>";
+    upload.before(fileLabel);
+    fileLabel.append(upload);
+    upload.setAttribute("aria-label", "เลือกไฟล์ประวัติ CSV หรือ XLSX");
+    if (version !== historyRenderVersion || workspace !== state.workspaceId) return;
+    visibleView.replaceChildren(...view.childNodes);
+    if (images !== null) state.allLibraryImages = images;
+    historyWorkspace = workspace;
+    scheduleHistorySyncRefresh();
+  } catch (e) {
+    if (version !== historyRenderVersion || workspace !== state.workspaceId) return;
+    if (historyWorkspace !== workspace) visibleView.innerHTML='<div class="page-heading"><h1>ข้อมูลของฉัน</h1></div><p role="alert">'+esc(e.message)+'</p><button class="secondary" data-history-refresh>ลองอีกครั้ง</button>';
+    toast(e.message);
+  } finally {
+    if (version === historyRenderVersion) { visibleView.removeAttribute('aria-busy'); historyLoadingWorkspace = undefined; }
+  }
 }
 document.addEventListener("submit", async (e) => {
   if (e.target.id !== "channel-form") return;
   e.preventDefault();
   const channelSubmit=e.target.querySelector('button[type="submit"],button.primary');
   if(channelSubmit?.disabled)return;
-  if(channelSubmit)channelSubmit.disabled=true;
+  const channelLabel=channelSubmit?.textContent;
+  if(channelSubmit){channelSubmit.disabled=true;channelSubmit.textContent='กำลังเชื่อมช่องทาง…';}
   try {
     const data = Object.fromEntries(new FormData(e.target));
     if (!data.url) delete data.url;
     const result = await api("/destinations", "POST", data);
     $("#channel-instruction").textContent = result.instruction;
-    if(result.verified){e.target.reset();await refresh();await renderNotifications();toast('เชื่อมช่องทางแล้ว · เลือกใช้ในเซตอัปได้เลย');}
+    if(result.verified){e.target.reset();toast('เชื่อมช่องทางแล้ว · เลือกใช้ในเซตอัปได้เลย');await refresh();await renderNotifications();}
+    else toast('บันทึกช่องทางแล้ว · ทำตามคำแนะนำเพื่อยืนยันการเชื่อมต่อ');
   } catch (error) {
     toast(error.message);
-  } finally {if(channelSubmit?.isConnected)channelSubmit.disabled=false;}
+  } finally {if(channelSubmit?.isConnected){channelSubmit.disabled=false;channelSubmit.textContent=channelLabel;}}
 });
 document.addEventListener("click", async (e) => {
   const button = e.target.closest("[data-disconnect]");
-  if (!button) return;
+  if (!button || button.disabled) return;
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'กำลังยกเลิก…';
   try {
     await api("/destinations/" + button.dataset.disconnect, "DELETE");
+    state.destinations = state.destinations.filter(item => item.id !== button.dataset.disconnect);
+    toast('ยกเลิกช่องทางแล้ว');
     await renderNotifications();
   } catch (error) {
     toast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
   }
 });
 panel.addEventListener("input", (e) => {
@@ -1703,25 +1765,26 @@ document.addEventListener("change", async (e) => {
     toast(error.message);
   }
 });
+let historyGeneration=0;
 async function loadChatHistory(){
-    let chatPage = await api(`/conversations/${state.conversation}/messages`);
+    const generation=++historyGeneration,conversation=state.conversation,workspace=state.workspaceId;
+    const current=()=>generation===historyGeneration&&state.conversation===conversation&&state.workspaceId===workspace;
+    let chatPage = await api(`/conversations/${conversation}/messages`);
+    if(!current())return;
     const paintPage = async (rows) => { for (const m of rows) {
-      if(m.ui_card?.type!=='preset')message(m.content, m.role === "user", m.role === 'user' ? (m.sources ?? []).filter(s => s.type === 'image' && s.available) : []);
-      if(m.ui_card?.type==='preset')(await presetsReady).renderCard(m);
+      if(!current())return;
+      if(!['preset','setup'].includes(m.ui_card?.type))message(m.content, m.role === "user");
+      if(['preset','setup'].includes(m.ui_card?.type))(await presetsReady).renderCard(m);
       if (m.setup_changes?.length) await showSetupChanges(null, null, m.setup_changes);
       if (m.sources?.some((s) => !s.available))
         message("ข้อมูลอ้างอิงบางส่วนถูกลบแล้ว ข้อสรุปเดิมอาจใช้ต่อไม่ได้");
-      for (const source of m.sources ?? [])
-        if (m.role !== 'user' && source.type === "image" && source.available) {
-          const img = document.createElement("img");
-          img.src = "/api/v1/images/" + source.id;
-          img.alt = "ภาพในบทสนทนา";
-          img.className = "chat-saved-image";
-          $("#messages").append(img);
-        }
+      if(m.role === 'user')appendChatImages((m.sources ?? []).filter(source => source.type === 'image' && source.available));
     }};
     await paintPage(chatPage);
-    requestAnimationFrame(scrollChatToLatest);
+    if(!current())return;
+    const stored=state.conversationRows.find(row=>row.id===conversation);
+    if(stored?.draft&&!chatPage.some(m=>['preset','setup'].includes(m.ui_card?.type))&&chatPage.some(m=>m.setup_changes?.length))await showChatSetupCard();
+    requestAnimationFrame(()=>{if(current())scrollChatToLatest();});
     if (chatPage.length === 200) {
       const older = document.createElement("button");
       older.className="text-button"; older.textContent="โหลดข้อความก่อนหน้า";
@@ -1733,24 +1796,31 @@ async function loadChatHistory(){
         followingChat=false;
         try {
           const page=await api(`/conversations/${conversationId}/messages?before=${chatPage[0].id}`);
-          if(state.conversation!==conversationId)return;
+          if(!current())return;
           const existing=[...$("#messages").childNodes].filter(n=>n!==older);
           $("#messages").replaceChildren();await paintPage(page);existing.forEach(n=>$("#messages").append(n));
+          document.dispatchEvent(new Event('setup-changed'));
           messagePane.scrollTop=priorTop+messagePane.scrollHeight-priorHeight;
           chatPage=page;if(page.length===200)$("#messages").prepend(older);
         }catch(error){toast(error.message);}finally{older.disabled=false;}
       };
     }
 }
+let conversationSelection=0;
 conversations.addEventListener("change", async () => {
   if (!conversations.value) return;
   const selected = conversations.value;
+  const selection=++conversationSelection,workspace=state.workspaceId;
   if (!(await leaveDraft())) {
+    if(selection!==conversationSelection||state.workspaceId!==workspace)return;
     conversations.value = state.conversation ?? "";
     return;
   }
   try {
-    state.conversationRows = await api("/conversations");
+    if(selection!==conversationSelection||state.workspaceId!==workspace)return;
+    const rows = await api("/conversations");
+    if(selection!==conversationSelection||state.workspaceId!==workspace)return;
+    state.conversationRows=rows;
     state.conversation = selected;
     const stored = state.conversationRows.find(
       (x) => x.id === state.conversation,
@@ -1770,25 +1840,42 @@ conversations.addEventListener("change", async () => {
     $("#messages").replaceChildren();
     showDesigner();
     await loadChatHistory();
+    await restoreChatImages();
   } catch (error) {
     toast(error.message);
   }
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const menu = e.target.closest(".watch-channel-picker[open]");
+  if (!menu) return;
+  menu.open = false;
+  menu.querySelector("summary").focus();
+});
+document.addEventListener("toggle", (e) => {
+  if (!e.target.matches(".watch-channel-picker[open]")) return;
+  document.querySelectorAll(".watch-channel-picker[open]").forEach(menu => {
+    if (menu !== e.target) menu.open = false;
+  });
+}, true);
 document.addEventListener("click", async (e) => {
+  document.querySelectorAll(".watch-channel-picker[open]").forEach(menu => {
+    if (!menu.contains(e.target)) menu.open = false;
+  });
   const t = e.target.closest("button,a");
   if (!t) return;
   if (t.classList.contains("nav-item")) $("#sidebar").classList.remove("is-open");
   try {
     if (t.classList.contains("nav-item") && t.dataset.view !== "home" && location.hash === "#" + t.dataset.view) {
       e.preventDefault();
-      navigate(t.dataset.view, true, true);
+      navigate(t.dataset.view);
       return;
     }
     if (t.classList.contains("nav-item") && t.dataset.view === "home") {
       e.preventDefault();
       setWorkbenchTab("chat");
       showDesigner();
-      navigate("home", true, true);
+      navigate("home");
       location.hash = "home";
       persistRecovery();
       return;
@@ -1876,16 +1963,57 @@ document.addEventListener("click", async (e) => {
       }finally{t.disabled=false;}
       return;
     }
-    if (t.dataset.activateRule) {
-      const r = state.rules.find((x) => x.id === t.dataset.activateRule);
-      if (r.active) {
-        await api(`/rules/${r.id}/activation`, "POST", {
-          active: false,
-          expectedRevision: r.revision,
-          confirmation: "PAUSE",
-        });
+    if (t.hasAttribute("data-watch-connect-channel")) {
+      e.preventDefault();
+      notificationSection = "channels";
+      await renderNotifications();
+      return;
+    }
+    if (t.dataset.saveRuleChannels) {
+      const r = state.rules.find(row => row.id === t.dataset.saveRuleChannels);
+      if (!r || t.disabled) return;
+      const menu = t.closest(".watch-channel-picker");
+      const destinations = [...menu.querySelectorAll("input:checked")].map(input => input.value);
+      if (destinations.length > 5) { toast("เลือกได้ไม่เกิน 5 ช่องทาง"); return; }
+      t.disabled = true;
+      try {
+        const saved = await api(`/rules/${r.id}/destinations`, "PUT", { expectedRevision: r.revision, destinations });
+        if (state.saved?.id === r.id) {
+          state.saved = saved;
+          state.draft.destinations = [...saved.spec.destinations];
+          renderDesigner();
+          persistRecovery();
+          await saveDraft();
+        }
         await refresh();
-      } else showActivation(r);
+        toast(destinations.length ? "บันทึกช่องทางแล้ว · ใช้กับสัญญาณถัดไป" : "รับสัญญาณในเว็บเท่านั้น");
+      } finally { t.disabled = false; }
+      return;
+    }
+    if (t.dataset.activateRule) {
+      if (t.disabled) return;
+      const r = state.rules.find((x) => x.id === t.dataset.activateRule);
+      if (!r || t.disabled) return;
+      const active = !r.active;
+      const original = t.innerHTML;
+      t.disabled = true;
+      t.textContent = active ? "กำลังเปิดใช้งาน…" : "กำลังหยุด…";
+      t.setAttribute("aria-busy", "true");
+      try {
+        const updated = await api(`/rules/${r.id}/activation`, "POST", {
+          active,
+          expectedRevision: r.revision,
+          confirmation: active ? "ACTIVATE" : "PAUSE",
+        });
+        Object.assign(r, updated);
+        if (state.saved?.id === r.id) state.saved = r;
+        renderWatch();
+        toast(active ? "เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป" : "หยุดเซตอัพแล้ว");
+      } finally {
+        t.disabled = false;
+        if (t.isConnected) t.innerHTML = original;
+        t.removeAttribute("aria-busy");
+      }
       return;
     }
     if (t.dataset.openRule) {
@@ -1986,9 +2114,18 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (t.hasAttribute("data-save")) {
+      if (t.disabled || state.saving) return;
+      if (state.busy) return toast("รอขั้นตอนปัจจุบันเสร็จก่อน");
       if (!validateEditor()) return;
+      state.busy=true;
+      setupPane.inert=true;
+      try {
       t.disabled = true;
-      await saveDraft();
+      state.saving = true;
+      panel.inert = true;
+      const saveLabel = t.textContent;
+      t.textContent = 'กำลังบันทึก…';
+      try { await saveDraft();
       await api("/strategies/validate", "POST", state.draft);
       const saved = state.saved
         ? await api("/rules/" + state.saved.id, "PUT", {
@@ -1998,15 +2135,24 @@ document.addEventListener("click", async (e) => {
           })
         : await api("/rules", "POST", state.conversation?{spec:state.draft,conversationId:state.conversation}:state.draft);
       state.saved = saved;
+      const index = state.rules.findIndex(rule => rule.id === saved.id);
+      if (index < 0) state.rules.push(saved); else state.rules[index] = saved;
+      if(state.conversation)await showChatSetupCard();
       state.images=[];state.crop=null;renderImages();
-      await refresh();
+      renderWatch();
       renderDesigner();
+      toast('บันทึกเซตอัปแล้ว');
       showEditorFeedback(
         saved.active
           ? "บันทึกเวอร์ชันใหม่แล้ว เซตอัพยังเปิดใช้งานอยู่"
-          : "บันทึกเซตอัพแล้ว ยังไม่เปิดแจ้งเตือน เปิดใช้งานได้ในหน้าเซตอัพที่ตั้งไว้",
+          : "บันทึกเซตอัปแล้ว เปิดแจ้งเตือนได้จากการ์ดในแชทหรือหน้าเซตอัปที่ตั้งไว้",
         true,
       );
+      } finally { state.saving = false; panel.inert = false; t.disabled = false; t.textContent = saveLabel; }
+      } finally {
+        state.busy=false;setupPane.inert=false;
+        if(t.isConnected)t.disabled=false;
+      }
       return;
     }
     if (t.hasAttribute("data-replay")) {
@@ -2071,7 +2217,7 @@ function persistRecovery() {
       savedId:state.saved?.id??null,draftRevision:state.draftRevision,persistedDraft:state.persistedDraft,
       chatText:$('#chat-input').value,followupText:$('#followup-input').value,
       tab:requestedWorkbenchMode??workbench.dataset.tab,designerOpen:!workbench.hidden,useMyData:state.useMyData,
-      aiMode:$('#ai-mode').value};
+      aiMode:$('#ai-mode').value,imageIds:state.images.map(image=>image.id),sentImageIds:state.images.filter(image=>image.sent).map(image=>image.id)};
     const fingerprint=key+JSON.stringify(snapshot);
     if(fingerprint!==recoveryFingerprint){
       localStorage.setItem(key,JSON.stringify({...snapshot,updatedAt:Date.now()}));
@@ -2082,6 +2228,7 @@ function persistRecovery() {
 }
 async function restoreRecovery() {
   recoveryReady=false;
+  const pending = [];
   let stored;
   try{stored=JSON.parse(localStorage.getItem(recoveryKey())??'null');}catch{}
   if(stored?.version===1){
@@ -2101,12 +2248,14 @@ async function restoreRecovery() {
       showDesigner();
       if(state.conversation){
         try{
-          await loadChatHistory();
+          pending.push(loadChatHistory().catch(() => {}));
         }catch{}
       }
     }
-    if(stored.useMyData){try{await setMyData(true);}catch{}}
+    if(stored.useMyData)pending.push(setMyData(true).catch(() => {}));
+    if(state.conversation)pending.push(restoreChatImages(Array.isArray(stored.imageIds)?stored.imageIds:undefined,Array.isArray(stored.sentImageIds)?stored.sentImageIds:[]).catch(() => {}));
   }
+  await Promise.all(pending);
   recoveryReady=true;
   if(state.draft)queueDraftSave();
 }
@@ -2123,12 +2272,14 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
   await Promise.all([directionToolsReady, indicatorCatalogReady, setupLimitsReady, timeframeToolsReady]);
+  // Companion deferred scripts provide workspace and page helpers.
+  await companionScriptsReady;
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
   try {
     try {
-      const [health, me] = await Promise.all([api('/health'), api('/me'), initWorkspaces()]);
-      state.health = health;
+      healthReady = api('/health').then(health => { state.health = health; }).catch(() => { state.health = { ai: false, billing: false }; });
+      const [me] = await Promise.all([api('/me'), initWorkspaces(), directionToolsReady, indicatorCatalogReady, entryFlexReady]);
       state.me = me;
     }
     catch(error){
@@ -2138,14 +2289,14 @@ async function boot() {
     sessionStorage.removeItem('snaap-signed-out');
     await refresh({ reuseMe: true });
     await restoreRecovery();
-    status.textContent = `${state.me?.local ? "บัญชีทดสอบ · " : ""}${state.health.ai ? "AI พร้อมเชื่อมต่อ" : "ยังไม่เชื่อม AI · ตั้งเงื่อนไขและดูกราฟได้"}`;
   } catch (error) {
-    status.hidden = false;
     if(error.statusCode===401){location.replace('/login.html?error=expired');return;}
-    status.textContent = error.message;
+    window.SnaapBoot?.fail(error.message);
+    return;
   }
   navigate(location.hash.slice(1) || "home");
-  if(workbench.hidden){showDesigner();setWorkbenchTab('chat');}
+  if(workbench.hidden || !state.draft){showDesigner();setWorkbenchTab('chat');}
+  else renderDesigner();
   // Allow restored geometry and fonts to settle before the first visible frame.
   if (document.fonts) await Promise.race([
     document.fonts.ready,
@@ -2164,8 +2315,12 @@ function evidenceUI(e) {
   const label = { TRUE: "ผ่าน", FALSE: "ไม่ผ่าน", UNKNOWN: "ข้อมูลไม่พอ" };
   return `<div class="evidence-row"><strong>${label[e.result] ?? "รอ"}</strong>${e.left !== undefined ? " · " + Number(e.left).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.right !== undefined ? " เทียบกับ " + Number(e.right).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.reason ? " · " + esc(e.reason) : ""}${e.children ? e.children.map(evidenceUI).join("") : ""}</div>`;
 }
-function barEvidence(bar) {
-  if(bar?.branches)return bar.branches.map(b=>`<h4>${esc(directionLabel(b.side,b.side==='SPOT'?'Spot':'Perpetual Futures'))}</h4>`+barEvidence({...b,time:bar.time})).join('');
+function barEvidence(bar, { showProgress = true } = {}) {
+  if(bar?.explanations){
+    const e=bar.explanations;
+    return `<p>ประเมิน ณ ${esc(insightTime(bar.time))}</p>${showProgress ? progressUI(bar.progress) : ''}<p>เงื่อนไขเริ่มต้น</p>${explanationsUI(e.entry)}${e.stages.map((lines,i)=>`<p>รอยืนยันขั้น ${i+1}</p>${explanationsUI(lines)}`).join('')}${e.exit.length?'<p>เงื่อนไขออก</p>'+explanationsUI(e.exit):''}${e.cancel.length?'<p>เงื่อนไขยกเลิก</p>'+explanationsUI(e.cancel):''}${timeframeUI(bar.timeframes, { showConditions: false })}`;
+  }
+  if(bar?.branches)return bar.branches.map(b=>`<h4>${esc(directionLabel(b.side,b.side==='SPOT'?'Spot':'Perpetual Futures'))}</h4>`+barEvidence({...b,time:bar.time}, { showProgress })).join('');
   return bar
     ? `<p>${new Date(bar.time).toLocaleString("th-TH")}${bar.waitingStage >= 0 ? " · รอขั้นตอน " + (bar.waitingStage + 2) : ""}${bar.activeSignal ? " · วงจรสัญญาณเข้าเปิดอยู่" : ""}</p><p>เงื่อนไขเริ่มต้น</p>${evidenceUI(bar.entry)}${bar.stages.map((s, i) => "<p>ขั้นตอน " + (i + 2) + "</p>" + evidenceUI(s)).join("")}${bar.exit ? "<p>สัญญาณออก</p>" + evidenceUI(bar.exit) : ""}`
     : "";
@@ -2210,20 +2365,26 @@ function branchSummary(d) {
   );
 }
 function reviewProposal(draft) {
+  const conversation=state.conversation,workspace=state.workspaceId;
   const dialog = document.createElement("dialog");
   dialog.className = "runtime-dialog";
   dialog.innerHTML = `<h2>ตรวจร่างที่ snaap เสนอ</h2><h3>ร่างปัจจุบัน</h3><p><strong>${esc(state.draft.name)}</strong> · ${esc(state.draft.exchange.join(', '))} · ${esc(state.draft.pairs.join(', '))}</p><p class="draft-diff">${esc(fullSummary(state.draft))}</p><h3>ข้อเสนอ</h3><p><strong>${esc(draft.name)}</strong> · ${esc(draft.exchange.join(", "))} · ${esc(draft.pairs.join(", "))}</p><p class="draft-diff">${esc(fullSummary(draft))}</p><p class="field-note">ใช้ร่างนี้จะแทนที่ร่างปัจจุบัน รวมชื่อและเงื่อนไขที่คุณแก้ระหว่างรอ</p><div class="design-actions"><button class="primary" data-apply>ใช้ร่างนี้</button><button class="secondary" data-keep>ใช้ร่างเดิม</button></div>`;
   document.body.append(dialog);
   dialog.showModal();
-  dialog.querySelector("[data-apply]").onclick = () => {
+  dialog.querySelector("[data-apply]").onclick = async () => {
+    if(state.conversation!==conversation||state.workspaceId!==workspace){dialog.close();return toast('บทสนทนาเปลี่ยนแล้ว กรุณาขอร่างในบทสนทนาปัจจุบัน');}
+    if(state.busy)return toast('รอขั้นตอนปัจจุบันเสร็จก่อน');
+    state.busy=true;
+    try {
     const previousDraft = structuredClone(state.draft);
     snapshot();
     state.draft = draft;
     state.replay = null;
     renderDesigner();
-    queueDraftSave();
-    showSetupChanges(previousDraft, state.draft);
     dialog.close();
+    await showSetupChanges(previousDraft,state.draft);
+    await showChatSetupCard();
+    } finally {state.busy=false;}
   };
   dialog.querySelector("[data-keep]").onclick = () => dialog.close();
   dialog.onclose = () => dialog.remove();

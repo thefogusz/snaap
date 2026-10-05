@@ -69,6 +69,7 @@ let workspaceSwitching=false;
 async function switchWorkspace(id){
   if(id===state.workspaceId){paintWorkspacePicker();return;}
   if(workspaceSwitching){paintWorkspacePicker();return;}
+  if(state.saving){paintWorkspacePicker();toast('กำลังบันทึกเซตอัป รอสักครู่');return;}
   if(state.busy){paintWorkspacePicker();toast('รอ snaap ตอบเสร็จก่อนเปลี่ยนเวิร์กสเปซ');return;}
   if(!state.workspaces.some(w=>w.id===id))return;
   workspaceSwitching=true;

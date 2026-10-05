@@ -6,6 +6,11 @@ import { ApiError } from "./errors.js";
 import { transaction } from "./data/db.js";
 import { setupFile } from "./domain/setup-files.js";
 import { makeSetupCode, setupCodeHash } from "./domain/setup-codes.js";
+function sharedSetup(input: any) {
+  return {
+    setup: setupFile(input.spec ?? input).setups[0],
+  };
+}
 function codeHash(params: unknown) {
   const { code } = z.object({ code: z.string().max(100) }).parse(params);
   try {
@@ -32,7 +37,11 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
       const code = makeSetupCode();
       const result = await db.query(
         "INSERT INTO setup_shares(code_hash,owner_id,setup) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
-        [setupCodeHash(code), req.userId, setup],
+        [
+          setupCodeHash(code),
+          req.userId,
+          setup,
+        ],
       );
       if (result.rowCount) return reply.code(201).send({ code });
     }
@@ -50,7 +59,7 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
         "NOT_FOUND",
         "ไม่พบโค้ดนี้ หรือเจ้าของปิดการแชร์แล้ว",
       );
-    return { setup: setupFile(row.setup).setups[0] };
+    return sharedSetup(row.setup);
   });
   app.post("/api/v1/setup-shares/:code/import", async (req, reply) => {
     z.object({})
@@ -69,7 +78,7 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
           "NOT_FOUND",
           "ไม่พบโค้ดนี้ หรือเจ้าของปิดการแชร์แล้ว",
         );
-      const spec = setupFile(row.setup).setups[0],
+      const { setup: spec } = sharedSetup(row.setup),
         id = randomUUID();
       await c.query(
         "INSERT INTO rules(id,owner_id,spec,workspace_id,active) VALUES($1,$2,$3,$4,false)",
@@ -79,7 +88,9 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
         "INSERT INTO rule_revisions(rule_id,revision,spec) VALUES($1,1,$2)",
         [id, spec],
       );
-      return reply.code(201).send({ id, spec, revision: 1, active: false });
+      return reply
+        .code(201)
+        .send({ id, spec, revision: 1, active: false });
     });
   });
   app.delete("/api/v1/setup-shares/:code", async (req) => {

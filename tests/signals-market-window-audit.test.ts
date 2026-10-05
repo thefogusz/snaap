@@ -35,11 +35,11 @@ test('accepted TEMA 500 retains its requested warmup and yields finite evidence'
  assert.ok(Number.isFinite(value(spec.entry.kind==='COMPARE'?spec.entry.left:{kind:'CONSTANT',value:0},{'5m':cached},end)));
 });
 
-test('known freshness limitation: REST accepts a latest close one full 5m bar behind and reports READY',async()=>{
+test('REST labels one full bar behind as DELAYED',async()=>{
  mode='lagging';
  const series=await candles('Binance','Spot','AUDITLAG/USDT','5m');
  assert.equal(series.at(-1)!.time,end-step);
- assert.equal(marketHealth.get('BinanceSpot')?.status,'READY');
+ assert.equal(marketHealth.get('BinanceSpot')?.status,'DELAYED');
 });
 
 test.after(()=>{(ccxt as any).binance=original;});

@@ -13,3 +13,6 @@ coverage/
 *.key
 *.p12
 *.pfx
+
+# Offline Python research artifacts
+__pycache__/

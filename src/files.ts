@@ -91,6 +91,17 @@ export async function registerFiles(app: FastifyInstance, db: pg.Pool) {
   const root = path.resolve(process.env.ASSET_STORAGE_PATH ?? ".local/assets");
   await mkdir(root, { recursive: true });
   await flushImageCleanup(db);
+  app.get('/api/v1/conversations/:id/images', async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    if (!(await db.query(
+      'SELECT 1 FROM conversations WHERE id=$1 AND owner_id=$2 AND ($3::uuid IS NULL OR workspace_id=$3)',
+      [id, req.userId, req.workspaceId ?? null],
+    )).rowCount) throw new ApiError(404, 'NOT_FOUND', 'ไม่พบบทสนทนา');
+    return (await db.query(
+      "SELECT id,name FROM assets WHERE owner_id=$1 AND purpose='chat' AND conversation_id=$2 AND ($3::uuid IS NULL OR NOT EXISTS(SELECT 1 FROM data_scopes s WHERE s.resource_id=assets.id AND s.owner_id=$1 AND s.kind='image' AND s.workspace_ids IS NOT NULL AND NOT ($3=ANY(s.workspace_ids)))) ORDER BY created_at DESC LIMIT 200",
+      [req.userId, id, req.workspaceId ?? null],
+    )).rows.reverse();
+  });
   app.get("/api/v1/images", async (req) =>
     (
       await db.query(

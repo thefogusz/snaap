@@ -9,6 +9,7 @@ import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
 import { FRAME_MS, TIMEFRAMES, availableTimeframes } from "../../dist/timeframes.js";
 export const frames = FRAME_MS;
 export const timeframe = z.enum(TIMEFRAMES);
+import { entryUnits, flexibilityCounts } from "../../dist/entry-flexibility.js";
 export type Candle = {
   time: number;
   open: number;
@@ -134,7 +135,7 @@ const condition: z.ZodType<Condition> = z.lazy(() =>
       .object({
         kind: z.literal("GROUP"),
         op: z.enum(["AND", "OR"]),
-        children: z.array(condition).min(1).max(12),
+        children: z.array(condition).min(1).max(20),
       })
       .strict(),
     z
@@ -146,6 +147,7 @@ const condition: z.ZodType<Condition> = z.lazy(() =>
       .strict(),
   ]),
 );
+export const entryMatchPercentSchema = z.number().int().min(1).max(100);
 const strategyStructure = z
   .object({
     schemaVersion: z.literal(2),
@@ -188,6 +190,7 @@ const strategyStructure = z
       .max(10, "เลือกคู่เทรดได้สูงสุด 10 คู่ต่อเซตอัป"),
     timeframe,
     entry: condition,
+    entryMatchPercent: entryMatchPercentSchema.optional(),
     exit: condition.optional(),
     cancel: condition.optional(),
     stages: z
@@ -768,6 +771,26 @@ export function evaluate(
             : left <= right;
   return { result: matched ? "TRUE" : "FALSE", left, right };
 }
+/** Each AND entry unit has equal weight. OR/HOLD remain atomic, lifecycle checks stay strict. */
+export function evaluateEntry(spec: Strategy, series: Series, time: number): Evidence {
+  const side = signalSide(spec),
+    base = spec.timeframe;
+  const percent = spec.entryMatchPercent ?? 100;
+  if (percent === 100) return evaluate(spec.entry, series, time, base, undefined, side);
+  const children = entryUnits(spec.entry).map(c =>
+    evaluate(c, series, time, base, undefined, side),
+  );
+  const { total, needed } = flexibilityCounts(spec.entry, percent);
+  const matched = children.filter(x => x.result === "TRUE").length;
+  const unknown = children.filter(x => x.result === "UNKNOWN").length;
+  const result: Truth = matched >= needed ? "TRUE"
+    : matched + unknown < needed ? "FALSE" : "UNKNOWN";
+  return {
+    result,
+    children,
+    reason: `ผ่าน ${matched}/${total} ข้อ · ต้องผ่านอย่างน้อย ${needed} ข้อ (${percent}%)`,
+  };
+}
 export type Signal = {
   market: Strategy["market"];
   side: "SPOT" | "LONG" | "SHORT" | "UNSPECIFIED";
@@ -876,7 +899,15 @@ function advanceSingle(
   };
   if (state.stage >= 0) {
     if (time > state.deadline) {
-      emit("EXPIRED", { result: "FALSE", reason: "หมดเวลารอ" });
+      const waiting = spec.stages[state.stage];
+      const condition = waiting.condition;
+      const operandName = (value: Operand): string =>
+        value.kind === 'INDICATOR' ? (value.name === 'MACD_SIGNAL' ? 'เส้นสัญญาณ MACD' : value.name)
+          : value.kind === 'PRICE' ? 'ราคา' : value.kind === 'CONSTANT' ? String(value.value) : 'ผลตอบแทน';
+      const description = condition.kind === 'COMPARE'
+        ? `${operandName(condition.left)} ${condition.op === 'CROSS_ABOVE' ? 'ตัดขึ้น' : condition.op === 'CROSS_BELOW' ? 'ตัดลง' : condition.op} ${operandName(condition.right)}`
+        : `ขั้นที่ ${state.stage + 1}`;
+      emit("EXPIRED", { result: "FALSE", reason: `เงื่อนไข ${description} ไม่ครบภายใน ${waiting.withinBars} แท่ง (${spec.timeframe})` });
       reset();
       return { state, events };
     }
@@ -889,7 +920,7 @@ function advanceSingle(
     }
     return { state, events };
   }
-  const evidence = check(spec.entry);
+  const evidence = evaluateEntry(spec, series, time);
   if (evidence.result === "FALSE") state.latched = false;
   if (
     evidence.result !== "TRUE" ||

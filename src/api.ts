@@ -8,10 +8,11 @@ import { z } from "zod";
 import type pg from "pg";
 import { transaction } from "./data/db.js";
 import { strategySchema } from "./domain/engine.js";
+import { signalValidUntil } from "./signal-validity.js";
 import { registerGoogle } from "./auth.js";
 import { registerFiles, cleanupChatImages } from "./files.js";
-import { registerHarness } from "./ai/harness.js";
-import { registerMarkets, instruments, strategySeries } from "./markets.js";
+import { registerHarness, type HarnessDependencies } from "./ai/harness.js";
+import { registerMarkets, instruments } from "./markets.js";
 import { registerBilling } from "./billing.js";
 import { registerDestinations } from "./destinations.js";
 import { registerHistory } from "./history.js";
@@ -21,6 +22,8 @@ import { registerSetupFiles } from "./setup-files.js";
 import { registerSetupShares } from "./setup-shares.js";
 import { registerPresets } from "./presets.js";
 import { registerRuleRemoval } from "./rule-removal.js";
+import { registerEntryFlexibility } from "./entry-flexibility.js";
+import { registerRuleDestinations } from "./rule-destinations.js";
 import { registerAdmin, recordSystemLog, isUserAdmin } from "./admin.js";
 import { isAdminIdentity } from "./admin-access.js";
 import { recordApiIncident } from "./admin-events.js";
@@ -41,6 +44,8 @@ export async function buildApp(
     developerPro?: boolean;
     origin?: string;
     monitoring?: boolean;
+    presetInstruments?: typeof instruments;
+    harnessDependencies?: HarnessDependencies;
     validateMarket?: (
       spec: import("./domain/engine.js").Strategy,
     ) => Promise<void>;
@@ -59,6 +64,8 @@ export async function buildApp(
     timeWindow: "1 minute",
     hook: "preHandler",
     keyGenerator: (req) => req.userId || req.ip,
+    errorResponseBuilder: (_req, context) =>
+      new ApiError(429, "RATE_LIMITED", `ส่งคำขอถี่เกินไป กรุณารอ ${Math.ceil(context.ttl / 1000)} วินาทีแล้วลองใหม่`),
   });
   app.decorateRequest("userId", "");
   app.setErrorHandler((err, req, reply) => {
@@ -249,7 +256,7 @@ export async function buildApp(
   });
   registerWorkspaces(app, db);
   await registerFiles(app, db);
-  registerHarness(app, db);
+  registerHarness(app, db, options.harnessDependencies);
   registerMarkets(app, db, !!options.monitoring);
   await registerBilling(app, db, origin);
   await registerDestinations(app, db, { local: options.local, origin });
@@ -354,6 +361,8 @@ export async function buildApp(
       local: user?.email === "local@snaap.invalid",
     };
   });
+  registerEntryFlexibility(app, db);
+  registerRuleDestinations(app, db);
   app.get(
     "/api/v1/rules",
     async (req) =>
@@ -401,6 +410,11 @@ export async function buildApp(
           "UPDATE conversations SET title=$3,saved_rule_id=$4,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
           [conversationId, req.userId, spec.name, id],
         );
+      if (conversationId)
+        await c.query(
+          "UPDATE messages SET ui_card=jsonb_set(ui_card,'{ruleId}',to_jsonb($2::text)) WHERE id=(SELECT id FROM messages WHERE conversation_id=$1 AND ui_card->>'type' IN ('preset','setup') ORDER BY created_at DESC,id DESC LIMIT 1)",
+          [conversationId, id],
+        );
     });
     if (conversationId)
       await cleanupChatImages(db, req.userId, conversationId, req.workspaceId);
@@ -428,8 +442,14 @@ export async function buildApp(
       throw new ApiError(404, "NOT_FOUND", "ไม่พบบทสนทนา");
     const saved = await transaction(db, async (c) => {
       const result = await c.query(
-        "UPDATE rules SET spec=$1,revision=revision+1,active=false,updated_at=now() WHERE id=$2 AND owner_id=$3 AND revision=$4 AND deleted_at IS NULL RETURNING *",
-        [input.spec, id, req.userId, input.expectedRevision],
+        "UPDATE rules SET spec=$1,revision=revision+1,active=false,updated_at=now() WHERE id=$2 AND owner_id=$3 AND revision=$4 AND deleted_at IS NULL AND ($5::uuid IS NULL OR workspace_id=$5) RETURNING *",
+        [
+          input.spec,
+          id,
+          req.userId,
+          input.expectedRevision,
+          req.workspaceId ?? null,
+        ],
       );
       if (!result.rowCount)
         throw new ApiError(
@@ -447,6 +467,11 @@ export async function buildApp(
           "UPDATE conversations SET title=$3,saved_rule_id=$4,setup_saved_at=now(),setup_status_known=true WHERE id=$1 AND owner_id=$2",
           [input.conversationId, req.userId, input.spec.name, id],
         );
+      if (input.conversationId)
+        await c.query(
+          "UPDATE messages SET ui_card=jsonb_set(ui_card,'{ruleId}',to_jsonb($2::text)) WHERE id=(SELECT id FROM messages WHERE conversation_id=$1 AND ui_card->>'type' IN ('preset','setup') ORDER BY created_at DESC,id DESC LIMIT 1)",
+          [input.conversationId, id],
+        );
       return row;
     });
     if (input.conversationId)
@@ -462,8 +487,8 @@ export async function buildApp(
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     return (
       await db.query(
-        "SELECT v.* FROM rule_revisions v JOIN rules r ON r.id=v.rule_id WHERE r.owner_id=$1 AND r.id=$2 ORDER BY v.revision DESC",
-        [req.userId, id],
+        "SELECT v.* FROM rule_revisions v JOIN rules r ON r.id=v.rule_id WHERE r.owner_id=$1 AND r.id=$2 AND ($3::uuid IS NULL OR r.workspace_id=$3) ORDER BY v.revision DESC",
+        [req.userId, id, req.workspaceId ?? null],
       )
     ).rows;
   });
@@ -478,10 +503,14 @@ export async function buildApp(
       .strict()
       .parse(req.body);
     if (input.active) {
+      if (!options.monitoring)
+        throw new ApiError(409, "MONITOR_NOT_READY", "Worker ยังไม่พร้อม");
+      if (input.confirmation !== "ACTIVATE")
+        throw new ApiError(400, "CONFIRMATION_REQUIRED", "ยืนยันกฎก่อนเปิดใช้งาน");
       const owned = (
         await db.query(
-          "SELECT spec FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND revision=$3",
-          [id, req.userId, input.expectedRevision],
+          "SELECT spec FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND revision=$3 AND ($4::uuid IS NULL OR workspace_id=$4)",
+          [id, req.userId, input.expectedRevision, req.workspaceId ?? null],
         )
       ).rows[0];
       if (!owned)
@@ -510,11 +539,8 @@ export async function buildApp(
               "UNSUPPORTED_INSTRUMENT",
               "คู่เทรดนี้ไม่พร้อมให้ติดตามบนกระดานและตลาดที่เลือก",
             );
-          // Large catalogs warm up independently in the monitor, rather than blocking
-          // one HTTP activation request behind hundreds of rate-limited market reads.
-          if (spec.pairs.length <= 10)
-            for (const pair of spec.pairs)
-              await strategySeries(spec, exchange, pair);
+          // The monitor loads candles and records readiness independently. Activation
+          // validates instruments without waiting for historical data for every pair.
         }
     }
     return transaction(db, async (c) => {
@@ -523,8 +549,8 @@ export async function buildApp(
       ]);
       const rule = (
         await c.query(
-          "SELECT * FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND revision=$3 FOR UPDATE",
-          [id, req.userId, input.expectedRevision],
+          "SELECT * FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND revision=$3 AND ($4::uuid IS NULL OR workspace_id=$4) FOR UPDATE",
+          [id, req.userId, input.expectedRevision, req.workspaceId ?? null],
         )
       ).rows[0];
       if (!rule)
@@ -585,7 +611,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,CASE WHEN NOT r.active THEN 'PAUSED' WHEN (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 6 END THEN 'QUOTA_BLOCKED' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id WHERE r.deleted_at IS NULL AND r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2)",
+          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,i.freshness,i.progress,CASE WHEN NOT r.active THEN 'PAUSED' WHEN (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 6 END THEN 'QUOTA_BLOCKED' WHEN s.status='READY' AND i.rule_id IS NULL THEN 'RECOVERING' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id LEFT JOIN monitor_insights i ON i.rule_id=s.rule_id AND i.exchange=s.exchange AND i.pair=s.pair AND i.revision=r.revision WHERE r.deleted_at IS NULL AND r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2)",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,
@@ -665,19 +691,24 @@ export async function buildApp(
       }));
   });
   app.get("/api/v1/signals", async (req) => {
-    const { before, after } = z
+    const { before, after, view } = z
       .object({
         before: z.string().uuid().optional(),
         after: z.string().uuid().optional(),
+        view: z.enum(['signals','status']).optional(),
       })
       .refine((value) => !(value.before && value.after), "Choose one cursor")
       .parse(req.query);
     return (
       await db.query(
-        `SELECT s.*,rv.spec->>'name' AS setup_name,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side FROM signals s LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE s.owner_id=$1 AND ($3::uuid IS NULL OR s.rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$3)) AND ($2::uuid IS NULL OR (s.created_at,s.id)<(SELECT created_at,id FROM signals WHERE id=$2 AND owner_id=$1)) AND ($4::uuid IS NULL OR (s.created_at,s.id)>(SELECT created_at,id FROM signals WHERE id=$4 AND owner_id=$1)) ORDER BY s.created_at ${after ? "ASC" : "DESC"},s.id ${after ? "ASC" : "DESC"} LIMIT 100`,
-        [req.userId, before ?? null, req.workspaceId ?? null, after ?? null],
+        `SELECT s.*,rv.spec->>'name' AS setup_name,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side,rv.spec->>'timeframe' AS setup_timeframe FROM signals s LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE s.owner_id=$1 AND ($3::uuid IS NULL OR s.rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$3)) AND ($2::uuid IS NULL OR (s.created_at,s.id)<(SELECT created_at,id FROM signals WHERE id=$2 AND owner_id=$1)) AND ($4::uuid IS NULL OR (s.created_at,s.id)>(SELECT created_at,id FROM signals WHERE id=$4 AND owner_id=$1)) AND ($5::text IS NULL OR ($5='status' AND s.event->>'kind'='EXPIRED') OR ($5='signals' AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED')) ORDER BY s.created_at ${after ? "ASC" : "DESC"},s.id ${after ? "ASC" : "DESC"} LIMIT 100`,
+        [req.userId, before ?? null, req.workspaceId ?? null, after ?? null, view ?? null],
       )
-    ).rows;
+    ).rows.map(({ setup_timeframe, ...row }) => ({
+      ...row,
+      signal_valid_until: signalValidUntil(row.event, setup_timeframe),
+      entry_valid_until: row.event.kind === "ENTRY" ? signalValidUntil(row.event, setup_timeframe) : null,
+    }));
   });
   app.get("/api/v1/export", async (req) => ({
     rules: (
@@ -701,7 +732,7 @@ export async function buildApp(
   }));
   registerSetupFiles(app, db);
   registerSetupShares(app, db);
-  registerPresets(app, db);
+  registerPresets(app, db, { instruments: options.presetInstruments });
   registerRuleRemoval(app, db);
   await app.register(staticFiles, {
     root: path.resolve("dist"),

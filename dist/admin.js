@@ -162,7 +162,7 @@
   // Load Overview Data
   async function loadOverview() {
     try {
-      const data = await apiFetch("/api/v1/admin/overview");
+      const data = await apiFetch("/api/v1/admin/overview", { cache: "no-store" });
       state.overview = data;
       renderOverview(data);
     } catch (err) {
@@ -177,12 +177,21 @@
 
     // Header Status Pill
     const dbOk = health.database.status === "healthy";
+    const checkedTime = new Date().toLocaleTimeString("th-TH", {
+      timeZone: "Asia/Bangkok",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    $("#system-status-pill").title =
+      "เวลาที่เซิร์ฟเวอร์รอฐานข้อมูล รวมการเชื่อมต่อ · ตรวจทุก 15 วินาที";
     $("#system-status-pill").className = dbOk
       ? "badge badge-success"
       : "badge badge-danger";
     $("#system-status-text").textContent = dbOk
-      ? `ฐานข้อมูลตอบสนอง (${health.database.latencyMs}ms)`
-      : "Database ผิดปกติ";
+      ? `ฐานข้อมูล ${health.database.latencyMs} ms · ${checkedTime}`
+      : `ฐานข้อมูลผิดปกติ · ${checkedTime}`;
 
     // KPIs
     $("#kpi-total-users").textContent = kpis.totalUsers;
@@ -958,10 +967,10 @@
     loadOverview();
     loadActivity();
 
-    // Poll the operations inbox on every tab.
+    // Both header health and the operations inbox remain live on every tab.
     setInterval(() => {
       loadActivity(false, true);
-      if (state.activeTab === "overview") loadOverview();
+      loadOverview();
     }, 15000);
   });
 })();

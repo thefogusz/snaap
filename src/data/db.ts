@@ -82,6 +82,18 @@ export async function migrate(db: pg.Pool) {
     UPDATE conversations c SET saved_rule_id=(SELECT min(r.id::text)::uuid FROM rules r WHERE r.owner_id=c.owner_id AND r.workspace_id IS NOT DISTINCT FROM c.workspace_id AND r.deleted_at IS NULL AND r.spec=c.draft HAVING count(*)=1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;
     CREATE TABLE IF NOT EXISTS data_scopes(owner_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('image','import','connection')),resource_id uuid NOT NULL,workspace_ids uuid[],PRIMARY KEY(owner_id,kind,resource_id));
   `);
+  await db.query(`
+    DROP TRIGGER IF EXISTS rule_risk_snapshot ON rule_revisions;
+    DROP FUNCTION IF EXISTS snapshot_rule_risk();
+    DROP TABLE IF EXISTS signal_outcomes;
+    ALTER TABLE rules DROP COLUMN IF EXISTS risk_plan;
+    ALTER TABLE rule_revisions DROP COLUMN IF EXISTS risk_plan;
+    UPDATE setup_shares SET setup=setup->'spec' WHERE setup ? 'spec' AND setup ? 'riskPlan';
+    CREATE TABLE IF NOT EXISTS monitor_insights (
+      rule_id uuid REFERENCES rules ON DELETE CASCADE, revision integer NOT NULL, exchange text, pair text,
+      freshness jsonb NOT NULL, progress jsonb, PRIMARY KEY(rule_id,exchange,pair)
+    );
+  `);
   await migrateAdmin(db);
 }
 export async function transaction<T>(

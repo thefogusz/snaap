@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import OpenAI from "openai";
+import { createProviderResponse, providerFailureDetails } from './provider.js';
 import { z } from "zod";
 import { transaction } from "../data/db.js";
 import { ApiError } from "../errors.js";
@@ -11,13 +12,13 @@ import { contextBundle, sourceIds } from "../context.js";
 import {
   strategySchema,
   replay,
-  evaluate,
+  evaluateEntry,
   strategyBranches,
   signalSide,
 } from "../domain/engine.js";
 import { extendedIndicators } from "../../dist/indicator-catalog.js";
 import { strategySeries, instruments } from "../markets.js";
-import { pricing, boundCost, outputLimit, compactHistoryForBudget } from "./budget.js";
+import { pricing, outputLimit } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
 import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
 import { availableTimeframes } from "../../dist/timeframes.js";
@@ -42,7 +43,17 @@ const selection = z
     to: z.string().datetime().optional(),
   })
   .strict();
-export function registerHarness(app: FastifyInstance, db: pg.Pool) {
+export type HarnessDependencies = {
+  instruments?: typeof instruments;
+  strategySeries?: typeof strategySeries;
+};
+export function registerHarness(
+  app: FastifyInstance,
+  db: pg.Pool,
+  dependencies: HarnessDependencies = {},
+) {
+  const readInstruments = dependencies.instruments ?? instruments;
+  const readSeries = dependencies.strategySeries ?? strategySeries;
   app.post("/api/v1/context", async (req) =>
     contextBundle(
       db,
@@ -57,7 +68,9 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       .object({
         text: z.string().trim().min(1).max(4000),
         mode: z.enum(["standard", "deep"]),
-        draft: strategySchema.optional(),
+        draft: strategySchema
+          .nullish()
+          .transform((draft) => draft ?? undefined),
         editorContext: editorContextSchema.optional(),
         selection: selection.optional(),
         imageIds: z.array(z.string().uuid()).max(5, "แนบได้สูงสุด 5 ภาพต่อข้อความ").default([]),
@@ -278,7 +291,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
           );
       const history = (
         await db.query(
-          "SELECT role,content,sources FROM messages WHERE conversation_id=$1 AND id<>$2 ORDER BY created_at DESC,id DESC LIMIT 10",
+          "SELECT role,content,sources FROM messages WHERE conversation_id=$1 AND id<>$2 AND COALESCE(ui_card->>'type','')<>'setup' ORDER BY created_at DESC,id DESC LIMIT 10",
           [id, userMessageId],
         )
       ).rows
@@ -367,6 +380,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         additionalProperties: false,
       };
       let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use exactly one exchange and one or more supported pairs (at most 5000). Preserve all existing pairs unless the user asks to change them. A setup has at most ${MAX_SETUP_CONDITIONS} leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than ${MAX_SETUP_CONDITIONS}; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
+      instructions += '\nEntry flexibility: entryMatchPercent is the single optional integer 1..100 setting. Omit it or use 100 for the original strict entry. Lower values require at least ceil(entryUnitCount * entryMatchPercent / 100) matching units, with equal weight for every unit. Flatten AND entry groups; each OR or HOLD group stays one indivisible unit. The same percentage applies independently to Long and Short, including an independent short branch; do not combine matches from opposite sides. Preserve entryMatchPercent unless asked to change it. Waiting stages, exits, cancels and crossing timing remain strict. There are no required-condition flags, per-condition weights or crossing-window settings. Matching percent is not win probability. Tool proposals change a draft only; saving is separate.';
       const loadedSpecialists = new Set<string>();
       instructions += "\nNative timeframes (minimum 5m, maximum 1w; no monthly or custom intervals): " + JSON.stringify(Object.fromEntries(["Binance", "Bybit", "OKX", "Bitget", "MEXC"].map(exchange => [exchange, {Spot: availableTimeframes([exchange], "Spot"), Futures: availableTimeframes([exchange], "Perpetual Futures")}])));
       instructions +=
@@ -386,42 +400,23 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         ". For extended indicators put period in operand.period and other parameters in operand.params. Legacy indicators never use params: MACD/MACD_SIGNAL/MACD_HIST use operand.period (fast), operand.slow and operand.signal; BB_* use operand.period and operand.deviation. VWAP_SESSION resets at UTC midnight; Ichimoku SPAN_A/B are displaced historical cloud values at the evaluation time. SUPERTREND_DIRECTION is +1 bullish, -1 bearish. No arbitrary Pine execution.";
       instructions +=
         '\nTool execution is real only when you issue a function_call in THIS request. Describing a call in prose does not execute it. For every requested create/edit/remove operation with known fields, call propose_strategy with the complete updated spec before saying it was changed. destinations may be [] (in-app inbox is always available); never invent destination IDs. Minimal valid example: {"schemaVersion":2,"name":"Example","exchange":["Binance"],"market":"Spot","side":"SPOT","pairs":["BTC/USDT"],"timeframe":"1h","entry":{"kind":"COMPARE","op":">","left":{"kind":"PRICE","field":"close","timeframe":"1h"},"right":{"kind":"INDICATOR","name":"EMA","period":200,"timeframe":"1h"}},"stages":[],"cooldownBars":0,"destinations":[]}. GROUP nodes have kind GROUP, op AND/OR, children. Constants have only kind CONSTANT and value. Omit optional exit/cancel keys to remove them.';
+      instructions += '\nLegacy MACD, MACD_SIGNAL and MACD_HIST use top-level period (fast), slow and signal; never put these in params. Example operand: {"kind":"INDICATOR","name":"MACD","period":12,"slow":26,"signal":9,"timeframe":"5m"}. EMA and RSI likewise use top-level period and timeframe without params.';
+      instructions += '\nMulti-timeframe chart views: spec.timeframe is the signal evaluation clock; each PRICE or INDICATOR operand keeps its own timeframe. Preserve these independently when creating or editing a multi-timeframe setup. The editor offers chart buttons for native exchange timeframes from 5m through 1w above the chart and a ดูกราฟ shortcut inside each comparison; each view shows its own candles and indicators. chartTimeframe (and compatibility alias chartFrame) is a view-only preview request field, never a StrategySpec field or a propose_strategy/replay_strategy argument. A request to view another chart timeframe does not authorize editing spec.timeframe or any condition; explain the matching chart button without proposing a strategy change. replay_strategy always evaluates the current draft on spec.timeframe with all required operand timeframes; selecting a chart view cannot change signals. Do not claim you switched the UI chart because there is no chart-navigation tool.';
       const maxOutputTokens = outputLimit(input.mode);
       let completed = false;
       let requireProposal = false;
-      let historyCount = history.length;
       for (let round = 0; round < 7; round++) {
         if (deadline.aborted) throw new Error("REQUEST_DEADLINE");
-        const budgetInstructions = instructions + JSON.stringify(toolParameters).repeat(2);
-        const compacted = compactHistoryForBudget(messages, historyCount, budgetInstructions, rate, cost);
-        historyCount = compacted.historyCount;
-        if (compacted.removed) {
-          trace.push({round,contextCompaction:{removedHistoryMessages:compacted.removed}});
-        }
-        const inputBound = boundCost(
-          budgetInstructions,
-          messages,
-          rate,
-          0,
-        );
-        const roundOutputLimit = Math.min(
-          maxOutputTokens,
-          Math.floor(((rate.cap - cost - inputBound) * 1e6) / rate.output),
-        );
-        if (roundOutputLimit < 2000)
-          throw new ApiError(
-            422,
-            "COST_BOUND",
-            "งบ AI ของคำขอรอบนี้ไม่พอสำหรับวิเคราะห์ต่อ แม้ลดประวัติเก่าแล้ว คืนโควตาแล้ว ลองแบ่งการแก้เซตอัปเป็นขั้นย่อยได้",
-          );
-        const response = await client.responses.create(
+        const response = await createProviderResponse(client,
           {
+            ...(process.env.AI_BASE_URL && new URL(process.env.AI_BASE_URL).hostname === 'openrouter.ai'
+              ? { provider: { require_parameters: true } } : {}),
             model:
               input.mode === "deep"
                 ? (process.env.AI_DEEP_MODEL ?? "gpt-5.4")
                 : (process.env.AI_STANDARD_MODEL ?? "gpt-5-mini"),
             store: false,
-            max_output_tokens: roundOutputLimit,
+            max_output_tokens: maxOutputTokens,
             reasoning: { effort: input.mode === "standard" ? "low" : "medium" },
             instructions,
             input: messages,
@@ -502,7 +497,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
               },
             ],
           },
-          { signal: deadline },
+          deadline, trace,
         );
         const roundInput = response.usage?.input_tokens;
         const roundOutput = response.usage?.output_tokens;
@@ -521,8 +516,6 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         inputTokens += roundInput!;
         outputTokens += roundOutput!;
         cost = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
-        if (cost > rate.cap)
-          throw new ApiError(422, 'COST_BOUND', 'ค่าใช้จ่าย AI ถึงเพดานของคำขอแล้ว หยุดวิเคราะห์และคืนโควตา กรุณาแบ่งคำขอเป็นขั้นย่อย');
         if (response.status !== "completed")
           throw new ApiError(
             502,
@@ -610,7 +603,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                   query: z.string().max(60),
                 })
                 .parse(JSON.parse(call.arguments));
-              const catalog = await instruments(q.exchange, q.market);
+              const catalog = await readInstruments(q.exchange, q.market);
               result = {
                 exchange: q.exchange,
                 market: q.market,
@@ -671,7 +664,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                   throw new Error(
                     "Select one exchange and supported pairs for this setup",
                   );
-                const catalog = await instruments(
+                const catalog = await readInstruments(
                   checked.data.exchange[0],
                   checked.data.market,
                 );
@@ -713,7 +706,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
               const spec = strategySchema.parse(
                 draft ?? input.draft ?? toolSpec(call.arguments),
               );
-              const series = await strategySeries(
+              const series = await readSeries(
                 spec,
                 spec.exchange[0],
                 spec.pairs[0],
@@ -746,14 +739,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                 current: strategyBranches(spec).map((branch) => ({
                   side: signalSide(branch),
                   evidence: last
-                    ? evaluate(
-                        branch.entry,
-                        series,
-                        last.time,
-                        spec.timeframe,
-                        undefined,
-                        signalSide(branch),
-                      )
+                    ? evaluateEntry(branch, series, last.time)
                     : { result: "UNKNOWN" },
                 })),
                 limitation: "Signal replay only; not returns or real positions",
@@ -858,7 +844,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
           code:
             error instanceof ApiError ? error.code :
               error instanceof OpenAI.APIConnectionTimeoutError || deadline.aborted ? 'AI_TIMEOUT' : 'PROVIDER_OR_TOOL_FAILURE',
-          status: error instanceof OpenAI.APIError ? error.status ?? null : null,
+          ...providerFailureDetails(error),
         },
       });
       const totals = (trace as any[]).reduce(
@@ -884,10 +870,15 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       if (error instanceof ApiError) throw error;
       if(error instanceof OpenAI.APIConnectionTimeoutError || deadline.aborted)
         throw new ApiError(502,'AI_TIMEOUT','AI ตอบกลับไม่ทันเวลา คืนโควตาแล้ว กรุณาลองใหม่หรือแบ่งคำขอเป็นขั้นย่อย');
+      const failure = providerFailureDetails(error);
+      const reason = failure.status === 429 ? 'ผู้ให้บริการ AI จำกัดคำขอชั่วคราว'
+        : [400, 422].includes(failure.status ?? 0) ? 'ผู้ให้บริการ AI ไม่รองรับรูปแบบคำขอนี้'
+        : failure.kind === 'APIConnectionTimeoutError' || deadline.aborted ? 'ผู้ให้บริการ AI ใช้เวลานานเกินกำหนด'
+        : 'ผู้ให้บริการ AI ตอบกลับไม่สำเร็จ';
       throw new ApiError(
         502,
         "AI_UNAVAILABLE",
-        "AI ยังไม่พร้อม คืนโควตาแล้ว ลองใหม่หรือใช้ editor",
+        `${reason} คืนโควตาแล้ว ภาพและข้อความยังอยู่ ลองส่งอีกครั้ง`,
       );
     }
   });
