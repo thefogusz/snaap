@@ -16,11 +16,11 @@ export function mountFlexibility(
       panel.querySelector("[data-flex-value]").textContent = percent + "%";
       const count = (entry) => {
         const { needed, total } = flexibilityCounts(entry, percent);
-        return `${needed} จาก ${total} ข้อ`;
+        return `${needed}/${total} ข้อ`;
       };
       panel.querySelector("[data-flex-result]").textContent = rule.spec.short
-        ? `แจ้งเมื่อ Long ผ่าน ${count(rule.spec.entry)} หรือ Short ผ่าน ${count(rule.spec.short.entry)}`
-        : `แจ้งเมื่อผ่านอย่างน้อย ${count(rule.spec.entry)}`;
+        ? `Long ${count(rule.spec.entry)} · Short ${count(rule.spec.short.entry)}`
+        : count(rule.spec.entry);
       panel
         .querySelectorAll("button,input")
         .forEach((control) => (control.disabled = busy));
@@ -34,7 +34,7 @@ export function mountFlexibility(
       }
       if (!canEdit(rule)) return;
       percent = rule.spec.entryMatchPercent ?? 100;
-      panel.innerHTML = `<label class="flex-percent-label">ต้องผ่านอย่างน้อย <output data-flex-value></output><input type="range" min="1" max="100" step="1" value="${percent}" data-flex-percent aria-label="ต้องผ่านเงื่อนไขอย่างน้อย (%)"><span class="flex-scale"><span>ผ่อนมาก</span><span>ครบทุกข้อ</span></span></label><div class="flex-footer"><p data-flex-result aria-live="polite"></p><div><button type="button" data-flex-cancel>ยกเลิก</button><button type="button" class="primary" data-flex-save>บันทึก</button></div></div><p class="flex-error" role="alert" hidden></p><button type="button" data-flex-reload hidden>โหลดค่าล่าสุด</button>`;
+      panel.innerHTML = `<div class="flex-controls"><label class="flex-percent-label">ผ่านอย่างน้อย <output data-flex-value></output><input type="range" min="1" max="100" step="1" value="${percent}" data-flex-percent aria-label="ต้องผ่านเงื่อนไขอย่างน้อย (%)"></label><span class="flex-result" data-flex-result aria-live="polite"></span><button type="button" class="primary" data-flex-save>บันทึก</button><button type="button" class="flex-close" data-flex-cancel aria-label="ยกเลิก" title="ยกเลิก">×</button></div><p class="flex-error" role="alert" hidden></p><button type="button" data-flex-reload hidden>โหลดค่าล่าสุด</button>`;
       update();
       panel.hidden = false;
       toggle.setAttribute("aria-expanded", "true");
