@@ -527,14 +527,23 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
 }
 .workbench[data-tab="split"] .design-body > .studio-footer-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
-  padding-top: 16px;
-  margin-top: 16px;
+  padding: 8px 0;
+  margin-top: 8px;
   border-top: 1px solid var(--line);
 }
 .studio-footer-actions > button {
-  flex: 1;
-  min-height: 44px;
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+@media (pointer: coarse) {
+  .studio-footer-actions > button {
+    min-height: 44px;
+  }
 }
 .studio-event-list {
   flex: none;
