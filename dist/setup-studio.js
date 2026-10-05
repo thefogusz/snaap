@@ -28,6 +28,103 @@
     .join("");
   workbench.before(tabsBar);
   workbench.dataset.inspector = "conditions";
+  // Layout preferences belong to the workspace UI, never to the strategy draft.
+  const layoutKey = "snaap-studio-panel-widths-v1";
+  let preferredWidths = { agent: 300, conditions: 340 };
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(layoutKey));
+    for (const name of ["agent", "conditions"])
+      if (Number.isFinite(saved?.[name]) && saved[name] > 0)
+        preferredWidths[name] = saved[name];
+  } catch {}
+  const desktopLayout = () => matchMedia("(min-width: 1280px)").matches;
+  const panelWidths = {};
+  const separators = ["agent", "conditions"].map((name) => {
+    const handle = document.createElement("div");
+    handle.className = "studio-panel-divider";
+    handle.dataset.resizePanel = name;
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-label", name === "agent" ? "ปรับความกว้างแชท" : "ปรับความกว้างแผงออกแบบเซตอัป");
+    handle.title = "ลากเพื่อปรับความกว้าง · ลูกศรซ้าย/ขวา · ดับเบิลคลิกคืนขนาดเดิม";
+    workbench.append(handle);
+    return handle;
+  });
+  function resizePanels(active) {
+    const width = workbench.clientWidth;
+    if (!width || innerWidth < 900) return;
+    const desktop = desktopLayout();
+    const agentVisible = desktop && workbench.dataset.agentCollapsed !== "true";
+    const conditionsVisible = !desktop || workbench.dataset.conditionsCollapsed !== "true";
+    const available = width - (agentVisible ? 12 : 0) - (conditionsVisible ? 12 : 0) - 240;
+    let agent = agentVisible ? Math.max(220, preferredWidths.agent) : 0;
+    let conditions = conditionsVisible ? Math.max(260, preferredWidths.conditions) : 0;
+    // Preserve the opposite panel while dragging; resize the chart in between.
+    if (active === "conditions") {
+      agent = agentVisible ? Math.min(agent, available - (conditionsVisible ? 260 : 0)) : 0;
+      conditions = conditionsVisible ? Math.min(conditions, available - agent) : 0;
+    } else {
+      conditions = conditionsVisible ? Math.min(conditions, available - (agentVisible ? 220 : 0)) : 0;
+      agent = agentVisible ? Math.min(agent, available - conditions) : 0;
+    }
+    panelWidths.agent = agent;
+    panelWidths.conditions = conditions;
+    workbench.style.setProperty("--studio-agent-width", agent + "px");
+    workbench.style.setProperty("--studio-conditions-width", conditions + "px");
+    for (const handle of separators) {
+      const name = handle.dataset.resizePanel;
+      handle.setAttribute("aria-valuemin", name === "agent" ? "220" : "260");
+      handle.setAttribute("aria-valuemax", String(Math.round(available - (name === "agent" ? conditions : agent))));
+      handle.setAttribute("aria-valuenow", String(Math.round(panelWidths[name])));
+    }
+  }
+  function savePanelWidths() {
+    try { sessionStorage.setItem(layoutKey, JSON.stringify(preferredWidths)); } catch {}
+  }
+  for (const handle of separators) {
+    const name = handle.dataset.resizePanel;
+    let drag = null;
+    const finish = () => {
+      if (!drag) return;
+      drag = null;
+      delete workbench.dataset.resizing;
+      savePanelWidths();
+    };
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      handle.focus();
+      drag = { x: event.clientX, width: panelWidths[name] };
+      handle.setPointerCapture(event.pointerId);
+      workbench.dataset.resizing = "true";
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      preferredWidths[name] = drag.width + (event.clientX - drag.x) * (name === "agent" ? 1 : -1);
+      resizePanels(name);
+      preferredWidths[name] = panelWidths[name];
+    });
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    handle.addEventListener("lostpointercapture", finish);
+    handle.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return;
+      event.preventDefault();
+      preferredWidths[name] = event.key === "Home" ? (name === "agent" ? 300 : 340)
+        : panelWidths[name] + (event.key === "ArrowRight" ? 1 : -1) * (name === "agent" ? 1 : -1) * (event.shiftKey ? 40 : 20);
+      resizePanels(name);
+      preferredWidths[name] = panelWidths[name];
+      savePanelWidths();
+    });
+    handle.addEventListener("dblclick", () => {
+      preferredWidths[name] = name === "agent" ? 300 : 340;
+      resizePanels(name);
+      savePanelWidths();
+    });
+  }
+  new ResizeObserver(() => resizePanels()).observe(workbench);
+  new MutationObserver(() => resizePanels()).observe(workbench, { attributes: true, attributeFilter: ["data-agent-collapsed", "data-conditions-collapsed"] });
   const reasonPane = document.createElement("aside");
   reasonPane.className = "studio-reason-pane";
   reasonPane.setAttribute("aria-label", "เหตุผลสัญญาณ");

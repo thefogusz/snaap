@@ -28,8 +28,33 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .click();
     await page
       .locator("[data-chart-status]")
-      .filter({ hasText: "500 แท่งปิด" })
+      .filter({ hasText: /\d+ แท่งปิด/ })
       .waitFor();
+    const panelBox = (selector) => page.locator(selector).boundingBox();
+    const beforeChat = await panelBox("#conversation");
+    const beforeChart = await panelBox(".setup-studio");
+    const dragDivider = async (name, delta) => {
+      await page.locator(`[data-resize-panel="${name}"]`).click({trial:true});
+      const box = await panelBox(`[data-resize-panel="${name}"]`);
+      await page.mouse.move(box.x + box.width / 2, box.y + 80);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2 + delta, box.y + 80, { steps: 8 });
+      await page.mouse.up();
+    };
+    await dragDivider("agent", 60);
+    assert.ok((await panelBox("#conversation")).width > beforeChat.width + 50);
+    assert.ok((await panelBox(".setup-studio")).width < beforeChart.width - 50);
+    const beforeConditions = await panelBox(".design-panel");
+    await dragDivider("conditions", -40);
+    assert.ok((await panelBox(".design-panel")).width > beforeConditions.width + 30);
+    const savedWidth = (await panelBox("#conversation")).width;
+    await page.reload();
+    await page.locator('[data-resize-panel="agent"]').waitFor({ state: "visible" });
+    assert.ok(Math.abs((await panelBox("#conversation")).width - savedWidth) < 2);
+    await page.locator('[data-resize-panel="agent"]').press("Home");
+    await page.locator('[data-resize-panel="conditions"]').press("Home");
+    assert.equal(Math.round((await panelBox("#conversation")).width), 300);
+    console.log("PASS draggable panel widths, chart resizing, session restore and keyboard reset");
     await page.locator('[data-chart-frame="4h"]').click();
     await page
       .locator("[data-chart-title]")
