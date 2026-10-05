@@ -341,16 +341,16 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .locator(".setup-change-card")
       .filter({ hasText: "ย้อนการปรับครั้งนี้แล้ว" })
       .waitFor();
-    await page.locator("[data-studio-save]").click();
+    await page.locator(".studio-footer-actions [data-save]").click();
     await page
       .locator("#editor-feedback")
       .filter({ hasText: "บันทึกเซตอัพแล้ว" })
       .waitFor();
     assert.equal(
-      await page.locator(".studio-workspace-header [data-studio-activate]").isEnabled(),
+      await page.locator(".studio-footer-actions [data-studio-activate]").isEnabled(),
       true,
     );
-    await page.locator(".studio-workspace-header [data-studio-activate]").click();
+    await page.locator(".studio-footer-actions [data-studio-activate]").click();
     await page
       .getByRole("button", { name: "ยังไม่เปิดใช้งาน", exact: true })
       .click();

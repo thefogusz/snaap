@@ -17,7 +17,7 @@
   const header = document.createElement("header");
   header.className = "studio-workspace-header";
   header.innerHTML =
-    '<div><strong data-studio-name>เซตอัป</strong><span data-studio-draft>ร่าง</span></div><div><button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button><button type="button" class="secondary" data-studio-save>บันทึก</button><button type="button" class="primary" data-studio-activate>เปิดใช้งาน</button></div>';
+    '<div><strong data-studio-name>เซตอัป</strong><span data-studio-draft>ร่าง</span></div><div><button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button></div>';
   workbench.before(header);
   const tabsBar = document.createElement("nav");
   tabsBar.className = "studio-inspector-tabs";
@@ -393,10 +393,10 @@
       : "ร่างใหม่";
     const activationDisabled = !state.saved ||
       JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(state.draft));
-    [header,panel].forEach(container=>container.querySelectorAll('[data-studio-activate]').forEach(button=>{
+    panel.querySelectorAll('[data-studio-activate]').forEach(button=>{
       button.disabled=activationDisabled;
       button.title=activationDisabled ? 'บันทึกเซตอัปก่อนเปิดใช้งาน' : 'เปิดตรวจและแจ้งเตือนเซตอัปนี้';
-    }));
+    });
     if (!panel.querySelector(".studio-condition-overview")) {
       const body = panel.querySelector(".design-body");
       const settings = document.createElement("section");
@@ -842,10 +842,6 @@
         String(workbench.dataset[key] !== "true"),
       );
     }
-    for (const [attr, target] of [
-      ["data-studio-save", "[data-save]"],
-    ])
-      if (b.hasAttribute(attr)) panel.querySelector(target)?.click();
   });
   panel.addEventListener("change", (e) => {
     if (e.target.hasAttribute("data-condition-frame")) {
