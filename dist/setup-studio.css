@@ -292,11 +292,23 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   gap: 4px 8px;
   min-width: 0;
 }
-.studio-toolbar-meta .saved-label,
-.studio-toolbar-meta [data-draft-status] {
+.studio-toolbar-meta .saved-label {
+  display: none;
+}
+.design-toolbar .studio-toolbar-meta [data-draft-status] {
+  display: inline-flex;
+  align-items: center;
   font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
   margin: 0;
-  padding: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--pale);
+  color: var(--muted);
+  max-width: 200px;
+  overflow-wrap: anywhere;
 }
 .studio-toolbar-meta [data-draft-status]::before {
   display: none;

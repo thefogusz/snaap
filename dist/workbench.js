@@ -627,14 +627,18 @@ function showDraftStatus(text) {
   draftStatus = text;
   const label = panel.querySelector("[data-draft-status]");
   if (label) {
-    label.textContent = text;
-    label.hidden = !text;
+    const savedLabel = panel.querySelector(".saved-label");
+    label.textContent = text || savedLabel?.textContent || "ร่างใหม่";
+    label.hidden = false;
+    label.title = "สถานะร่าง · บันทึกอัตโนมัติยังไม่เปิดใช้งานเซตอัป";
     label.dataset.state =
       text === "บันทึกร่างแล้ว"
         ? "saved"
         : text.includes("กำลัง")
           ? "saving"
-          : "pending";
+          : text.includes("ไม่สำเร็จ") || text.startsWith("ยังไม่บันทึก")
+            ? "error"
+            : "pending";
   }
 }
 async function ensureConversation(title = state.draft?.name ?? "เซตอัพใหม่") {
@@ -955,6 +959,7 @@ function renderDesigner() {
   const toolbarMeta = document.createElement("span");
   toolbarMeta.className = "studio-toolbar-meta";
   const savedLabel = panel.querySelector(".saved-label");
+  savedLabel.hidden = true;
   savedLabel.before(toolbarMeta);
   toolbarMeta.append(savedLabel, draftLabel);
   showDraftStatus(draftStatus);
