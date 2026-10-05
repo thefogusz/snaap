@@ -223,7 +223,7 @@
                   })
                   .join("")}</div>`
               : ""
-          }<div class="studio-condition-actions"><button type="button" data-studio-edit="${r.path}">แก้</button><button type="button" data-studio-view="${r.path}">ดูกราฟ</button><button type="button" data-studio-ask="${r.path}">ถาม Agent</button></div></article>`;
+          }<div class="studio-condition-actions"><button type="button" data-studio-edit="${r.path}">แก้</button><button type="button" data-studio-view="${r.path}">ดูกราฟ</button><button type="button" data-studio-ask="${r.path}">ถาม Snaap</button></div></article>`;
         })
         .join("") || "<p>ไม่มีเงื่อนไขในไทม์เฟรมนี้</p>"
     }${bar ? `<small>อ้างอิงแท่งตรวจ ${esc(new Date(bar.time).toLocaleString("th-TH"))}</small>` : ""}`;
@@ -618,7 +618,7 @@
   document.addEventListener("studio-evidence", (e) => {
     bar = e.detail.bar;
     renderOverview();
-    reasonPane.innerHTML = `<h3>เหตุผลสัญญาณ</h3><p>กราฟ ${esc(view.frame.toUpperCase())} · ตรวจบน ${esc(state.draft.timeframe.toUpperCase())}</p>${bar ? barEvidence(bar) : "<p>ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้</p>"}${bar?.branches?.map((b) => (b.cancel ? "<p>ยกเลิก</p>" + evidenceUI(b.cancel) : "")).join("") ?? ""}<button type="button" data-ask-bar>ถาม Agent เกี่ยวกับแท่งนี้</button>`;
+    reasonPane.innerHTML = `<h3>เหตุผลสัญญาณ</h3><p>กราฟ ${esc(view.frame.toUpperCase())} · ตรวจบน ${esc(state.draft.timeframe.toUpperCase())}</p>${bar ? barEvidence(bar) : "<p>ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้</p>"}${bar?.branches?.map((b) => (b.cancel ? "<p>ยกเลิก</p>" + evidenceUI(b.cancel) : "")).join("") ?? ""}<button type="button" data-ask-bar>ถาม Snaap เกี่ยวกับแท่งนี้</button>`;
     const data = window.SnaapChart.data;
     eventList.hidden =
       !data || data.chartTimeframe === data.evaluationTimeframe;
