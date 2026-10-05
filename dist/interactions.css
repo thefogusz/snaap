@@ -502,6 +502,27 @@ summary:focus-visible {
   line-height: 1.6;
 }
 .thinking-mark { display:block; width:22px; height:26px; flex:none; color:var(--ink); }
+.thinking-logo { display:block; width:22px; height:26px; overflow:visible; }
+.thinking-logo-base { fill:var(--ink); }
+.thinking-logo-color { fill:var(--brand-lime,var(--lime)); }
+/* Paint follows the two bends; the lower stroke clears back to brand white. */
+.thinking-logo-trace { fill:none; stroke:white; stroke-width:50; stroke-linecap:butt; stroke-linejoin:round; }
+.thinking-logo-trace-lower { stroke-dasharray:35 165; stroke-dashoffset:35; animation:snaap-logo-lower 3.2s linear infinite; }
+.thinking-logo-trace-upper { stroke-dasharray:100 100; stroke-dashoffset:100; animation:snaap-logo-upper 3.2s linear infinite; }
+@keyframes snaap-logo-lower {
+  0%,8% { stroke-dashoffset:35; }
+  48%,100% { stroke-dashoffset:-100; }
+}
+@keyframes snaap-logo-upper {
+  0%,38% { stroke-dashoffset:100; opacity:1; }
+  78%,90% { stroke-dashoffset:0; opacity:1; }
+  98%,100% { stroke-dashoffset:0; opacity:0; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .thinking-logo-trace { animation:none; }
+  .thinking-logo-trace-upper { stroke-dashoffset:0; }
+  .thinking-logo-color-lower { display:none; }
+}
 .thinking-indicator [data-thinking-stage] { min-width:0; overflow-wrap:anywhere; }
 .thinking-indicator .thinking-dots { flex:none; color:var(--muted); }
 @media(prefers-reduced-motion:reduce) { .thinking-indicator .thinking-dots i { animation:none; } }

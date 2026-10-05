@@ -1,4 +1,20 @@
 "use strict";
+let thinkingLogoId = 0;
+function thinkingLogo() {
+  const id = `thinking-logo-${++thinkingLogoId}`;
+  const upper = 'M120.2 24.1C125.9 21.3 129 24.7 124.9 29.1L83.1 74.7C79.4 78.7 77.8 81.8 81.3 85.9L105.9 112.4C109 115.8 106.3 118.7 102.1 116.8L47.7 92.2C36.7 87.2 34.9 82.2 41.6 74.8C53.5 61.8 89.2 39.5 120.2 24.1Z';
+  const lower = 'M101.6 80.2C97.6 78.3 95.9 80.6 98.7 83.9L119.4 109.2C122.8 113.5 122.3 117.6 117.9 121.7L71.7 164.7C67.3 168.9 70.2 173.3 76.2 170.6C105 157.8 138.8 140.2 151.6 128C161.3 118.8 160.6 111.2 149.5 104.6C139.1 98.5 118.1 87.6 101.6 80.2Z';
+  return `<svg class="thinking-logo" viewBox="34 20 128 155" aria-hidden="true" focusable="false">
+    <defs>
+      <mask id="${id}-lower" maskUnits="userSpaceOnUse" x="34" y="20" width="128" height="155"><path class="thinking-logo-trace thinking-logo-trace-lower" d="M72 169 L136 127 Q162 113 137 104 L99 81" pathLength="100"/></mask>
+      <mask id="${id}-upper" maskUnits="userSpaceOnUse" x="34" y="20" width="128" height="155"><path class="thinking-logo-trace thinking-logo-trace-upper" d="M106 116 L57 93 Q26 83 60 61 L125 24" pathLength="100"/></mask>
+    </defs>
+    <path class="thinking-logo-base" d="${upper} ${lower}"/>
+    <path class="thinking-logo-color thinking-logo-color-lower" d="${lower}" mask="url(#${id}-lower)"/>
+    <path class="thinking-logo-color" d="${upper}" mask="url(#${id}-upper)"/>
+  </svg>`;
+}
+
 // Register before dynamic imports can resume after DOMContentLoaded has fired.
 const companionScriptsReady = document.readyState === "complete" ? Promise.resolve() :
   new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, {once:true}));
@@ -1332,7 +1348,7 @@ async function chat(text) {
   thinking.setAttribute('aria-live','polite');
   thinking.setAttribute('aria-atomic','true');
   thinking.innerHTML =
-    '<svg class="thinking-mark" viewBox="34 20 128 155" aria-hidden="true" focusable="false"><use href="/assets/snaap-symbol.svg#snaap-symbol"></use></svg><span class="sr-only">Snaap: </span><span data-thinking-stage>กำลังเตรียมคำตอบ…</span><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+    `<span class="thinking-mark" aria-hidden="true">${thinkingLogo()}</span><span class="sr-only">Snaap: </span><span data-thinking-stage>กำลังเตรียมคำตอบ…</span><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>`;
   const thinkingStage=thinking.querySelector('[data-thinking-stage]');
   const setThinkingStage=text=>{thinkingStage.textContent=text;};
   let thinkingWaitTimer;
