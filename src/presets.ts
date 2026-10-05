@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type pg from "pg";
 import { z } from "zod";
 import { transaction } from "./data/db.js";
-import { strategySchema } from "./domain/engine.js";
+import { strategySchema, timeframe } from "./domain/engine.js";
 import {
   buildPreset,
   describePreset,
@@ -29,7 +29,7 @@ const configSchema = z
     side: z.enum(["SPOT", "LONG", "SHORT", "BOTH"]),
     pair: z.string().min(1).max(61).optional(),
     pairs: z.array(z.string().min(1).max(61)).min(1).max(10).refine(values => new Set(values).size === values.length, "คู่เทรดต้องไม่ซ้ำ").optional(),
-    timeframe: z.enum(["5m", "15m", "1h", "4h", "1d"]),
+    timeframe,
     expectedRevision: z.number().int().nonnegative(),
     level: z.number().finite().positive().optional(),
   })

@@ -7,8 +7,10 @@ import { ApiError } from "./errors.js";
 import { preview } from "./domain/preview.js";
 import { freshness } from "./domain/insights.js";
 import { indicatorByName } from "../dist/indicator-catalog.js";
+import { availableTimeframes, lastClosedBoundary } from "../dist/timeframes.js";
 import {
   frames,
+  timeframe,
   replay,
   evaluate,
   advance,
@@ -173,9 +175,11 @@ export async function candles(
   frame: keyof typeof frames,
   requiredBars = 500,
 ): Promise<Candle[]> {
+  if (!availableTimeframes([exchange], market).includes(frame))
+    throw new ApiError(400, "TIMEFRAME_UNSUPPORTED", `${exchange} ไม่รองรับไทม์เฟรม ${frame} ในตลาดนี้`);
   const key = [exchange, market, pair, frame, requiredBars].join(":");
   const hit = cache.get(key);
-  const expectedClose = Math.floor(Date.now() / frames[frame]) * frames[frame];
+  const expectedClose = lastClosedBoundary(Date.now(), frame);
   const completeHistory = hit?.data.every(
     (bar, index, bars) =>
       index === 0 || bar.time - bars[index - 1].time === frames[frame],
@@ -210,7 +214,7 @@ export async function candles(
         expectedClose - hit.data.at(-1)!.time < requiredBars * frames[frame];
       let since = reusable
         ? hit.data.at(-1)!.time - frames[frame]
-        : Math.floor(now / frames[frame]) * frames[frame] -
+        : lastClosedBoundary(now, frame) -
           requiredBars * frames[frame];
       for (let page = 0; page < 8; page++) {
         const batch: number[][] = await client.fetchOHLCV(
@@ -334,7 +338,9 @@ export async function strategySeries(
   };
   strategyConditions(spec).forEach(walk);
   extra.forEach(collect);
-  for (const frame of neededFrames(spec))
+  const requestedFrames = new Set(neededFrames(spec));
+  for (const o of extra) if (o.kind === "INDICATOR" || o.kind === "PRICE") requestedFrames.add(o.timeframe);
+  for (const frame of requestedFrames)
     series[frame] = await candles(
       exchange,
       spec.market,
@@ -374,14 +380,16 @@ export function registerMarkets(
       .object({
         spec: strategySchema,
         indicators: z.array(operand).max(8).default([]),
-        chartFrame: z.enum(["5m", "15m", "1h", "4h", "1d"]).optional(),
+        chartTimeframe: timeframe.optional(),
+        chartOnly: z.boolean().default(false),
+        chartFrame: timeframe.optional(),
       })
       .strict()
       .parse(req.body);
     const spec = input.spec;
-    const chartFrame = input.chartFrame ?? spec.timeframe;
-    if (!neededFrames(spec).includes(chartFrame))
-      throw new ApiError(400, "CHART_FRAME", "เลือกกรอบเวลาที่ใช้ในเงื่อนไขเซตอัป");
+    const chartFrame = input.chartTimeframe ?? input.chartFrame ?? spec.timeframe;
+    if (!availableTimeframes(spec.exchange, spec.market).includes(chartFrame))
+      throw new ApiError(400, "TIMEFRAME_UNSUPPORTED", `กระดานและตลาดที่เลือกไม่รองรับ ${chartFrame}`);
     if (spec.exchange.length !== 1 || spec.pairs.length !== 1)
       throw new ApiError(
         400,
@@ -399,19 +407,26 @@ export function registerMarkets(
           "INDICATOR_FRAME",
           "อินดิเคเตอร์เสริมใช้กรอบเวลาของกราฟ",
         );
+      // Chart-only operands obey the same semantic checks as saved conditions.
+      strategySchema.parse({
+        ...spec, exchange: ["Binance"], market: "Spot", side: "SPOT", short: undefined, mirrorShort: undefined,
+        entry: { kind: "COMPARE", op: ">", left: o, right: { kind: "CONSTANT", value: 0 } },
+        stages: [], exit: undefined, cancel: undefined,
+      });
     }
     const series = await strategySeries(
       spec,
       spec.exchange[0],
       spec.pairs[0],
-      input.indicators,
+      [...input.indicators, { kind: "INDICATOR", name: "SMA", period: 2, timeframe: chartFrame }],
     );
     return {
-      ...preview(spec, series, input.indicators, chartFrame),
+      ...preview(spec, series, input.indicators, chartFrame, input.chartOnly),
       source: {
         exchange: spec.exchange[0],
         pair: spec.pairs[0],
         frame: chartFrame,
+        evaluationTimeframe: spec.timeframe,
         evaluationFrame: spec.timeframe,
         asOf: new Date().toISOString(),
       },

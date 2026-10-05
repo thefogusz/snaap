@@ -48,3 +48,10 @@ test("stage progress includes deadline equality as the final allowed bar", () =>
   assert.equal(progress(state, "1h", 10 * step, 2).remainingBars, 0);
   assert.equal(progress(state, "1h", 9 * step, 2).remainingBars, 1);
 });
+
+test('weekly freshness uses exchange Monday UTC boundaries', () => {
+  const monday = Date.parse('2026-10-05T00:00:00Z');
+  assert.equal(freshness('1w', [bar(monday - frames['1w']), bar(monday)], monday + frames['1d']).status, 'CURRENT');
+  assert.equal(freshness('1w', [bar(monday - frames['1w'])], monday).status, 'DELAYED');
+  assert.equal(freshness('1w', [bar(monday + 3 * frames['1d'])], monday + 4 * frames['1d']).status, 'INSUFFICIENT');
+});

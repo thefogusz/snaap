@@ -8,43 +8,34 @@
   const status = studio.querySelector("[data-chart-status]");
   const canvas = studio.querySelector(".studio-canvas");
   const scrub = studio.querySelector("[data-scrub]");
-  const framePicker = document.createElement('div');
-  framePicker.className = 'studio-frame-picker';
-  framePicker.setAttribute('role', 'group');
-  framePicker.setAttribute('aria-label', 'กราฟตามไทม์เฟรมของเงื่อนไข');
-  studio.querySelector('header').after(framePicker);
-  let chartFrame = null;
-  function conditionFrames(draft) {
-    const used = new Set([draft.timeframe]);
-    function walk(c) {
-      if (!c) return;
-      if (c.kind === 'GROUP') c.children.forEach(walk);
-      else if (c.kind === 'HOLD') walk(c.condition);
-      else [c.left,c.right].forEach(o => { if (o.timeframe) used.add(o.timeframe); });
-    }
-    [draft,draft.short].filter(Boolean).forEach(b => {
-      walk(b.entry); b.stages.forEach(s => walk(s.condition)); walk(b.exit); walk(b.cancel);
-    });
-    return tf.filter(frame => used.has(frame));
-  }
-  function selectFrame(frame) {
-    if (!state.draft || !conditionFrames(state.draft).includes(frame)) return;
-    chartFrame = frame;
-    clear();
-    update(true);
-  }
-  framePicker.onclick = e => {
-    const button = e.target.closest('[data-chart-frame]');
-    if (button) selectFrame(button.dataset.chartFrame);
+  let chartPair=null, chartFrame=null, selectedBarTime=null, requestedBarTime=null;
+  window.SnaapChart = {
+    get pair(){return chartPair;}, get frame(){return chartFrame ?? state.draft?.timeframe;},
+    get selectedTime(){return selectedBarTime;}, get data(){return result;},
+    view(frame, pair, time){
+      chartFrame=frame; if(pair)chartPair=pair; selectedBarTime=time??null; requestedBarTime=time??null;
+      key=""; stop(); update(true);
+    },
+    refresh(){key="";schedule();},
+    reset(){
+      generation++;
+      clearTimeout(timer);
+      key="";
+      chartPair=null;chartFrame=null;selectedBarTime=null;requestedBarTime=null;
+      clear();
+      chartPickerWrap.hidden=true;
+      scrub.value=0;
+      studio.querySelector('[data-chart-title]').textContent='กราฟเซตอัปใหม่';
+      status.textContent='เพิ่มเงื่อนไขเพื่อดูกราฟและสัญญาณของเซตอัปนี้';
+      canvas.inert=false;canvas.style.opacity='1';
+    },
+    visibility(){lines.forEach(({series,operand})=>series.applyOptions({visible:!window.SnaapStudio?.isHidden(operand)}));},
   };
+  const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector(".studio-header-actions").append(chartPickerWrap);
   panel.addEventListener('click', e => {
     const button = e.target.closest('[data-open-condition-chart]');
-    if (!button) return;
-    selectFrame(button.dataset.openConditionChart);
-    studio.scrollIntoView({block:'start',behavior:'smooth'});
+    if (button) window.SnaapChart.view(button.dataset.openConditionChart);
   });
-  let chartPair=null;
-  const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector(".studio-header-actions").append(chartPickerWrap);
   chartPicker.onchange=()=>{chartPair=chartPicker.value;update(true);};
   let chart,
     candles,
@@ -85,8 +76,15 @@
     chart.timeScale().setVisibleLogicalRange({ from: Math.max(-1, at - visibleBars + 1), to: at + Math.max(2, Math.round(visibleBars * .035)) });
   }
   let wasVisible = false;
+  function fitStudyPanes() {
+    if (!chart) return;
+    const studies = chart.panes().slice(1);
+    const height = Math.max(32, Math.min(110, canvas.clientHeight * .35 / Math.max(1,studies.length)));
+    studies.forEach(p => p.setHeight(height));
+  }
   new ResizeObserver(() => {
     const visible = canvas.clientWidth > 0 && canvas.clientHeight > 0;
+    if (visible) fitStudyPanes();
     if (visible && !wasVisible) requestAnimationFrame(() => { if (chart) fitFrame(); else update(); });
     wasVisible = visible;
   }).observe(canvas);
@@ -111,7 +109,7 @@
           .map((p) =>
             p.value === null
               ? { time: p.time / 1000 }
-              : { time: p.time / 1000, value: p.value },
+              : { time: p.time / 1000, value: p.value, ...(p.color ? {color:p.color} : {}) },
           ),
       ),
     );
@@ -131,12 +129,14 @@
           }[e.kind] + " · " + ({SPOT:"Spot",LONG:"Long",SHORT:"Short"}[e.side] ?? "ไม่ระบุฝั่ง"),
         })),
     );
+    selectedBarTime = cut;
     const bar = result.chartTimeline[at];
+    document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar,selectedTime:cut,source:result.source}}));
     const historical=at<result.candles.length-1;
     const ready=result.freshness?.every(f=>f.status==='CURRENT')??true;
     studio.querySelector('[data-setup-insights]').innerHTML = freshnessUI(result.freshness) + (historical?'<p>กำลังดูสถานะย้อนหลังตามแท่งที่เลือก</p>':'') + (ready||historical?(bar?.branches??[]).map(b=>`<strong>${esc(directionLabel(b.side,b.side === "SPOT" ? "Spot" : "Perpetual Futures"))}</strong>${progressUI(b.progress)}`).join(''):'<p role="status">รอข้อมูลแท่งปิดให้ครบก่อนแสดงสถานะปัจจุบัน · ยังดูหลักฐานของแท่งย้อนหลังได้</p>');
     studio.querySelector("[data-chart-evidence]").innerHTML =
-      (barEvidence(bar, { showProgress: false }) || '<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>') +
+      (hasEntryCondition() ? (barEvidence(bar, { showProgress: false }) || "<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>") : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
       (bar?.cancel && !bar.branches && !bar.explanations ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
     if (fit) fitFrame();
   }
@@ -146,6 +146,7 @@
     const paused = result && at < result.candles.length - 1;
     clear();
     result = data;
+    canvas.inert=false;canvas.style.opacity="1";
     const dark = document.documentElement.dataset.theme === "dark";
     colors = dark ? ["#aa87ff", "#32a9df", "#e8ab42", "#ee79bb", "#4cbda5"] : ['#7549c4','#087aa6','#916400','#ad3576','#16725e'];
     const ink = getComputedStyle(studio).color;
@@ -176,69 +177,94 @@
     });
     markers = LightweightCharts.createSeriesMarkers(candles, []);
     let pane = 0;
+    const macdPanes = new Map();
     lines = data.overlays.map((o, i) => {
       const overlay = window.SnaapIndicatorCatalog?.indicatorByName[o.operand.name]?.overlay ?? ["EMA", "SMA", "BB_UPPER", "BB_LOWER","WMA","RMA","VWMA","HIGHEST","LOWEST","DONCHIAN_UPPER","DONCHIAN_LOWER","DONCHIAN_MID","BB_MIDDLE"].includes(
         o.operand.name,
       );
       const title = operandText(o.operand);
+      const histogram = ['VOLUME', 'MACD_HIST', 'AO'].includes(o.operand.name);
+      const macd = ['MACD','MACD_SIGNAL','MACD_HIST'].includes(o.operand.name);
+      const macdKey = macd ? JSON.stringify([o.operand.timeframe,o.operand.period,o.operand.slow??26,o.operand.signal??9,o.operand.source??'close']) : null;
+      let studyPane = 0;
+      if (!overlay) {
+        studyPane = macdPanes.get(macdKey) ?? ++pane;
+        if (macd) macdPanes.set(macdKey,studyPane);
+      }
+      const displayOperand = o.chartOperand ?? o.operand;
       const series = chart.addSeries(
-        LightweightCharts.LineSeries,
+        histogram ? LightweightCharts.HistogramSeries : LightweightCharts.LineSeries,
         {
-          color: colors[i % colors.length],
+          color: macd ? (o.operand.name==='MACD_SIGNAL' ? '#e8ab42' : '#32a9df') : colors[i % colors.length],
           lineWidth: 2,
+          ...(o.operand.name === 'PSAR' ? {lineVisible:false,pointMarkersVisible:true,pointMarkersRadius:2} : {}),
           title,
-          priceFormat: {type:'price',precision:overlay?precision:2,minMove:overlay?10**-precision:.01},
+          priceFormat: o.operand.name === 'VOLUME' ? {type:'volume'} : {type:'price',precision:overlay?precision:2,minMove:overlay?10**-precision:.01},
           priceLineVisible: false,
           lastValueVisible: false,
+          visible: !window.SnaapStudio?.isHidden(displayOperand),
         },
-        overlay ? 0 : ++pane,
+        studyPane,
       );
-      if (!overlay) chart.panes()[pane].setHeight(110);
-      return { series, points: o.points };
+      if (!overlay) chart.panes()[studyPane].setHeight(Math.max(32, Math.min(110, canvas.clientHeight * .25)));
+      const candleByTime = new Map(data.candles.map(c => [c.time,c]));
+      const points = histogram ? o.points.map(p => {
+        const candle = candleByTime.get(p.time);
+        const up = o.operand.name === 'VOLUME' ? candle && candle.close >= candle.open : p.value >= 0;
+        return {...p,color:up ? (dark ? '#35ba8a' : '#168063') : (dark ? '#eb7480' : '#c13d51')};
+      }) : o.points;
+      return { series, points, operand:displayOperand };
     });
+    fitStudyPanes();
     studio.querySelector(".chart-legend").innerHTML = data.overlays
       .map(
         (o, i) =>
-          `<span style="color:${colors[i % colors.length]}">${esc(operandText(o.operand))}</span>`,
+          o.chartOperand || window.SnaapStudio?.isHidden(o.operand) ? "" : `<span class="studio-legend-chip" style="color:${colors[i % colors.length]}"><button type="button" class="studio-legend-item" data-chart-indicator="${i}">${esc(operandText(o.operand))} ⚙</button><button type="button" class="studio-legend-remove" data-remove-chart-indicator="${i}" aria-label="นำ ${esc(operandText(o.operand))} ออกจากกราฟ" title="นำออกจากกราฟ · คงเงื่อนไขไว้">×</button></span>`,
       )
       .join("");
     studio
       .querySelectorAll(".replay-controls button,.replay-controls input")
       .forEach((e) => (e.disabled = false));
     scrub.max = Math.max(0, data.candles.length - 1);
-    const selectedIndex = paused ? data.candles.findIndex(b=>b.time===selectedTime) : -1;
+    const requestedTime = requestedBarTime ?? selectedTime;
+    const selectedIndex = paused || requestedBarTime != null ? data.candles.findLastIndex(b=>b.time <= requestedTime) : -1;
     draw(selectedIndex >= 0 ? selectedIndex : data.candles.length - 1, !oldRange);
-    if (oldRange) chart.timeScale().setVisibleLogicalRange(oldRange);
+    if (oldRange && requestedBarTime == null) chart.timeScale().setVisibleLogicalRange(oldRange);
+    requestedBarTime=null;
     chart.subscribeClick((p) => {
       if (!p.time) return;
-      const index = data.candles.findIndex((b) => b.time / 1000 === p.time);
-      if (index < 0) return;
-      const bar = data.chartTimeline[index];
+      selectedBarTime = Number(p.time)*1000;
+      const index = data.timeline.findLastIndex((b) => b.time <= selectedBarTime);
+      if (index < 0) {
+        document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar:null,selectedTime:selectedBarTime,source:data.source}}));
+        studio.querySelector('[data-chart-evidence]').textContent=hasEntryCondition() ? 'ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้' : 'ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ';
+        return;
+      }
+      const bar = data.timeline[index];
+      document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar,selectedTime:selectedBarTime,source:data.source}}));
       studio.querySelector("[data-chart-evidence]").innerHTML =
-        (barEvidence(bar) || '<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>') +
-        (bar?.cancel && !bar.branches && !bar.explanations ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+        (hasEntryCondition() ? barEvidence(bar) : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
+        (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
       studio.querySelector(".chart-evidence").open = true;
     });
     status.textContent = `${data.freshness?.some(f=>f.status!=="CURRENT")?"ข้อมูลยังไม่พร้อมสำหรับสัญญาณล่าสุด · ":""}${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · ตรวจทุก ${data.source.evaluationFrame} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
   }
   async function update(force = false) {
     if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;
-    const availableFrames = conditionFrames(state.draft);
-    if (!availableFrames.includes(chartFrame)) chartFrame = state.draft.timeframe;
-    if (framePicker.dataset.frames !== availableFrames.join(',')) {
-      framePicker.dataset.frames = availableFrames.join(',');
-      framePicker.innerHTML = '<span>กราฟเงื่อนไข</span>' + availableFrames.map(frame => `<button type="button" data-chart-frame="${frame}">${frame}</button>`).join('');
-    }
-    framePicker.querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.chartFrame === chartFrame)));
     if(!state.draft.pairs.includes(chartPair))chartPair=state.draft.pairs[0];
     chartPickerWrap.hidden=state.draft.pairs.length<2;
     chartPicker.innerHTML=state.draft.pairs.map(pair=>`<option value="${esc(pair)}">${esc(pair)}</option>`).join("");chartPicker.value=chartPair;
-    const spec = {...state.draft,pairs:[chartPair]};
-    const next = JSON.stringify({spec,chartFrame});
+    chartFrame ??= state.draft.timeframe;
+    const chartOnly = !hasEntryCondition();
+    // Supply a valid transport spec for market fetching only; never evaluate it.
+    const request = {spec:{...state.draft,pairs:[chartPair],...(chartOnly ? {entry:{kind:'COMPARE',op:'>',left:{kind:'CONSTANT',value:0},right:{kind:'CONSTANT',value:0}},stages:[],exit:undefined,cancel:undefined,short:undefined,mirrorShort:undefined,side:state.draft.market==='Spot'?'SPOT':'LONG'} : {})},chartOnly,chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]};
+    const scope={conversation:state.conversation,workspace:state.workspaceId};
+    const next = JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:request.indicators},...scope});
     const draftAtRequest=JSON.stringify(state.draft);
     if (!force && ((next === key && result) || next === pendingKey)) return;
     pendingKey = next;
     const token = ++generation;
+    canvas.inert=true;canvas.style.opacity=".35";
     stop();
     studio.querySelector("[data-chart-title]").textContent =
       `${state.draft.exchange.join(", ")} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
@@ -249,9 +275,8 @@
     }
     status.textContent = "กำลังคำนวณกราฟและสัญญาณ…";
     try {
-      const data = await api("/preview", "POST", JSON.parse(next));
-      if (token !== generation) return;
-      if (JSON.stringify(state.draft) !== draftAtRequest || chartPair !== spec.pairs[0]) { pendingKey = ""; schedule(); return; }
+      const data = await api("/preview", "POST", request);
+      if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==request.spec.pairs[0] || chartFrame!==request.chartTimeframe || state.conversation!==scope.conversation || state.workspaceId!==scope.workspace) return;
       render(data);
       key = next;
     } catch (e) {
@@ -265,17 +290,17 @@
   }
   function schedule() {
     if (!state.draft) return;
-    if (JSON.stringify({spec:{...state.draft,pairs:[chartPair]},chartFrame}) === key && result) return;
-    if (JSON.stringify({spec:{...state.draft,pairs:[chartPair]},chartFrame}) === pendingKey) return;
+    const next = JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]},conversation:state.conversation,workspace:state.workspaceId});
+    if ((next === key && result) || next === pendingKey) return;
     generation++;
-    pendingKey = "";
+    selectedBarTime=null;
     stop();
     studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
     clearTimeout(timer);
     status.textContent = "เซตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…";
-    canvas.style.opacity = ".35";
+    canvas.style.opacity = ".35";canvas.inert=true;
+    studio.querySelector("[data-chart-evidence]").textContent="กำลังคำนวณร่างล่าสุด…";
     timer = setTimeout(() => {
-      canvas.style.opacity = "1";
       update();
     }, 120);
   }
@@ -332,6 +357,7 @@
     const pairs = [...state.draft.pairs];
     const hint = panel.querySelector("[data-pair-availability]");
     if (!hint) return;
+    hint.hidden = false;
     hint.textContent = `กำลังตรวจคู่เทรดบน ${exchange} · ${market}…`;
     try {
       const data = await api(`/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(market)}`);
@@ -340,7 +366,8 @@
       const missing = pairs.filter(pair => !available.has(pair));
       hint.textContent = missing.length
         ? `${missing.join(", ")} ไม่มีหรือยังไม่รองรับบน ${exchange} · ${market} กรุณาเลือกคู่เทรดใหม่`
-        : `คู่เทรดพร้อมใช้บน ${exchange} · ${market}`;
+        : "";
+      hint.hidden = !missing.length;
       hint.style.color = missing.length ? "#f2bb70" : "";
     } catch (error) {
       if (token === availabilityGeneration && hint.isConnected) hint.textContent = error.message;

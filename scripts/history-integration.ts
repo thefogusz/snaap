@@ -15,8 +15,15 @@ process.env.DATA_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 let deny = false,
   fail = false,
   closed = 0;
+let fillTime=Date.now()-1000;
 const client = (exchange: string, credentials: any, market = "Spot") => ({
   apiKey: credentials.apiKey,
+  options:{},
+  fetch:async()=>{throw new Error('Unexpected real transport in history fixture');},
+  handleUTAAndParams:async()=>[true,{}],
+  spotPrivateGetMyTrades:async()=>deny ? {error:'read access denied'} : [],
+  contractPrivateGetOrderListHistoryOrders:async()=>({success:!deny,code:deny?703:0,data:[]}),
+  privateUtaGetV3TradeFills:async()=>({code:'00000',data:{list:[]}}),
   sapiGetAccountApiRestrictions: async () => ({
     enableReading: true,
     enableWithdrawals: deny,
@@ -52,9 +59,10 @@ const client = (exchange: string, credentials: any, market = "Spot") => ({
   }),
   loadMarkets: async () => {},
   markets: {
-    "BTC/USDT": { symbol: "BTC/USDT", spot: true, active: true },
+    "BTC/USDT": { id:'BTCUSDT',symbol: "BTC/USDT", spot: true, active: true },
     "BTC/USDT:USDT": {
       symbol: "BTC/USDT:USDT",
+      id:'BTCUSDT',
       swap: true,
       linear: true,
       contractSize: 0.01,
@@ -70,7 +78,8 @@ const client = (exchange: string, credentials: any, market = "Spot") => ({
     return [
       {
         id: "fill-1",
-        timestamp: Date.now(),
+        symbol:pair,
+        timestamp: fillTime,
         price: 100,
         amount: 2,
         side: "buy",
@@ -95,9 +104,11 @@ try {
   );
   for (const exchange of historyExchanges)
     for (const market of ["Spot", "Futures"]) {
+      fillTime=Date.now()-1000;
       const payload = {
         exchange,
         market,
+        privacyConsent: 'trade-history-v1',
         name: exchange + " " + market + " fixture",
         apiKey: "test-api-key",
         secret: "test-api-secret",
@@ -120,16 +131,8 @@ try {
         );
       }
       deny = true;
-      assert.equal(
-        (
-          await app.inject({
-            method: "POST",
-            url: "/api/v1/connections",
-            payload,
-          })
-        ).statusCode,
-        400,
-      );
+      const deniedConnection=await app.inject({method:'POST',url:'/api/v1/connections',payload});
+      assert.equal(deniedConnection.statusCode,400,exchange+' '+market+' '+deniedConnection.body);
       deny = false;
       const created = await app.inject({
         method: "POST",
@@ -171,7 +174,7 @@ try {
       );
       let response = await sync();
       assert.equal(response.statusCode, 200, response.body);
-      assert.equal(response.json().inserted, 1);
+      assert.equal(response.json().inserted+response.json().duplicates, 1);
       assert.equal(response.json().partial, true);
       response = await sync();
       assert.equal(response.json().inserted, 0);

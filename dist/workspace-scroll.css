@@ -50,13 +50,13 @@ body:has(#admin-impersonation-banner):has(#view-home:not([hidden]) .workbench:no
   #view-home .workbench:not([hidden]) { flex:1; height:auto; }
   .workbench[data-tab="split"] { grid-template-columns:minmax(320px,.85fr) minmax(0,1.35fr); }
   .workbench[data-tab="design"] { grid-template-columns:minmax(0,1fr); }
-  .workbench .setup-pane { overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; display:block; min-height:0; border:1px solid var(--line); border-radius:20px; clip-path:inset(0 round 20px); box-sizing:border-box; }
+  .workbench .setup-pane { overflow:auto; overscroll-behavior:contain; display:block; min-height:0; border:1px solid var(--line); border-radius:20px; clip-path:inset(0 round 20px); box-sizing:border-box; }
   .workbench .setup-pane > .setup-studio,
   .workbench .setup-pane > .design-panel { border:0; border-radius:0; box-shadow:none; }
   .workbench .setup-pane .design-toolbar { border-radius:0; }
   .setup-pane .setup-studio { margin-bottom:20px; }
   .workbench[data-tab="split"] #conversation,.workbench[data-tab="chat"] #conversation { position:relative; top:auto; grid-column:auto; grid-row:auto; display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; }
-  .workbench #messages { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding-right:10px; padding-bottom:20px; }
+  .workbench #messages { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding-right:4px; padding-bottom:20px; }
   .workbench .chat-composer { flex:none; margin-top:12px; max-height:45%; overflow:auto; }
   .workbench .design-toolbar { position:sticky; top:0; z-index:2; background:var(--white); }
 }

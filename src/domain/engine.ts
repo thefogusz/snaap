@@ -5,15 +5,11 @@ import {
 } from "../../dist/indicator-catalog.js";
 import { extendedValue } from "./extended-indicators.js";
 import { mirrorBranch } from "../../dist/trade-direction.js";
+import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
+import { FRAME_MS, TIMEFRAMES, availableTimeframes } from "../../dist/timeframes.js";
+export const frames = FRAME_MS;
+export const timeframe = z.enum(TIMEFRAMES);
 import { entryUnits, flexibilityCounts } from "../../dist/entry-flexibility.js";
-export const frames = {
-  "5m": 300000,
-  "15m": 900000,
-  "1h": 3600000,
-  "4h": 14400000,
-  "1d": 86400000,
-};
-const timeframe = z.enum(["5m", "15m", "1h", "4h", "1d"]);
 export type Candle = {
   time: number;
   open: number;
@@ -209,6 +205,9 @@ const strategyStructure = z
   })
   .strict()
   .superRefine((s, ctx) => {
+    const supportedFrames = availableTimeframes(s.exchange, s.market);
+    if (!supportedFrames.includes(s.timeframe))
+      ctx.addIssue({ code: "custom", message: `กระดานและตลาดที่เลือกไม่รองรับ ${s.timeframe}` });
     if (s.market === "Spot" && s.side && s.side !== "SPOT")
       ctx.addIssue({
         code: "custom",
@@ -243,6 +242,8 @@ const strategyStructure = z
         return c.children.forEach((x) => validateOperands(x, entryContext));
       if (c.kind === "HOLD") return validateOperands(c.condition, entryContext);
       for (const o of [c.left, c.right]) {
+        if ((o.kind === "PRICE" || o.kind === "INDICATOR") && !supportedFrames.includes(o.timeframe))
+          ctx.addIssue({ code: "custom", message: `กระดานและตลาดที่เลือกไม่รองรับ ${o.timeframe}` });
         if (o.kind === "INDICATOR") {
           const definition = indicatorByName[o.name];
           if (o.params && !definition)
@@ -374,11 +375,11 @@ const strategyStructure = z
       .forEach((c) => walk(c!));
     if (count > 60)
       ctx.addIssue({ code: "custom", message: "Maximum 60 conditions" });
-    if (comparisonCount > 20)
+    if (comparisonCount > MAX_SETUP_CONDITIONS)
       ctx.addIssue({
         code: "custom",
         message:
-          "เซตอัปมีได้สูงสุด 20 เงื่อนไข รวมเงื่อนไขเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก",
+          `เซตอัปมีได้สูงสุด ${MAX_SETUP_CONDITIONS} เงื่อนไข รวมเงื่อนไขเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก`,
       });
     if (
       new Set(s.exchange).size !== s.exchange.length ||

@@ -1,5 +1,7 @@
 # Indicator selection for Snaap v1
 
+VOLUME is raw closed-bar exchange volume, with no lookback or price-source setting; period remains a required compatibility field but does not change this value. VOLUME_RATIO is the latest volume divided by the mean of the preceding period bars and is not raw volume. Volume units come from the exchange feed; never describe these generically as dollars or compare amounts across different instruments without checking units.
+
 The runtime also supplies a shared extended indicator catalog. Its names and parameter definitions are authoritative and include ADX/DMI, stochastic K/D, Stochastic RSI, KDJ, OBV, VWAP, Supertrend, Ichimoku, PSAR and other studies. Put primary period in operand.period and other numeric settings in operand.params. Do not infer that a library implementation is numerically identical to every exchange chart. Ichimoku cloud values are aligned causally at the evaluated time; no future-price Chikou conditions. Session VWAP uses UTC days. Volume Profile, order flow, funding and arbitrary Pine remain unsupported inputs, not aliases for supported indicators.
 
 Use when the user wants indicator suggestions, comparisons or a setup idea. Match the observable behavior they want to detect before choosing a metric.

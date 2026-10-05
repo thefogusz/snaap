@@ -188,6 +188,23 @@
   align-items: center;
   flex-wrap: wrap;
 }
+.attachment-preview[hidden] {
+  display: none;
+}
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.message-images img {
+  width: 120px;
+  height: 100px;
+  max-width: 100%;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
 .attachment-preview img {
   width: 90px;
   height: 70px;

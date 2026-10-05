@@ -158,3 +158,31 @@ test('delayed refresh cannot replace data from a different workspace',async()=>{
   pending.forEach((resolve,i)=>resolve(i===0?['old']:{}));await flight;
   assert.deepEqual(state.rules,['original']);
 });
+
+const activationSource = source.slice(source.indexOf('async function setRuleActivation('), source.indexOf('function watchChannelPicker('));
+test('shared activation uses the saved revision and refreshes the editor without changing its draft', async () => {
+  const rule = {id: 'saved', revision: 3, active: false};
+  const draft = {name: 'unchanged'};
+  const state = {saved: rule, draft};
+  const requests: any[] = [];
+  let renders = 0;
+  const button = {disabled: false, innerHTML: 'Activate', textContent: '', isConnected: true, setAttribute() {}, removeAttribute() {}};
+  let cardRefreshes = 0;
+  const context = vm.createContext({state, document: {dispatchEvent: () => cardRefreshes++}, Event: class {}, api: async (path: string, method: string, body: any) => {requests.push({path,method,body});return {...rule,active: body.active};}, renderWatch() {}, renderDesigner: () => renders++, toast() {}});
+  vm.runInContext(activationSource + ';globalThis.activate=setRuleActivation;',context);
+  await context.activate(rule, button, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{path:'/rules/saved/activation',method:'POST',body:{active:true,expectedRevision:3,confirmation:'ACTIVATE'}}]);
+  assert.equal(state.saved.active,true);
+  assert.equal(state.draft,draft);
+  assert.equal(renders,1);
+  assert.equal(cardRefreshes,1);
+  assert.equal(button.disabled,false);
+});
+test('failed activation cannot mark the setup active and releases the busy button', async () => {
+  const rule = {id:'saved',revision:3,active:false};
+  const button = {disabled:false,innerHTML:'Activate',textContent:'',isConnected:true,setAttribute() {},removeAttribute() {}};
+  const context = vm.createContext({state:{saved:rule},api:async()=>{throw Error('revision conflict');},renderWatch() {},renderDesigner() {},toast() {}});
+  vm.runInContext(activationSource+';globalThis.activate=setRuleActivation;',context);
+  await assert.rejects(context.activate(rule,button,true), /revision conflict/);
+  assert.equal(rule.active,false);assert.equal(button.disabled,false);
+});

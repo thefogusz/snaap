@@ -5,6 +5,7 @@ import { database, migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
 import { evaluateTarget } from "../src/monitor.js";
 import { deliver } from "../src/destinations.js";
+import { seal } from "../src/vault.js";
 import type { Series } from "../src/domain/engine.js";
 const postgres = await localDatabase(),
   db = database(postgres.url);
@@ -42,6 +43,8 @@ const spec = {
   destinations: [destination],
 };
 const originalFetch = globalThis.fetch;
+const originalEncryptionKey=process.env.DATA_ENCRYPTION_KEY;
+process.env.DATA_ENCRYPTION_KEY='ab'.repeat(32);
 try {
   await db.query("INSERT INTO users(id) VALUES($1)", [owner]);
   await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')", [
@@ -50,7 +53,7 @@ try {
   ]);
   await db.query(
     "INSERT INTO destinations(id,owner_id,kind,name,config,verified) VALUES($1,$2,'TELEGRAM','Fixture',$3,true)",
-    [destination, owner, { recipient: "fixture-not-real" }],
+    [destination, owner, { recipient: "123456789",encryptedTelegram:seal({token:'123456:'+'x'.repeat(35)},`telegram:${owner}:${destination}`) }],
   );
   const create = await app.inject({
     method: "POST",
@@ -72,7 +75,7 @@ try {
   ]);
   const series: Series = {
     "15m": [
-      { time: 900000, open: 100, close: 100, high: 100, low: 100, volume: 1 },
+      { time: Math.floor(Date.now()/900000)*900000, open: 100, close: 100, high: 100, low: 100, volume: 1 },
     ],
   };
   const target = {
@@ -100,8 +103,8 @@ try {
   // No outbound request: intercept every delivery call in-process.
   const messages: string[] = [];
   globalThis.fetch = async (_url, options) => {
-    messages.push(JSON.parse(String(options?.body)).text);
-    return new Response("{}", { status: 200 });
+    const body=options?.body; messages.push(body instanceof FormData ? String(body.get("caption")) : JSON.parse(String(body)).text);
+    return new Response('{"ok":true}', { status: 200 });
   };
   for (const row of (
     await db.query("SELECT id FROM deliveries WHERE destination_id=$1", [
@@ -171,6 +174,8 @@ try {
   );
 } finally {
   globalThis.fetch = originalFetch;
+  if(originalEncryptionKey===undefined)delete process.env.DATA_ENCRYPTION_KEY;
+  else process.env.DATA_ENCRYPTION_KEY=originalEncryptionKey;
   await db.query("DELETE FROM deliveries WHERE destination_id=$1", [
     destination,
   ]);

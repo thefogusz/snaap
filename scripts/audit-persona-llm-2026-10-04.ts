@@ -62,7 +62,7 @@ const cases = [
     prompt:
       "สร้างเซตอัป Binance Spot BTC/USDT 5m ให้เข้าเมื่อ close > EMA20, close > EMA50, close > EMA100, close > EMA200, RSI14 > 50, RSI14 < 70, volume > 1000 ต้องครบทั้ง 7 ข้อ ไม่ต้องออก ไม่มี cooldown แจ้งเตือนในแอป",
     expect:
-      "Create a valid seven-condition draft; the current maximum is twenty conditions",
+      "Accept all seven requested conditions within the 24-condition maximum; preserve all parameters",
   },
   {
     id: "injection",

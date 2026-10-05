@@ -1,4 +1,5 @@
-import { frames, type Strategy } from "./domain/engine.js";
+import { type Strategy } from "./domain/engine.js";
+import { lastClosedBoundary } from "../dist/timeframes.js";
 
 export type MonitorTarget = {
   ruleId: string;
@@ -19,7 +20,7 @@ export function monitorBatches(
   for (const row of rows) {
     const spec = row.spec;
     const close =
-      Math.floor(now / frames[spec.timeframe]) * frames[spec.timeframe];
+      lastClosedBoundary(now, spec.timeframe);
     for (const exchange of spec.exchange)
       for (const pair of spec.pairs) {
         total++;

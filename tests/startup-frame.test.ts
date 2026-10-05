@@ -34,7 +34,7 @@ function bootFixture(failure = false) {
   let revealed = 0;
   const failures: string[] = [];
   const context = vm.createContext({
-    directionToolsReady: Promise.resolve(), indicatorCatalogReady: Promise.resolve(), entryFlexReady: Promise.resolve(),
+    companionScriptsReady: Promise.resolve(), setupLimitsReady: Promise.resolve(), timeframeToolsReady: Promise.resolve(), directionToolsReady: Promise.resolve(), indicatorCatalogReady: Promise.resolve(), entryFlexReady: Promise.resolve(),
     state: {draft: {}, me: null}, workbench: {hidden: false}, status: {textContent: '', hidden: true},
     healthReady: Promise.resolve(),
     api: async (url: string) => url === '/health' ? health.promise : {local: false},
@@ -95,4 +95,13 @@ test('recovery starts history, context and images together and waits for them be
   jobs[2].resolve();
   await running;
   assert.equal(context.recoveryReady, true);
+});
+
+// Dynamic imports may resolve after DOMContentLoaded while images keep readyState interactive.
+test('startup readiness cannot miss DOMContentLoaded during dynamic imports', async () => {
+  let loaded = () => {};
+  const context = vm.createContext({document: {readyState: 'interactive', addEventListener: (_event: string, fn: () => void) => {loaded = fn;}}});
+  vm.runInContext(workbench.slice(0, workbench.indexOf('const setupChangesReady')) + ';globalThis.ready=companionScriptsReady;', context);
+  loaded();
+  assert.equal(await Promise.race([context.ready.then(() => 'ready'), new Promise(resolve => setTimeout(() => resolve('missed'), 100))]), 'ready');
 });

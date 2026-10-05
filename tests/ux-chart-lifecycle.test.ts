@@ -17,7 +17,7 @@ function fixture() {
     state: { draft }, workbench: { hidden: false, dataset: { tab: 'split' } },
     studio: { querySelector: () => element, querySelectorAll: () => [element] },
     chartPicker: { ...element }, chartPickerWrap: { ...element }, canvas: { ...element }, status: element,
-    chartFrame: null,
+    chartFrame: null, window: {SnaapStudio: {chartIndicators: () => []}}, hasEntryCondition: () => true,
     conditionFrames: (draft: {timeframe: string}) => [draft.timeframe],
     framePicker: { dataset: {}, innerHTML: '', querySelectorAll: () => [] },
     esc: String, directionLabel: () => 'Spot', stop: () => {},

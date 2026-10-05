@@ -9,7 +9,7 @@ function fixture(fail = false, pending?: Promise<void>) {
   const element = () => ({ value: 'question', append(node: any) { if(node.src)painted.push(node); }, remove() {}, setAttribute() {}, querySelector: () => ({ textContent: '' }) });
   const context = vm.createContext({ state, workbench: { dataset: { tab: 'split' } }, location: {},
     document: { createElement: element }, $: (key: string) => { if (!elements.has(key)) elements.set(key, element()); return elements.get(key); }, $$: () => [],
-    sources: { querySelectorAll: () => [] }, message() {}, toast() {}, followingChat: false,
+    hasEntryCondition: () => true, window: {}, sources: { querySelectorAll: () => [] }, message() {}, toast() {}, followingChat: false,
     requestAnimationFrame() {}, scrollChatToLatest() {}, resizeChatInputs() {}, showDesigner() {},
     setTimeout: () => 1, clearTimeout() {}, ensureConversation: async () => {}, saveDraft: async () => {},
     renderImages() { visible = state.images.filter((image: any) => !image.sent).length; }, persistRecovery() {}, appendChatImages: (images: any[]) => painted.push(images),

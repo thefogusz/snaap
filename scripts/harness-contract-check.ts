@@ -50,12 +50,20 @@ process.env.AI_API_KEY = "test-fixture";
 process.env.AI_STANDARD_INPUT_USD_PER_MILLION = "0.25";
 process.env.AI_STANDARD_OUTPUT_USD_PER_MILLION = "2";
 process.env.AI_STANDARD_MAX_USD = "0.03";
-const pg = process.env.TEST_DATABASE_URL
-    ? { url: process.env.TEST_DATABASE_URL, stop: async () => {} }
-    : await localDatabase(),
-  db = database(pg.url);
-await migrate(db);
+const pg = process.env.TEST_DATABASE_URL ? {url:process.env.TEST_DATABASE_URL,stop:async()=>{}} : await localDatabase();
+const admin = database(pg.url), schema = "harness_contract_" + Date.now();
+await admin.query(`CREATE SCHEMA "${schema}"`);
+const fixtureUrl = new URL(pg.url);fixtureUrl.searchParams.set('options','-c search_path='+schema);
+const db = database(fixtureUrl.toString());await migrate(db);
 const { app } = await buildApp(db, { local: true });
+(ccxt as any).binance=class {
+ has={fetchOHLCV:true};markets={'BTC/USDT':{symbol:'BTC/USDT',active:true,spot:true}};
+ async loadMarkets(){return this.markets;}
+ async fetchOHLCV(_symbol:string,frame:keyof typeof frames,since:number,limit:number){
+  const step=frames[frame],end=Math.floor(Date.now()/step)*step;
+  return Array.from({length:600},(_,i)=>[end-(600-i)*step,100,102,98,100+i*.01,10]).filter(r=>r[0]>=since).slice(0,limit);
+ }
+};
 const owner = randomUUID(),
   token = randomUUID(),
   headers = {
@@ -381,6 +389,126 @@ try {
   assert.equal(mixedImages.json().error.code, 'IMAGE_LIMIT');
   assert.equal(requests.length, beforeTooMany);
   console.log('PASS five uploaded images reach provider; six and mixed overflow rejected without silent truncation');
+  const studioSpec={schemaVersion:2,name:'Studio contract',exchange:['Binance'],market:'Spot',pairs:['BTC/USDT'],timeframe:'5m',entry:{kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe:'1h'},right:{kind:'CONSTANT',value:100}},stages:[],cooldownBars:0,destinations:[]};
+  const studioTurn=(editorContext:unknown,draft:unknown=studioSpec)=>app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'Explain selected bar',mode:'standard',draft,editorContext}});
+  const beforeInvalid=requests.length;
+  assert.equal((await studioTurn({pair:'ETH/USDT',chartTimeframe:'4h'})).statusCode,400);
+  assert.equal((await studioTurn({pair:'BTC/USDT',chartTimeframe:'4h',conditionPath:'entry.left'})).statusCode,400);
+  assert.equal(requests.length,beforeInvalid);
+  const selectedTime=Math.floor(Date.now()/frames['5m'])*frames['5m']-1;
+  reply=async body=>{
+    if(body.input.some((m:any)=>m.type==='function_call_output'))return response('Evidence inspected');
+    const r=response('');r.output=[{id:'fc_'+randomUUID(),type:'function_call',call_id:'call_'+randomUUID(),name:'inspect_setup_bar',arguments:JSON.stringify({pair:'BTC/USDT',selectedBarTime:selectedTime})}] as any;return r;
+  };
+  const inspected=await studioTurn({pair:'BTC/USDT',chartTimeframe:'4h',conditionPath:'entry',selectedBarTime:selectedTime});
+  assert.equal(inspected.statusCode,200,inspected.body);
+  const inspectOutput=JSON.parse(requests.at(-1).input.findLast((m:any)=>m.type==='function_call_output').output);
+  assert.ok(inspectOutput.bar.time<=selectedTime);
+  assert.equal(inspectOutput.evaluationTimeframe,'5m');
+  assert.equal(inspectOutput.source.pair,'BTC/USDT');
+  assert.ok(requests.at(-1).instructions.includes('at most 24 leaf COMPARE'));
+  assert.ok(requests.at(-1).instructions.includes('navigation only, not market evidence'));
+  console.log('PASS studio context rejects wrong pair/path before provider; inspect tool returns real closed-bar evidence on evaluation timeframe');
+
+  await db.query("INSERT INTO entitlements(owner_id,pro_until) VALUES($1,now()+interval '1 day') ON CONFLICT(owner_id) DO UPDATE SET pro_until=excluded.pro_until",[owner]);
+  const auditTurn=async (text:string,extra:any={})=>{
+    const conversation=(await app.inject({method:'POST',url:'/api/v1/conversations',headers,payload:{title:'Harness audit'}})).json();
+    return app.inject({method:'POST',url:`/api/v1/conversations/${conversation.id}/turns`,headers,payload:{text,mode:'standard',...extra}});
+  };
+  const toolResponse=(name:string,args:unknown)=>{
+    const r=response('');r.output=[{id:'fc_'+randomUUID(),type:'function_call',call_id:'call_'+randomUUID(),name,arguments:JSON.stringify(args)}] as any;return r;
+  };
+  reply=async()=>response('ส่งร่างเข้า editor แล้วครับ');
+  const beforeUnrequested=requests.length;
+  const unrequested=await auditTurn('RSI คืออะไร',{draft:studioSpec});
+  assert.equal(unrequested.statusCode,502,unrequested.body);
+  assert.equal(unrequested.json().error.code,'AI_ACTION_MISSING');
+  assert.equal(requests.length,beforeUnrequested+1,'analysis must not force a draft change to repair a false success claim');
+  console.log('PASS analysis cannot claim a draft edit or force an unrequested repair');
+
+  reply=async()=>{const r=response('complete');delete (r as any).usage;return r;};
+  const usageMissing=await auditTurn('อธิบาย EMA');
+  assert.equal(usageMissing.statusCode,502,usageMissing.body);
+  assert.equal(usageMissing.json().error.code,'AI_USAGE_INVALID');
+  reply=async()=>{const r=response('complete');r.usage={input_tokens:200000,output_tokens:100,total_tokens:200100};return r;};
+  const overspent=await auditTurn('อธิบาย EMA');
+  assert.equal(overspent.statusCode,200,overspent.body);
+  assert.equal((await db.query('SELECT status FROM usage_ledger WHERE id=$1',[overspent.json().runId])).rows[0].status,'COMPLETED');
+  console.log('PASS missing usage is rejected and high-cost responses retain valid accounting');
+
+  const macdSpec={...studioSpec,entry:{kind:'COMPARE',op:'CROSS_ABOVE',left:{kind:'INDICATOR',name:'MACD',period:12,slow:26,signal:9,timeframe:'5m'},right:{kind:'INDICATOR',name:'MACD_SIGNAL',period:12,slow:26,signal:9,timeframe:'5m'}}};
+  const invalidMacd=structuredClone(macdSpec);Object.assign(invalidMacd.entry.left,{params:{slow:26,signal:9}});
+  let repairRound=0;
+  reply=async body=>{
+    if(repairRound++===0)return toolResponse('propose_strategy',{spec:invalidMacd});
+    if(repairRound===2){
+      const output=JSON.parse(body.input.findLast((m:any)=>m.type==='function_call_output').output);
+      assert.equal(output.valid,false);assert.ok(output.parameterGuide.includes('not inside params'));
+      return toolResponse('propose_strategy',{spec:macdSpec});
+    }
+    return response('ปรับเงื่อนไขร่างแล้วครับ');
+  };
+  const repaired=await auditTurn('เปลี่ยนเป็น MACD ตัดขึ้น Signal 12/26/9',{draft:studioSpec});
+  assert.equal(repaired.statusCode,200,repaired.body);
+  assert.equal(repaired.json().draft.entry.left.slow,26);
+  assert.ok(repaired.json().changes.length>0);
+  const condition=(n:number)=>({kind:'GROUP',op:'AND',children:Array.from({length:Math.ceil(n/12)},(_,group)=>({kind:'GROUP',op:'AND',children:Array.from({length:Math.min(12,n-group*12)},()=>({kind:'COMPARE',op:'>',left:{kind:'CONSTANT',value:2},right:{kind:'CONSTANT',value:1}}))}))});
+  const full={...studioSpec,entry:condition(24)};
+  const tooMany={...studioSpec,entry:condition(25)};
+  const before25=requests.length;
+  assert.equal((await auditTurn('อธิบายร่าง',{draft:tooMany})).statusCode,400);
+  assert.equal(requests.length,before25);
+  let limitRound=0;
+  reply=async body=>{
+    if(limitRound++===0)return toolResponse('propose_strategy',{spec:tooMany});
+    if(limitRound===2){assert.equal(JSON.parse(body.input.findLast((m:any)=>m.type==='function_call_output').output).valid,false);return toolResponse('propose_strategy',{spec:full});}
+    return response('ปรับเงื่อนไขร่างแล้วครับ');
+  };
+  const atLimit=await auditTurn('สร้างร่าง 24 เงื่อนไข',{draft:studioSpec});
+  assert.equal(atLimit.statusCode,200,atLimit.body);
+  assert.equal(atLimit.json().draft.entry.children.reduce((sum:number,g:any)=>sum+g.children.length,0),24);
+  console.log('PASS invalid MACD parameters repair to a real diff; API and tool enforce 24/25 condition boundary');
+
+  reply=async()=>{const r=response('complete');r.usage.input_tokens=-1;return r;};
+  assert.equal((await auditTurn('อธิบาย RSI')).json().error.code,'AI_USAGE_INVALID');
+  reply=async()=>response('','completed');
+  assert.equal((await auditTurn('อธิบาย RSI')).json().error.code,'AI_EMPTY');
+  let skillRound=0;
+  reply=async body=>{
+    if(skillRound++===0)return toolResponse('read_skill',{name:'../../secrets'});
+    const output=JSON.parse(body.input.findLast((m:any)=>m.type==='function_call_output').output);
+    assert.equal(output.error,'Unknown Snaap skill');return response('ตอบจากบริบทปัจจุบัน');
+  };
+  assert.equal((await auditTurn('อธิบาย RSI')).statusCode,200);
+  reply=async()=>toolResponse('read_skill',{name:'indicator-guide'});
+  const tooManyTools=await auditTurn('อธิบาย RSI');
+  assert.equal(tooManyTools.statusCode,502);
+  assert.equal(tooManyTools.json().error.code,'AI_TOOL_LIMIT');
+  const failedRuns=await db.query("SELECT r.id,l.status,l.estimated_usd FROM agent_runs r JOIN usage_ledger l ON l.id=r.id WHERE r.owner_id=$1 AND r.status='FAILED'",[owner]);
+  assert.ok(failedRuns.rows.every(row=>row.status==='REFUNDED'&&Number(row.estimated_usd)>=0));
+  console.log('PASS empty output, invalid usage, specialist allowlist and tool budget fail safely with quota refunds');
+
+  reply=async()=>{throw new Error('fixture provider failure');};
+  assert.equal((await auditTurn('อธิบาย RSI')).json().error.code,'AI_UNAVAILABLE');
+  const changingImage=randomUUID();
+  await db.query("INSERT INTO assets(id,owner_id,name,mime,storage_path,metadata,purpose,conversation_id) SELECT $1,owner_id,'changing image',mime,storage_path,metadata,purpose,conversation_id FROM assets WHERE id=$2",[changingImage,imageIds[0]]);
+  reply=async()=>{await db.query('DELETE FROM assets WHERE id=$1',[changingImage]);return response('STALE_CONTEXT_ANSWER');};
+  const contextChanged=await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'ตรวจภาพที่แนบ',mode:'standard',imageIds:[changingImage]}});
+  assert.equal(contextChanged.statusCode,409,contextChanged.body);
+  assert.equal(contextChanged.json().error.code,'CONTEXT_CHANGED');
+  assert.equal((await db.query("SELECT count(*) n FROM messages WHERE conversation_id=$1 AND role='assistant' AND content='STALE_CONTEXT_ANSWER'",[id])).rows[0].n,'0');
+  console.log('PASS provider outage refunds quota and image deletion during a turn prevents stale assistant persistence');
+
+  if(process.env.RUN_HARNESS_TIMEOUT_CHECK==='true'){
+    reply=async()=>new Promise(resolve=>setTimeout(()=>resolve(response('LATE_PROVIDER_ANSWER')),46000));
+    const timeout=await auditTurn('อธิบาย RSI');
+    assert.equal(timeout.statusCode,502,timeout.body);
+    assert.equal(timeout.json().error.code,'AI_TIMEOUT');
+    assert.equal((await db.query("SELECT count(*) n FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.owner_id=$1 AND m.role='assistant' AND m.content='LATE_PROVIDER_ANSWER'",[owner])).rows[0].n,'0');
+    assert.equal((await db.query("SELECT l.status FROM usage_ledger l JOIN agent_runs r ON r.id=l.id WHERE r.owner_id=$1 ORDER BY r.created_at DESC LIMIT 1",[owner])).rows[0].status,'REFUNDED');
+    console.log('PASS real provider request timeout returns a retryable error and does not accept late output');
+  }
+
   let providerAttempts = 0;
   reply = async () => ++providerAttempts === 1 ? { error: { code: 503 } } : response('retry recovered');
   assert.equal((await turn('temporary provider failure')).statusCode, 200);
@@ -459,7 +587,7 @@ try {
     const created = await turn('สร้างร่าง 20 เงื่อนไข แยก 4h 1h 15m 5m');
     assert.equal(created.statusCode,200,created.body);
     assert.deepEqual(created.json().draft,mtf);
-    assert.match(requests.at(-1).instructions,/chartFrame is a view-only preview request field/);
+    assert.match(requests.at(-1).instructions,/is a view-only preview request field/);
     const saved = await app.inject({method:'PUT',url:`/api/v1/conversations/${id}/draft`,headers,payload:{spec:created.json().draft,expectedRevision:0}});
     assert.equal(saved.statusCode,200,saved.body);
     const revision = saved.json().draft_revision;
@@ -479,7 +607,7 @@ try {
       assert.deepEqual(chart.timeline,baseline.timeline);
       assert.deepEqual(chart.events,baseline.events);
     }
-    assert.deepEqual([...fetchedFrames].sort(),['15m','1h','4h','5m'].sort());
+    assert.ok(['15m','1h','4h','5m'].every(frame=>fetchedFrames.has(frame)));
     const stored = (await db.query('SELECT draft,draft_revision FROM conversations WHERE id=$1',[id])).rows[0];
     assert.deepEqual(stored.draft,mtf);
     assert.equal(stored.draft_revision,revision);
@@ -527,8 +655,8 @@ try {
     assert.equal((await view('4h')).source.evaluationFrame,'5m');
 
     const rejected = await app.inject({method:'POST',url:'/api/v1/preview',headers,payload:{spec:mtf,chartFrame:'1d'}});
-    assert.equal(rejected.statusCode,400);
-    assert.equal(rejected.json().error.code,'CHART_FRAME');
+    assert.equal(rejected.statusCode,200,rejected.body);
+    assert.equal(rejected.json().source.frame,'1d');
     assert.equal(strategySchema.safeParse({...mtf,chartFrame:'4h'}).success,false);
     round=0;
     reply = async body => {
@@ -584,6 +712,7 @@ try {
 } finally {
   await app.close();
   await db.end();
+  await admin.query(`DROP SCHEMA "${schema}" CASCADE`);await admin.end();
   await pg.stop();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 }

@@ -1,4 +1,5 @@
 import ccxt from "ccxt";
+import { lastClosedBoundary } from "../dist/timeframes.js";
 import {
   frames,
   strategySchema,
@@ -55,7 +56,7 @@ export function closedStreamCandles(
       (r) =>
         r.length >= 6 &&
         r.slice(0, 6).every(Number.isFinite) &&
-        r[0] % frames[frame] === 0,
+        lastClosedBoundary(r[0], frame) === r[0],
     )
     .sort((a, b) => a[0] - b[0]);
   const nextStart = valid.at(-1)?.[0];

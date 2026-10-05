@@ -17,16 +17,13 @@ import {
 import { explain, explainEntry, progress, seriesFreshness, usedFrames } from "./insights.js";
 
 // Rendering and alerts deliberately use the same evaluator, including closed-HTF rules.
-export function preview(
-  spec: Strategy,
-  series: Series,
-  extra: Operand[] = [],
-  chartFrame?: keyof typeof frames,
-  now = Date.now(),
-) {
-  const candles = series[spec.timeframe] ?? [];
-  const chartCandles = chartFrame ? (series[chartFrame] ?? []) : candles;
+export function preview(spec: Strategy, series: Series, extra: Operand[] = [], chartTimeframe?: Strategy["timeframe"], chartOnlyOrNow: boolean | number = false, now = Date.now()) {
+  const chartOnly = typeof chartOnlyOrNow === "boolean" ? chartOnlyOrNow : false;
+  if (typeof chartOnlyOrNow === "number") now = chartOnlyOrNow;
+  const frame = chartTimeframe ?? spec.timeframe;
+  const candles = series[frame] ?? [];
   const operands = new Map<string, Operand>();
+  const evaluationFrames = new Set<string>([spec.timeframe]);
   extra.forEach((o) => {
     if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
   });
@@ -34,26 +31,38 @@ export function preview(
     if (c.kind === "GROUP") c.children.forEach(walk);
     else if (c.kind === "HOLD") walk(c.condition);
     else
-      for (const o of [c.left, c.right])
+      for (const o of [c.left, c.right]) {
+        if (o.kind === "INDICATOR" || o.kind === "PRICE") evaluationFrames.add(o.timeframe);
         if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
+      }
   };
-  strategyConditions(spec).forEach(walk);
-  const overlays = [...operands.values()]
-    .filter(
-      (o) => !chartFrame || ("timeframe" in o && o.timeframe === chartFrame),
-    )
-    .map((o) => ({
-      operand: o,
-      points: chartCandles.map((c) => ({
-        time: c.time,
-        value:
-          value(o, series, c.time, undefined, chartFrame ?? spec.timeframe) ??
-          null,
-      })),
-    }));
+  if (!chartOnly) strategyConditions(spec).forEach(walk);
+  const chartOperands = [...operands.values()].filter(o => !chartTimeframe || (o.kind === "INDICATOR" && o.timeframe === frame));
+  const studies: {operand: Operand; chartOperand?: Operand}[] = chartOperands.map(operand => ({operand}));
+  // Complete the familiar MACD chart without adding strategy operands or conditions.
+  for (const operand of chartOperands) {
+    if (operand.kind !== 'INDICATOR' || operand.name !== 'MACD') continue;
+    for (const name of ['MACD_HIST', 'MACD_SIGNAL'] as const) {
+      const companion = {...operand,name};
+      const exists = chartOperands.some(o => o.kind === 'INDICATOR' && o.name === name &&
+        o.timeframe === operand.timeframe && o.period === operand.period &&
+        (o.slow ?? 26) === (operand.slow ?? 26) && (o.signal ?? 9) === (operand.signal ?? 9) &&
+        (o.source ?? 'close') === (operand.source ?? 'close'));
+      if (!exists) studies.push({operand:companion,chartOperand:operand});
+    }
+  }
+  const overlays = studies.map(({operand:o,chartOperand}) => ({
+    operand: o,
+    ...(chartOperand ? {chartOperand} : {}),
+    points: candles.map((c) => ({
+      time: c.time,
+      value: value(o, series, c.time, undefined, frame) ?? null,
+    })),
+  }));
+  if (chartOnly) return { candles, overlays, timeline: [], chartTimeline: [], events: [], chartEvents: [], freshness: [], chartTimeframe: frame, evaluationTimeframe: spec.timeframe };
   let state = emptyLifecycle();
   const branchSpecs = strategyBranches(spec);
-  const timeline = candles.map((bar) => {
+  const timeline = (series[spec.timeframe] ?? []).map((bar) => {
     const branches = branchSpecs.map((branch) => {
       const prior =
         spec.side === "BOTH"
@@ -92,6 +101,10 @@ export function preview(
     state = advance(spec, series, bar, state).state;
     return {
       time: bar.time,
+      references: Object.entries(series).filter(([timeframe]) => evaluationFrames.has(timeframe)).map(([timeframe, candles]) => {
+        const reference = candles?.findLast(c => c.time <= bar.time);
+        return { timeframe, closedAt: reference?.time ?? null, stale: !reference || bar.time - reference.time >= frames[timeframe as keyof typeof frames] };
+      }),
       entry,
       stages,
       exit,
@@ -152,7 +165,7 @@ export function preview(
   });
   // Viewing another timeframe must never change the strategy's evaluation clock.
   let index = -1;
-  const chartTimeline = chartCandles.map((c) => {
+  const chartTimeline = candles.map((c) => {
     while (index + 1 < timeline.length && timeline[index + 1].time <= c.time)
       index++;
     const bar = timeline[index];
@@ -160,18 +173,19 @@ export function preview(
   });
   const events = replay(spec, series);
   const chartEvents = events.flatMap((e) => {
-    const bar = chartCandles.find((c) => c.time >= e.time);
-    return bar && bar.time - e.time < frames[chartFrame ?? spec.timeframe]
+    const bar = candles.find((c) => c.time >= e.time);
+    return bar && bar.time - e.time < frames[frame]
       ? [{ ...e, time: bar.time, signalTime: e.time }]
       : [];
   });
   return {
-    candles: chartCandles,
+    candles: candles,
     overlays,
     timeline,
     chartTimeline,
     events,
     chartEvents,
+    chartTimeframe: frame, evaluationTimeframe: spec.timeframe,
     freshness: seriesFreshness(spec, series, now),
   };
 }

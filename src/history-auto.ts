@@ -27,6 +27,7 @@ export function automaticHistory(
 ) {
   let busy = false,
     stopping = false;
+  let activeTick:Promise<void>|undefined;
   async function persist(
     row: any,
     incoming: any[],
@@ -34,6 +35,8 @@ export function automaticHistory(
     status = "SYNCING",
   ) {
     await transaction(db, async (c) => {
+      // Match manual sync lock order. Import FK checks also lock this owner.
+      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[row.owner_id]);
       const found = await c.query(
         "SELECT id FROM exchange_connections WHERE id=$1 AND owner_id=$2 FOR UPDATE",
         [row.id, row.owner_id],
@@ -284,13 +287,15 @@ export function automaticHistory(
       busy = false;
     }
   }
-  const timer = setInterval(() => {
-    void tick();
-  }, 30000);
+  function startTick(){
+    if(!busy&&!stopping)activeTick=tick();
+  }
+  const timer = setInterval(startTick, 30000);
   timer.unref();
   app.addHook("onClose", async () => {
     stopping = true;
     clearInterval(timer);
+    await activeTick;
   });
   return {
     async enable(owner: string, id?: string) {
@@ -298,14 +303,14 @@ export function automaticHistory(
         "UPDATE exchange_connections SET auto_sync=true,status=CASE WHEN status IN ('VERIFIED','PARTIAL_SYNC') AND auto_sync=false THEN 'VERIFIED' ELSE status END WHERE owner_id=$1 AND ($2::uuid IS NULL OR id=$2)",
         [owner, id ?? null],
       );
-      void tick();
+      startTick();
     },
     async retry(owner: string, id: string) {
       await db.query(
         "UPDATE exchange_connections SET auto_sync=true,status='VERIFIED' WHERE owner_id=$1 AND id=$2 AND status<>'SYNCING'",
         [owner, id],
       );
-      void tick();
+      startTick();
     },
   };
 }

@@ -20,6 +20,9 @@ import { extendedIndicators } from "../../dist/indicator-catalog.js";
 import { strategySeries, instruments } from "../markets.js";
 import { pricing, outputLimit } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
+import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
+import { availableTimeframes } from "../../dist/timeframes.js";
+import { editorContextSchema, validEditorContext, inspectSetupBar } from "../domain/studio.js";
 import {
   claimsDraftChange,
   requestsDraftChange,
@@ -68,6 +71,7 @@ export function registerHarness(
         draft: strategySchema
           .nullish()
           .transform((draft) => draft ?? undefined),
+        editorContext: editorContextSchema.optional(),
         selection: selection.optional(),
         imageIds: z.array(z.string().uuid()).max(5, "แนบได้สูงสุด 5 ภาพต่อข้อความ").default([]),
         useMyData: z.boolean().default(false),
@@ -82,6 +86,8 @@ export function registerHarness(
       })
       .strict()
       .parse(req.body);
+    if (input.editorContext && !validEditorContext(input.draft, input.editorContext))
+      throw new ApiError(400, "EDITOR_CONTEXT", "บริบทกราฟไม่ตรงกับร่างปัจจุบัน กรุณาเลือกเงื่อนไขอีกครั้ง");
     // Keep the deep implementation available for later development, but block entry now.
     if (["deep"].includes(input.mode))
       throw new ApiError(
@@ -373,9 +379,13 @@ export function registerHarness(
         required: ["spec"],
         additionalProperties: false,
       };
-      let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use exactly one exchange and one or more supported pairs (at most 5000). Preserve all existing pairs unless the user asks to change them. A setup has at most 20 leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than 20; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
+      let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use exactly one exchange and one or more supported pairs (at most 5000). Preserve all existing pairs unless the user asks to change them. A setup has at most ${MAX_SETUP_CONDITIONS} leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than ${MAX_SETUP_CONDITIONS}; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
       instructions += '\nEntry flexibility: entryMatchPercent is the single optional integer 1..100 setting. Omit it or use 100 for the original strict entry. Lower values require at least ceil(entryUnitCount * entryMatchPercent / 100) matching units, with equal weight for every unit. Flatten AND entry groups; each OR or HOLD group stays one indivisible unit. The same percentage applies independently to Long and Short, including an independent short branch; do not combine matches from opposite sides. Preserve entryMatchPercent unless asked to change it. Waiting stages, exits, cancels and crossing timing remain strict. There are no required-condition flags, per-condition weights or crossing-window settings. Matching percent is not win probability. Tool proposals change a draft only; saving is separate.';
       const loadedSpecialists = new Set<string>();
+      instructions += "\nNative timeframes (minimum 5m, maximum 1w; no monthly or custom intervals): " + JSON.stringify(Object.fromEntries(["Binance", "Bybit", "OKX", "Bitget", "MEXC"].map(exchange => [exchange, {Spot: availableTimeframes([exchange], "Spot"), Futures: availableTimeframes([exchange], "Perpetual Futures")}])));
+      instructions +=
+        "\nEditor focus (navigation only, not market evidence): " + JSON.stringify(input.editorContext ?? null) +
+        ". Changing the visible chart timeframe does not change the strategy evaluation timeframe. Use inspect_setup_bar for evidence at a selected candle. Do not infer TRUE/FALSE or prices from the editor focus. Preserve all unrequested fields and never activate a setup.";
       instructions +=
         "\nAdditional supported indicators (name, parameter defaults): " +
         JSON.stringify(
@@ -387,11 +397,11 @@ export function registerHarness(
             ),
           })),
         ) +
-        ". Put period in operand.period; other parameters in operand.params. Do not use params for legacy indicators. VWAP_SESSION resets at UTC midnight; Ichimoku SPAN_A/B are displaced historical cloud values at the evaluation time. SUPERTREND_DIRECTION is +1 bullish, -1 bearish. No arbitrary Pine execution.";
+        ". For extended indicators put period in operand.period and other parameters in operand.params. Legacy indicators never use params: MACD/MACD_SIGNAL/MACD_HIST use operand.period (fast), operand.slow and operand.signal; BB_* use operand.period and operand.deviation. VWAP_SESSION resets at UTC midnight; Ichimoku SPAN_A/B are displaced historical cloud values at the evaluation time. SUPERTREND_DIRECTION is +1 bullish, -1 bearish. No arbitrary Pine execution.";
       instructions +=
         '\nTool execution is real only when you issue a function_call in THIS request. Describing a call in prose does not execute it. For every requested create/edit/remove operation with known fields, call propose_strategy with the complete updated spec before saying it was changed. destinations may be [] (in-app inbox is always available); never invent destination IDs. Minimal valid example: {"schemaVersion":2,"name":"Example","exchange":["Binance"],"market":"Spot","side":"SPOT","pairs":["BTC/USDT"],"timeframe":"1h","entry":{"kind":"COMPARE","op":">","left":{"kind":"PRICE","field":"close","timeframe":"1h"},"right":{"kind":"INDICATOR","name":"EMA","period":200,"timeframe":"1h"}},"stages":[],"cooldownBars":0,"destinations":[]}. GROUP nodes have kind GROUP, op AND/OR, children. Constants have only kind CONSTANT and value. Omit optional exit/cancel keys to remove them.';
       instructions += '\nLegacy MACD, MACD_SIGNAL and MACD_HIST use top-level period (fast), slow and signal; never put these in params. Example operand: {"kind":"INDICATOR","name":"MACD","period":12,"slow":26,"signal":9,"timeframe":"5m"}. EMA and RSI likewise use top-level period and timeframe without params.';
-      instructions += '\nMulti-timeframe chart views: spec.timeframe is the signal evaluation clock; each PRICE or INDICATOR operand keeps its own timeframe. Preserve these independently when creating or editing a multi-timeframe setup. The editor offers one chart button per used timeframe above the chart and a ดูกราฟ shortcut inside each comparison; each view shows its own candles and indicators. chartFrame is a view-only preview request field, never a StrategySpec field or a propose_strategy/replay_strategy argument. A request to view another chart timeframe does not authorize editing spec.timeframe or any condition; explain the matching chart button without proposing a strategy change. replay_strategy always evaluates the current draft on spec.timeframe with all required operand timeframes; selecting a chart view cannot change signals. Do not claim you switched the UI chart because there is no chart-navigation tool.';
+      instructions += '\nMulti-timeframe chart views: spec.timeframe is the signal evaluation clock; each PRICE or INDICATOR operand keeps its own timeframe. Preserve these independently when creating or editing a multi-timeframe setup. The editor offers chart buttons for native exchange timeframes from 5m through 1w above the chart and a ดูกราฟ shortcut inside each comparison; each view shows its own candles and indicators. chartTimeframe (and compatibility alias chartFrame) is a view-only preview request field, never a StrategySpec field or a propose_strategy/replay_strategy argument. A request to view another chart timeframe does not authorize editing spec.timeframe or any condition; explain the matching chart button without proposing a strategy change. replay_strategy always evaluates the current draft on spec.timeframe with all required operand timeframes; selecting a chart view cannot change signals. Do not claim you switched the UI chart because there is no chart-navigation tool.';
       const maxOutputTokens = outputLimit(input.mode);
       let completed = false;
       let requireProposal = false;
@@ -478,21 +488,34 @@ export function registerHarness(
                 parameters: toolParameters,
                 strict: false,
               },
+              {
+                type: "function",
+                name: "inspect_setup_bar",
+                description: "Inspect lifecycle-aware evidence at the latest closed evaluation candle not after selectedBarTime, for the current draft and a selected pair. Uses public candles; no orders, profit or monitoring claims.",
+                parameters: { type: "object", properties: { pair: { type: "string" }, selectedBarTime: { type: "integer", minimum: 0 } }, required: ["pair", "selectedBarTime"], additionalProperties: false },
+                strict: true,
+              },
             ],
           },
           deadline, trace,
         );
-        inputTokens += response.usage?.input_tokens ?? 0;
-        outputTokens += response.usage?.output_tokens ?? 0;
-        cost = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
+        const roundInput = response.usage?.input_tokens;
+        const roundOutput = response.usage?.output_tokens;
+        const validUsage = Number.isSafeInteger(roundInput) && roundInput! >= 0 &&
+          Number.isSafeInteger(roundOutput) && roundOutput! >= 0;
         trace.push({
           round,
           model: response.model,
-          inputTokens: response.usage?.input_tokens,
-          outputTokens: response.usage?.output_tokens,
+          inputTokens: validUsage ? roundInput : undefined,
+          outputTokens: validUsage ? roundOutput : undefined,
           status: response.status,
           incomplete: response.incomplete_details,
         });
+        if (!validUsage)
+          throw new ApiError(502, 'AI_USAGE_INVALID', 'AI ส่งข้อมูลการใช้งานไม่ครบ จึงวิเคราะห์ต่อไม่ได้ คืนโควตาแล้ว กรุณาลองใหม่');
+        inputTokens += roundInput!;
+        outputTokens += roundOutput!;
+        cost = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
         if (response.status !== "completed")
           throw new ApiError(
             502,
@@ -505,10 +528,9 @@ export function registerHarness(
         if (!calls.length) {
           if (
             !draft &&
-            requestsDraftChange(input.text) &&
             claimsDraftChange(text)
           ) {
-            if (requireProposal)
+            if (requireProposal || !requestsDraftChange(input.text))
               throw new ApiError(
                 502,
                 "AI_ACTION_MISSING",
@@ -525,11 +547,7 @@ export function registerHarness(
         requireProposal = false;
         for (const call of calls) {
           if (++toolCount > 6)
-            throw new ApiError(
-              502,
-              "AI_TOOL_LIMIT",
-              "AI ใช้ขั้นตอนเกินขอบเขต กรุณาลดขอบเขตคำขอ คืนโควตาแล้ว",
-            );
+            throw new ApiError(502, 'AI_TOOL_LIMIT', 'AI ใช้เครื่องมือครบขอบเขตคำขอแล้ว คืนโควตาแล้ว กรุณาแบ่งการวิเคราะห์เป็นขั้นย่อย');
           let result: unknown = { error: "Unknown tool" };
           if (call.name === "read_skill") {
             let skillArguments: unknown;
@@ -663,13 +681,24 @@ export function registerHarness(
                   );
                 draft = checked.data;
                 result = { valid: true, activation: false };
-              } else result = { valid: false, errors: checked.error.issues };
+              } else result = { valid: false, errors: checked.error.issues, parameterGuide: 'Legacy MACD/MACD_SIGNAL/MACD_HIST use period (fast), slow and signal directly on the operand, not inside params. Legacy BB_* use period and deviation directly. Extended indicators use params for their catalog parameters other than period. Preserve all conditions and repair only the reported errors.' };
             } catch {
               result = {
                 valid: false,
                 error:
                   "Cannot validate draft or instrument. Select exactly one exchange and supported pairs; ask for missing details, never invent instruments.",
               };
+            }
+          }
+          if (call.name === "inspect_setup_bar") {
+            try {
+              const args = z.object({ pair: z.string(), selectedBarTime: z.number().int().nonnegative() }).strict().parse(JSON.parse(call.arguments));
+              const spec = strategySchema.parse(draft ?? input.draft);
+              if (spec.exchange.length !== 1 || !spec.pairs.includes(args.pair)) throw new Error("Invalid target");
+              const series = await strategySeries(spec, spec.exchange[0], args.pair);
+              result = { source: { exchange: spec.exchange[0], market: spec.market, pair: args.pair, asOf: new Date().toISOString() }, ...inspectSetupBar(spec, series, args.selectedBarTime) };
+            } catch {
+              result = { error: "Cannot inspect selected bar; current draft, supported pair and closed market history are required. Do not invent evidence." };
             }
           }
           if (call.name === "replay_strategy") {
@@ -813,7 +842,8 @@ export function registerHarness(
       trace.push({
         failure: {
           code:
-            error instanceof ApiError ? error.code : "PROVIDER_OR_TOOL_FAILURE",
+            error instanceof ApiError ? error.code :
+              error instanceof OpenAI.APIConnectionTimeoutError || deadline.aborted ? 'AI_TIMEOUT' : 'PROVIDER_OR_TOOL_FAILURE',
           ...providerFailureDetails(error),
         },
       });
@@ -838,6 +868,8 @@ export function registerHarness(
         [runId, JSON.stringify(trace)],
       );
       if (error instanceof ApiError) throw error;
+      if(error instanceof OpenAI.APIConnectionTimeoutError || deadline.aborted)
+        throw new ApiError(502,'AI_TIMEOUT','AI ตอบกลับไม่ทันเวลา คืนโควตาแล้ว กรุณาลองใหม่หรือแบ่งคำขอเป็นขั้นย่อย');
       const failure = providerFailureDetails(error);
       const reason = failure.status === 429 ? 'ผู้ให้บริการ AI จำกัดคำขอชั่วคราว'
         : [400, 422].includes(failure.status ?? 0) ? 'ผู้ให้บริการ AI ไม่รองรับรูปแบบคำขอนี้'

@@ -1,3 +1,4 @@
+import { lastClosedBoundary } from "../dist/timeframes.js";
 import { PgBoss } from "pg-boss";
 import type pg from "pg";
 import { randomUUID } from "node:crypto";
@@ -55,7 +56,7 @@ export async function evaluateTarget(
     )
   ).rows[0];
   const expectedClose =
-    Math.floor(Date.now() / frames[spec.timeframe]) * frames[spec.timeframe];
+    lastClosedBoundary(Date.now(), spec.timeframe);
   if (previous && Number(previous.state.lastTime) >= expectedClose) return;
   if (spec.market === "Perpetual Futures" && !spec.side) {
     await db.query(
@@ -171,7 +172,7 @@ export async function evaluateTarget(
     const after = new Date(current.activated_at).getTime();
     if (!stored)
       state.lastTime =
-        Math.floor(after / frames[spec.timeframe]) * frames[spec.timeframe];
+        lastClosedBoundary(after, spec.timeframe);
     for (const bar of series[spec.timeframe] ?? []) {
       if (bar.time > checkedAt) continue;
       if (bar.time <= after || bar.time <= state.lastTime) continue;

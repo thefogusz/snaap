@@ -1,3 +1,4 @@
+import { lastClosedBoundary } from "../../dist/timeframes.js";
 import {
   frames,
   strategyConditions,
@@ -14,7 +15,7 @@ import { entryUnits } from "../../dist/entry-flexibility.js";
 export function isValidCandle(c: Candle, frame: keyof typeof frames) {
   return (
     Object.values(c).every(Number.isFinite) &&
-    c.time % frames[frame] === 0 &&
+    lastClosedBoundary(c.time, frame) === c.time &&
     Math.min(c.open, c.high, c.low, c.close) > 0 &&
     c.volume >= 0 &&
     c.low <= Math.min(c.open, c.close) &&
@@ -28,7 +29,7 @@ export function freshness(
   now: number,
 ) {
   const step = frames[frame],
-    expectedClose = Math.floor(now / step) * step;
+    expectedClose = lastClosedBoundary(now, frame);
   const closed = candles.filter((c) => c.time <= expectedClose);
   const latestClose = closed.at(-1)?.time ?? null;
   const gap = closed.some(

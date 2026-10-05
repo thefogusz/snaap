@@ -1,4 +1,7 @@
 "use strict";
+// Register before dynamic imports can resume after DOMContentLoaded has fired.
+const companionScriptsReady = document.readyState === "complete" ? Promise.resolve() :
+  new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, {once:true}));
 const setupChangesReady = import('./setup-changes.js');
 let entryFlexUI;
 const entryFlexReady = import('./entry-flexibility-ui.js').then(module => entryFlexUI = module);
@@ -6,6 +9,9 @@ const assistantTextReady = import('./assistant-text.js');
 let healthReady = Promise.resolve();
 let indicatorCatalog;
 const indicatorCatalogReady=import('./indicator-catalog.js').then(m=>indicatorCatalog=m);
+let timeframeTools;
+const timeframeToolsReady = import('./timeframes.js').then(m => { timeframeTools = m; tf = m.TIMEFRAMES; });
+function setupTimeframes(d = state.draft) { return timeframeTools ? timeframeTools.availableTimeframes(d?.exchange, d?.market) : tf; }
 let directionTools;
 const directionToolsReady=import('./trade-direction.js').then(m=>directionTools=m);
 function directionLabel(side,market){return directionTools.directionLabel(side,market);}
@@ -51,8 +57,8 @@ const state = {
   crop: null,
   editorNotice: null,
 };
-const tf = ["5m", "15m", "1h", "4h", "1d"],
-  names = ["Binance", "Bybit", "OKX", "Bitget", "MEXC"];
+let tf = ["5m", "15m", "1h", "4h", "1d"];
+const names = ["Binance", "Bybit", "OKX", "Bitget", "MEXC"];
 const constant = (value) => ({ kind: "CONSTANT", value });
 const price = () => ({ kind: "PRICE", field: "close", timeframe: "15m" });
 const cmp = () => ({
@@ -74,6 +80,11 @@ const initial = () => ({
   cooldownBars: 0,
   destinations: [],
 });
+// An unfinished editor draft must never be evaluated as a sample strategy.
+const blankSetup = () => ({ ...initial(), entry: { kind: "GROUP", op: "AND", children: [] } });
+function hasEntryCondition(d = state.draft) {
+  return Boolean(d?.entry && !(d.entry.kind === "GROUP" && !d.entry.children.length));
+}
 // The page content supplies its heading; keep the header utilities in place.
 $("#page-name").classList.add("sr-only");
 const workbench = document.createElement("div");
@@ -279,7 +290,7 @@ const chatPromptSamples = [
   'ช่วยออกแบบเซตอัปรอราคาย่อตัวในแนวโน้มขาขึ้น',
   'ตลาดออกข้าง ควรออกแบบเงื่อนไขแบบไหน?',
   'ช่วยออกแบบเซตอัป Long และ Short ให้มีเงื่อนไขชัดเจน',
-  'ช่วยย่อไอเดียเทรดของฉันให้เป็นเซตอัปไม่เกิน 20 เงื่อนไข',
+  'ช่วยย่อไอเดียเทรดของฉันให้เป็นเซตอัปไม่เกิน 24 เงื่อนไข',
   'ฉันดูกราฟได้วันละนิด ควรเลือกกรอบเวลาแบบไหน?',
   'ช่วยเปรียบเทียบการเล่นสั้นกับการถือหลายวัน',
   'จากประวัติที่ซิงก์ไว้ ฉันซื้อขายคู่ไหนและฝั่งไหนบ่อยที่สุด?',
@@ -440,15 +451,13 @@ function alignToast() {
   const notice = $("#toast");
   if (notice.hidden) return;
   const shell = $(".main-shell").getBoundingClientRect();
-  const chat = $(".chat-composer").getBoundingClientRect();
-  const area = chat.width > 0 ? chat : shell;
-  const center = area.left + area.width / 2;
+  // Global notices belong to the whole workspace, regardless of panel widths.
+  const center = shell.left + shell.width / 2;
   notice.style.left = `${center}px`;
   notice.style.maxWidth = `${Math.max(0, 2 * Math.min(center - shell.left, shell.right - center) - 32)}px`;
 }
 const toastLayoutObserver = new ResizeObserver(alignToast);
 toastLayoutObserver.observe($(".main-shell"));
-toastLayoutObserver.observe($(".chat-composer"));
 window.addEventListener("resize", alignToast);
 function toast(text) {
   window.SnaapToast.show(text, alignToast);
@@ -599,13 +608,18 @@ function showDraftStatus(text) {
   draftStatus = text;
   const label = panel.querySelector("[data-draft-status]");
   if (label) {
-    label.textContent = text;
+    const savedLabel = panel.querySelector(".saved-label");
+    label.textContent = text || savedLabel?.textContent || "ร่างใหม่";
+    label.hidden = false;
+    label.title = "สถานะร่าง · บันทึกอัตโนมัติยังไม่เปิดใช้งานเซตอัป";
     label.dataset.state =
       text === "บันทึกร่างแล้ว"
         ? "saved"
         : text.includes("กำลัง")
           ? "saving"
-          : "pending";
+          : text.includes("ไม่สำเร็จ") || text.startsWith("ยังไม่บันทึก")
+            ? "error"
+            : "pending";
   }
 }
 async function ensureConversation(title = state.draft?.name ?? "เซตอัพใหม่") {
@@ -614,6 +628,7 @@ async function ensureConversation(title = state.draft?.name ?? "เซตอั�
     title: title.slice(0, 100),
   })
     .then((c) => {
+      window.SnaapStudio?.adoptConversation(c.id);
       state.conversation = c.id;
       state.conversationRows.unshift({ ...c, workspace_id:state.workspaceId, draft: null, draft_revision: 0 });
       const option = new Option(c.title, c.id, true, true);
@@ -628,6 +643,10 @@ async function ensureConversation(title = state.draft?.name ?? "เซตอั�
 }
 async function saveDraft() {
   clearTimeout(draftTimer);
+  if (!hasEntryCondition()) {
+    persistRecovery();
+    return;
+  }
   if (draftFlight) {
     await draftFlight;
     if (draftDirty()) return saveDraft();
@@ -673,6 +692,11 @@ function queueDraftSave() {
   if (undoButton) undoButton.disabled = state.undo.length === 0;
   const summary = panel.querySelector(".draft-diff");
   if (summary && state.draft) summary.textContent = fullSummary(state.draft);
+  if (!hasEntryCondition()) {
+    clearTimeout(draftTimer);
+    showDraftStatus("ร่างยังไม่มีเงื่อนไข");
+    return;
+  }
   if (!draftDirty()) {
     clearTimeout(draftTimer);
     if (!draftFlight)
@@ -729,6 +753,7 @@ function comparableSpec(value) {
   return value;
 }
 function conditionText(c) {
+  if (c.kind === "GROUP" && !c.children.length) return "ยังไม่มีเงื่อนไขเข้า";
   if (c.kind === "GROUP")
     return (
       "(" +
@@ -765,9 +790,13 @@ const options = (values, selected) =>
         `<option value="${esc(x)}" ${x === selected ? "selected" : ""}>${esc(display[x] ?? x)}</option>`,
     )
     .join("");
+const timeframeOptions = (selected, d = state.draft) => {
+  const values = setupTimeframes(d);
+  return (selected && !values.includes(selected) ? `<option value="${esc(selected)}" selected disabled>${esc(selected)} · ตลาดนี้ไม่รองรับ</option>` : "") + options(values, selected);
+};
 function operandUI(o, path, title) {
   const select = (label, key, values, value) =>
-    `<label>${label}<select data-path="${path}.${key}">${options(values, value)}</select></label>`;
+    `<label>${label}<select data-path="${path}.${key}">${key === "timeframe" ? timeframeOptions(value) : options(values, value)}</select></label>`;
   const number = (label, key, value, attributes = "") =>
     `<label>${label}<input type="number" data-path="${path}.${key}" value="${value}" ${attributes}></label>`;
   let fields = `<label>ชนิดค่า<select data-opkind="${path}">${options(["PRICE", "INDICATOR", "CONSTANT", "ENTRY_RETURN"], o.kind)}</select></label>`;
@@ -852,7 +881,7 @@ function operandUI(o, path, title) {
       );
   }
   if (["PRICE", "INDICATOR"].includes(o.kind))
-    fields += select("กรอบเวลา", "timeframe", tf, o.timeframe);
+   fields += select("กรอบเวลา", "timeframe", setupTimeframes(), o.timeframe);
   return `<div class="operand-block" role="group" aria-label="${title}"><div class="operand-heading"><p class="operand-title">${title}</p>${o.kind === "INDICATOR" ? `<button type="button" class="indicator-import-trigger" data-import-indicator="${path}">${uiIcon("file")}<span>นำเข้าสูตร / TradingView</span></button>` : ""}</div><div class="operand-fields${o.kind === "INDICATOR" ? " indicator-fields" : ""}">${fields}</div>${o.kind === "INDICATOR" ? `<div class="operand-reference"><a href="/indicator-guide.html" target="_blank" rel="noopener">สูตร หน่วย และข้อมูลที่ต้องใช้ ${uiIcon("arrowUpRight")}</a></div>` : ""}</div>`;
 }
 function conditionUI(c, path) {
@@ -863,7 +892,8 @@ function conditionUI(c, path) {
   const chartLinks = [...new Set([c.left.timeframe,c.right.timeframe].filter(Boolean))].map(frame => `<button type="button" class="secondary" data-open-condition-chart="${esc(frame)}">ดูกราฟ ${esc(frame)}</button>`).join('');
   return `<div class="condition-chart-links">${chartLinks}</div><div class="condition-line">${operandUI(c.left, path + ".left", "ค่าที่ตรวจ")}<label class="comparison-field">การเปรียบเทียบ<select class="operator" data-path="${path}.op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], c.op)}</select></label>${operandUI(c.right, path + ".right", "เทียบกับ")}</div><div class="condition-tools"><button class="text-button" data-group="${path}">จัดกลุ่ม AND / OR</button><button class="text-button" data-hold="${path}">ต่อเนื่องหลายแท่ง</button></div>`;
 }
-const MAX_SETUP_CONDITIONS = 20;
+let MAX_SETUP_CONDITIONS;
+const setupLimitsReady = import("./setup-limits.js").then(m => MAX_SETUP_CONDITIONS = m.MAX_SETUP_CONDITIONS);
 function setupConditionCount(spec) {
   const count = c => !c ? 0 : c.kind === "GROUP" ? c.children.reduce((n, child) => n + count(child), 0) : c.kind === "HOLD" ? count(c.condition) : 1;
   const branch = b => !b ? 0 : count(b.entry) + count(b.exit) + count(b.cancel) + (b.stages ?? []).reduce((n, stage) => n + count(stage.condition), 0);
@@ -871,7 +901,7 @@ function setupConditionCount(spec) {
 }
 function canAddSetupCondition() {
   if (setupConditionCount(state.draft) < MAX_SETUP_CONDITIONS) return true;
-  toast("ครบ 20 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่");
+  toast("ครบ 24 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่");
   return false;
 }
 function renderDesigner() {
@@ -894,7 +924,7 @@ function renderDesigner() {
   setWorkbenchTab(requestedWorkbenchMode ?? workbench.dataset.tab);
   queueDraftSave();
   const d = state.draft;
-  panel.innerHTML = `<div class="design-toolbar"><strong>ออกแบบเซตอัพ</strong><span class="saved-label">${state.saved ? "เวอร์ชัน " + state.saved.revision : "ร่างใหม่"}${state.saved && JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(d)) ? " · ยังไม่บันทึก" : ""}</span><button class="text-button" data-undo ${state.undo.length ? "" : "disabled"}>ย้อนกลับ</button></div><div class="design-body"><div id="editor-feedback" tabindex="-1" hidden></div><label>ชื่อเซตอัพ<input data-path="name" value="${esc(d.name)}" maxlength="100"></label><fieldset class="exchange-fieldset"><legend>เลือกกระดาน</legend><div class="exchange-choices">${names.map((x) => `<label><input type="radio" name="setup-exchange" data-exchange="${x}" ${d.exchange.includes(x) ? "checked" : ""}><span class="exchange-check" aria-hidden="true">${uiIcon("check")}</span><span>${x}</span></label>`).join("")}</div></fieldset><div class="field-grid"><label>ตลาด<select data-path="market">${options(["Spot", "Perpetual Futures"], d.market)}</select></label><label>รอบตรวจแท่งปิด<select data-path="timeframe">${options(tf, d.timeframe)}</select></label></div>${directionChoices(d)}<div class="pair-control"><span>คู่เทรด</span><button type="button" class="secondary" data-pair-picker>${esc(d.pairs.length>1?d.pairs.length+" คู่เทรด":d.pairs[0]??"เลือกคู่เทรด")} ▾</button><p class="field-note" data-pair-availability role="status"></p></div><section class="setup-section"><h3>1. ${d.market === "Spot" ? "เงื่อนไขเริ่มต้น" : d.side === "SHORT" ? "เงื่อนไข Short" : d.side ? "เงื่อนไข Long" : "เงื่อนไขเริ่มต้น"}</h3>${conditionUI(d.entry, "entry")}</section><details data-advanced-options ${openAdvanced || d.stages.length || d.exit || d.cancel || d.cooldownBars ? "open" : ""}><summary>เงื่อนไขเพิ่มเติม<span>รอยืนยัน · สัญญาณออก · ยกเลิก · พักสัญญาณ</span></summary><div class="advanced-options">${d.stages.map((s, i) => `<section class="setup-section"><h3>${i + 2}. รอยืนยัน</h3><label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="stages.${i}.withinBars" value="${s.withinBars}"></label>${conditionUI(s.condition, `stages.${i}.condition`)}<button class="text-button" data-remove="stages.${i}">ลบขั้นตอน</button></section>`).join("")}<button class="secondary" data-stage>เพิ่มขั้นตอนรอยืนยัน</button><section class="setup-section"><h3>สัญญาณออก / ยกเลิก</h3>${d.exit ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขสัญญาณออก</h4><button class="text-button" data-remove-optional="exit">ลบเงื่อนไขออก</button></div>${conditionUI(d.exit, "exit")}</div>` : '<button class="text-button" data-optional="exit">เพิ่มเงื่อนไขออก</button>'}${d.cancel ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขยกเลิก</h4><button class="text-button" data-remove-optional="cancel">ลบเงื่อนไขยกเลิก</button></div>${conditionUI(d.cancel, "cancel")}</div>` : '<button class="text-button" data-optional="cancel">เพิ่มเงื่อนไขยกเลิก</button>'}<p class="field-note">วงจรสัญญาณ ไม่ใช่ออเดอร์ที่ถือจริง</p></section><label>พักหลังสัญญาณ (แท่ง)<input type="number" min="0" max="1000" data-path="cooldownBars" value="${d.cooldownBars}"></label></div></details>${d.short?`<details class="setup-custom-short"><summary>เงื่อนไข Short</summary>${conditionUI(d.short.entry,"short.entry")}${d.short.stages.map((s,i)=>`<h4>รอยืนยัน ${i+1}</h4>${conditionUI(s.condition,`short.stages.${i}.condition`)}<label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="short.stages.${i}.withinBars" value="${s.withinBars}"></label>`).join("")}${d.short.exit?`<h4>สัญญาณออก Short</h4>${conditionUI(d.short.exit,"short.exit")}`:""}${d.short.cancel?`<h4>ยกเลิก Short</h4>${conditionUI(d.short.cancel,"short.cancel")}`:""}<label>พักสัญญาณ Short (แท่ง)<input type="number" min="0" max="1000" data-path="short.cooldownBars" value="${d.short.cooldownBars}"></label></details>`:""}<details open class="rule-review"><summary>สรุปเซตอัพ</summary><p class="draft-diff">${esc(fullSummary(d))}</p></details><fieldset class="destination-choices"><legend>แจ้งเตือนไปที่</legend><p>กล่องแจ้งเตือนในเว็บเสมอ</p>${state.destinations
+  panel.innerHTML = `<div class="design-toolbar"><strong>ออกแบบเซตอัพ</strong><span class="saved-label">${state.saved ? "เวอร์ชัน " + state.saved.revision : "ร่างใหม่"}${state.saved && JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(d)) ? " · ยังไม่บันทึก" : ""}</span><button class="text-button" data-undo ${state.undo.length ? "" : "disabled"}>ย้อนกลับ</button></div><div class="design-body"><div id="editor-feedback" tabindex="-1" hidden></div><label>ชื่อเซตอัพ<input data-path="name" value="${esc(d.name)}" maxlength="100"></label><fieldset class="exchange-fieldset"><legend>เลือกกระดาน</legend><div class="exchange-choices">${names.map((x) => `<label><input type="radio" name="setup-exchange" data-exchange="${x}" ${d.exchange.includes(x) ? "checked" : ""}><span class="exchange-check" aria-hidden="true">${uiIcon("check")}</span><span>${x}</span></label>`).join("")}</div></fieldset><div class="field-grid"><label>ตลาด<select data-path="market">${options(["Spot", "Perpetual Futures"], d.market)}</select></label><label>รอบตรวจแท่งปิด<select data-path="timeframe">${timeframeOptions(d.timeframe, d)}</select></label></div>${directionChoices(d)}<div class="pair-control"><span>คู่เทรด</span><button type="button" class="secondary" data-pair-picker>${esc(d.pairs.length>1?d.pairs.length+" คู่เทรด":d.pairs[0]??"เลือกคู่เทรด")} ▾</button><p class="field-note" data-pair-availability role="status"></p></div><section class="setup-section"><h3>1. ${d.market === "Spot" ? "เงื่อนไขเริ่มต้น" : d.side === "SHORT" ? "เงื่อนไข Short" : d.side ? "เงื่อนไข Long" : "เงื่อนไขเริ่มต้น"}</h3>${conditionUI(d.entry, "entry")}</section><details data-advanced-options ${openAdvanced || d.stages.length || d.exit || d.cancel || d.cooldownBars ? "open" : ""}><summary>เงื่อนไขเพิ่มเติม<span>รอยืนยัน · สัญญาณออก · ยกเลิก · พักสัญญาณ</span></summary><div class="advanced-options">${d.stages.map((s, i) => `<section class="setup-section"><h3>${i + 2}. รอยืนยัน</h3><label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="stages.${i}.withinBars" value="${s.withinBars}"></label>${conditionUI(s.condition, `stages.${i}.condition`)}<button class="text-button" data-remove="stages.${i}">ลบขั้นตอน</button></section>`).join("")}<button class="secondary" data-stage>เพิ่มขั้นตอนรอยืนยัน</button><section class="setup-section"><h3>สัญญาณออก / ยกเลิก</h3>${d.exit ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขสัญญาณออก</h4><button class="text-button" data-remove-optional="exit">ลบเงื่อนไขออก</button></div>${conditionUI(d.exit, "exit")}</div>` : '<button class="text-button" data-optional="exit">เพิ่มเงื่อนไขออก</button>'}${d.cancel ? `<div class="optional-condition"><div class="optional-heading"><h4>เงื่อนไขยกเลิก</h4><button class="text-button" data-remove-optional="cancel">ลบเงื่อนไขยกเลิก</button></div>${conditionUI(d.cancel, "cancel")}</div>` : '<button class="text-button" data-optional="cancel">เพิ่มเงื่อนไขยกเลิก</button>'}<p class="field-note">วงจรสัญญาณ ไม่ใช่ออเดอร์ที่ถือจริง</p></section><label>พักหลังสัญญาณ (แท่ง)<input type="number" min="0" max="1000" data-path="cooldownBars" value="${d.cooldownBars}"></label></div></details>${d.short?`<details class="setup-custom-short"><summary>เงื่อนไข Short</summary>${conditionUI(d.short.entry,"short.entry")}${d.short.stages.map((s,i)=>`<h4>รอยืนยัน ${i+1}</h4>${conditionUI(s.condition,`short.stages.${i}.condition`)}<label>ภายในกี่แท่ง<input type="number" min="1" max="100" data-path="short.stages.${i}.withinBars" value="${s.withinBars}"></label>`).join("")}${d.short.exit?`<h4>สัญญาณออก Short</h4>${conditionUI(d.short.exit,"short.exit")}`:""}${d.short.cancel?`<h4>ยกเลิก Short</h4>${conditionUI(d.short.cancel,"short.cancel")}`:""}<label>พักสัญญาณ Short (แท่ง)<input type="number" min="0" max="1000" data-path="short.cooldownBars" value="${d.short.cooldownBars}"></label></details>`:""}<details open class="rule-review"><summary>สรุปเซตอัพ</summary><p class="draft-diff">${esc(fullSummary(d))}</p></details><fieldset class="destination-choices"><legend>แจ้งเตือนไปที่</legend><p>กล่องแจ้งเตือนในเว็บเสมอ</p>${state.destinations
     .filter((x) => x.verified)
     .map(
       (x) =>
@@ -902,7 +932,7 @@ function renderDesigner() {
     )
     .join(
       "",
-    )}</fieldset><div class="design-actions"><button class="primary" data-save>ตรวจและบันทึก</button><button class="secondary" data-replay>ดูผลบนกราฟ</button></div><p class="field-note">บันทึกก่อน แล้วเปิดแจ้งเตือนจากการ์ดในแชทหรือหน้าเซตอัปที่ตั้งไว้</p><div id="replay-result"></div></div>`;
+    )}</fieldset><div class="design-actions studio-footer-actions"><button type="button" class="secondary" data-save>บันทึก</button><button type="button" class="primary" data-studio-activate disabled>เปิดใช้งาน</button></div><div id="replay-result"></div></div>`;
   const conditionCount = setupConditionCount(d);
   const limitLabel = document.createElement("p");
   limitLabel.className = "field-note setup-condition-limit";
@@ -911,15 +941,20 @@ function renderDesigner() {
   panel.querySelector("#editor-feedback").after(limitLabel);
   if (conditionCount >= MAX_SETUP_CONDITIONS) panel.querySelectorAll("[data-add], [data-group], [data-stage], [data-optional]").forEach(button => {
     button.disabled = true;
-    button.title = "ครบ 20 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
+    button.title = "ครบ 24 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
   });
   if (d.stages.length >= 5) panel.querySelector("[data-stage]").disabled = true;
-  const draftLabel = document.createElement("p");
+  const draftLabel = document.createElement("span");
   draftLabel.className = "field-note";
   draftLabel.dataset.draftStatus = "";
   draftLabel.setAttribute("role", "status");
   draftLabel.textContent = draftStatus;
-  panel.querySelector(".design-toolbar").after(draftLabel);
+  const toolbarMeta = document.createElement("span");
+  toolbarMeta.className = "studio-toolbar-meta";
+  const savedLabel = panel.querySelector(".saved-label");
+  savedLabel.hidden = true;
+  savedLabel.before(toolbarMeta);
+  toolbarMeta.append(savedLabel, draftLabel);
   showDraftStatus(draftStatus);
   panel
     .querySelector(".design-toolbar strong")
@@ -966,8 +1001,12 @@ function showEditorFeedback(text, success = false, focus = true) {
   }
 }
 function validateEditor() {
+  if (!hasEntryCondition()) {
+    showEditorFeedback("เพิ่มเงื่อนไขเข้าก่อนบันทึกเซตอัป");
+    return false;
+  }
   if (setupConditionCount(state.draft) > MAX_SETUP_CONDITIONS) {
-    showEditorFeedback("เซตอัปมีได้สูงสุด 20 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
+    showEditorFeedback("เซตอัปมีได้สูงสุด 24 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
     return false;
   }
   panel
@@ -1017,6 +1056,30 @@ function set(path, value) {
 function watchChannelMark(channel) {
   const logo = { DISCORD: "discord.svg", TELEGRAM: "telegram.svg", LINE: "line.png" }[channel.kind];
   return logo ? `<img src="/assets/brands/${logo}" alt="" width="14" height="14">` : uiIcon("link");
+}
+async function setRuleActivation(r, t, active = !r?.active) {
+  if (!r || t.disabled) return;
+  const original = t.innerHTML;
+  t.disabled = true;
+  t.textContent = active ? "กำลังเปิดใช้งาน…" : "กำลังหยุด…";
+  t.setAttribute("aria-busy", "true");
+  try {
+    const updated = await api(`/rules/${r.id}/activation`, "POST", {
+      active,
+      expectedRevision: r.revision,
+      confirmation: active ? "ACTIVATE" : "PAUSE",
+    });
+    Object.assign(r, updated);
+    if (state.saved?.id === r.id) state.saved = r;
+    renderWatch();
+    if (state.saved?.id === r.id) renderDesigner();
+    document.dispatchEvent(new Event('setup-changed'));
+    toast(active ? "เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป" : "หยุดเซตอัพแล้ว");
+  } finally {
+    t.disabled = false;
+    if (t.isConnected) t.innerHTML = original;
+    t.removeAttribute("aria-busy");
+  }
 }
 function watchChannelPicker(r) {
   const channels = state.destinations.filter(d => d.verified);
@@ -1261,7 +1324,8 @@ async function chat(text) {
         text,
         mode: $("#ai-mode").value,
         selection,
-        ...(state.draft?{draft:state.draft}:{}),
+        draft: hasEntryCondition() ? state.draft : undefined,
+        editorContext: hasEntryCondition() ? window.SnaapStudio?.context() : undefined,
         useMyData:state.useMyData,
         imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))],
 
@@ -1373,7 +1437,6 @@ async function attachChatImages(files) {
   updateProgress(1);
   try{
     showDesigner();
-    setWorkbenchTab('chat');
     await ensureConversation('บทสนทนาภาพ');
     const uploadConversation=state.conversation;
     for(const [index,file] of valid.entries()){
@@ -1599,6 +1662,7 @@ panel.addEventListener("input", (e) => {
     snapshot();
     t.dataset.editing = "true";
   }
+  if (t.type === "number" && (!t.value || !t.validity.valid)) return;
   if (t.dataset.path)
     set(t.dataset.path, t.type === "number" ? Number(t.value) : t.value);
   else
@@ -1621,6 +1685,7 @@ panel.addEventListener("change", (e) => {
     !t.hasAttribute("data-pairs")
   )
     return;
+  if (t.type === "number" && (!t.value || !t.validity.valid)) return;
   if (!t.dataset.editing) snapshot();
   if(t.dataset.direction){
     const selected=[...panel.querySelectorAll('[data-direction]:checked')].map(x=>x.dataset.direction);
@@ -1629,7 +1694,7 @@ panel.addEventListener("change", (e) => {
   } else if(t.hasAttribute('data-mirror-short')){
     const nextDraft=directionTools.setShortMirroring(state.draft,t.checked);
     if (setupConditionCount(nextDraft) > MAX_SETUP_CONDITIONS) {
-      toast("ตั้ง Long และ Short แยกกันได้รวมสูงสุด 20 เงื่อนไข ลดเงื่อนไขก่อนแยกฝั่ง");
+      toast("ตั้ง Long และ Short แยกกันได้รวมสูงสุด 24 เงื่อนไข ลดเงื่อนไขก่อนแยกฝั่ง");
       renderDesigner();
       return;
     }
@@ -1876,11 +1941,13 @@ document.addEventListener("click", async (e) => {
       state.crop = null;
       renderImages();
       state.saved = null;
-      state.draft = initial();
+      state.draft = blankSetup();
       state.replay = null;
       state.undo = [];
       $("#messages").replaceChildren();
       state.editorNotice = null;
+      window.SnaapStudio?.reset();
+      window.SnaapChart?.reset();
       setWorkbenchTab(t.dataset.action === "new-rule" ? "design" : "chat");
       showDesigner();
       location.hash = "home";
@@ -1951,26 +2018,7 @@ document.addEventListener("click", async (e) => {
       if (t.disabled) return;
       const r = state.rules.find((x) => x.id === t.dataset.activateRule);
       if (!r || t.disabled) return;
-      const active = !r.active;
-      const original = t.innerHTML;
-      t.disabled = true;
-      t.textContent = active ? "กำลังเปิดใช้งาน…" : "กำลังหยุด…";
-      t.setAttribute("aria-busy", "true");
-      try {
-        const updated = await api(`/rules/${r.id}/activation`, "POST", {
-          active,
-          expectedRevision: r.revision,
-          confirmation: active ? "ACTIVATE" : "PAUSE",
-        });
-        Object.assign(r, updated);
-        if (state.saved?.id === r.id) state.saved = r;
-        renderWatch();
-        toast(active ? "เปิดเซตอัพแล้ว เริ่มตรวจแท่งปิดถัดไป" : "หยุดเซตอัพแล้ว");
-      } finally {
-        t.disabled = false;
-        if (t.isConnected) t.innerHTML = original;
-        t.removeAttribute("aria-busy");
-      }
+      await setRuleActivation(r, t);
       return;
     }
     if (t.dataset.openRule) {
@@ -2228,8 +2276,9 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 // Also checkpoint programmatic updates such as cleared text after sending a message.
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
+  await Promise.all([directionToolsReady, indicatorCatalogReady, setupLimitsReady, timeframeToolsReady]);
   // Companion deferred scripts provide workspace and page helpers.
-  if (document.readyState === 'loading' || document.readyState === 'interactive') await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+  await companionScriptsReady;
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
   try {
