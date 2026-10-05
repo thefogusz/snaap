@@ -449,15 +449,13 @@ function alignToast() {
   const notice = $("#toast");
   if (notice.hidden) return;
   const shell = $(".main-shell").getBoundingClientRect();
-  const chat = $(".chat-composer").getBoundingClientRect();
-  const area = chat.width > 0 ? chat : shell;
-  const center = area.left + area.width / 2;
+  // Global notices belong to the whole workspace, regardless of panel widths.
+  const center = shell.left + shell.width / 2;
   notice.style.left = `${center}px`;
   notice.style.maxWidth = `${Math.max(0, 2 * Math.min(center - shell.left, shell.right - center) - 32)}px`;
 }
 const toastLayoutObserver = new ResizeObserver(alignToast);
 toastLayoutObserver.observe($(".main-shell"));
-toastLayoutObserver.observe($(".chat-composer"));
 window.addEventListener("resize", alignToast);
 function toast(text) {
   window.SnaapToast.show(text, alignToast);

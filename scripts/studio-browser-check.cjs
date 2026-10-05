@@ -148,6 +148,12 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       if (width < 1280)
         await page.locator('[data-studio-tab="conditions"]').click();
       await page.waitForTimeout(350);
+      await page.getByRole('button', {name: 'บัญชี / แพ็กเกจ', exact: true}).click();
+      await page.locator('#toast').waitFor({state: 'visible'});
+      const notice = await page.locator('#toast').boundingBox();
+      const shell = await page.locator('.main-shell').boundingBox();
+      assert.ok(Math.abs(notice.x + notice.width / 2 - shell.x - shell.width / 2) < 2, 'toast centered in workspace at ' + width);
+      assert.ok(notice.x >= shell.x && notice.x + notice.width <= shell.x + shell.width, 'toast within workspace at ' + width);
       box = await page.locator(".studio-canvas").boundingBox();
       assert.ok(
         box.width > 50 && box.height > 30 && box.y + box.height <= 1000,
