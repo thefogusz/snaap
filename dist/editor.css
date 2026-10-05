@@ -864,6 +864,7 @@
 .chat-composer #followup-form { display: block; padding: 0; }
 .chat-composer #followup-form { position:relative; }
 .chat-composer #followup-input.has-prompt-hint::placeholder { color:transparent; }
+.chat-composer #followup-input:focus::placeholder { opacity:0; }
 .chat-prompt-hint { position:absolute; top:4px; left:6px; right:6px; color:var(--muted); font:inherit; font-size:15px; line-height:1.7; pointer-events:none; overflow-wrap:anywhere; }
 .chat-prompt-hint[hidden] { display:none; }
 .chat-composer #followup-input { display: block; padding: 4px 6px; min-height: 72px; }

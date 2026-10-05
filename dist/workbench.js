@@ -312,7 +312,7 @@ function nextChatPrompt() {
   return promptBag.pop();
 }
 function syncChatPromptHint() {
-  const visible = workbench.dataset.tab === 'chat' && !followupText.value;
+  const visible = workbench.dataset.tab === 'chat' && !followupText.value && document.activeElement !== followupText;
   chatPromptHint.hidden = !visible;
   followupText.classList.toggle('has-prompt-hint', visible);
   if (!visible) {
@@ -322,28 +322,23 @@ function syncChatPromptHint() {
 }
 async function rotateChatPrompt() {
   syncChatPromptHint();
-  if (chatPromptHint.hidden || document.hidden || !followupText.getClientRects().length || document.activeElement === followupText) return;
+  if (chatPromptHint.hidden || document.hidden || !followupText.getClientRects().length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const version = ++promptMotionVersion;
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduced) {
-    try {
-      await chatPromptHint.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(10px)'}],{duration:220,easing:'ease-in',fill:'forwards'}).finished;
-    } catch { return; }
-  }
+  try {
+    await chatPromptHint.animate([{opacity:1},{opacity:0}],{duration:300,easing:'ease-in',fill:'forwards'}).finished;
+  } catch { return; }
   if (version !== promptMotionVersion || followupText.value || document.activeElement === followupText) {
     chatPromptHint.getAnimations().forEach(animation => animation.cancel());
     return;
   }
   chatPromptHint.textContent = nextChatPrompt();
   chatPromptHint.getAnimations().forEach(animation => animation.cancel());
-  if (!reduced) chatPromptHint.animate([{opacity:0,transform:'translateX(-10px)'},{opacity:1,transform:'translateX(0)'}],{duration:420,easing:'cubic-bezier(.22,1,.36,1)'});
+  chatPromptHint.animate([{opacity:0},{opacity:1}],{duration:450,easing:'ease-out'});
 }
-setInterval(rotateChatPrompt, 7000);
+setInterval(rotateChatPrompt, 4500);
 followupText.addEventListener('input', syncChatPromptHint);
-followupText.addEventListener('focus', () => {
-  promptMotionVersion++;
-  chatPromptHint.getAnimations().forEach(animation => animation.cancel());
-});
+followupText.addEventListener('focus', syncChatPromptHint);
+followupText.addEventListener('blur', syncChatPromptHint);
 syncChatPromptHint();
 function resizeChatInputs() {
   syncChatPromptHint();
