@@ -5,6 +5,7 @@ import {
 } from "../../dist/indicator-catalog.js";
 import { extendedValue } from "./extended-indicators.js";
 import { mirrorBranch } from "../../dist/trade-direction.js";
+import { entryUnits, flexibilityCounts } from "../../dist/entry-flexibility.js";
 export const frames = {
   "5m": 300000,
   "15m": 900000,
@@ -150,6 +151,7 @@ const condition: z.ZodType<Condition> = z.lazy(() =>
       .strict(),
   ]),
 );
+export const entryMatchPercentSchema = z.number().int().min(1).max(100);
 const strategyStructure = z
   .object({
     schemaVersion: z.literal(2),
@@ -192,6 +194,7 @@ const strategyStructure = z
       .max(10, "เลือกคู่เทรดได้สูงสุด 10 คู่ต่อเซตอัป"),
     timeframe,
     entry: condition,
+    entryMatchPercent: entryMatchPercentSchema.optional(),
     exit: condition.optional(),
     cancel: condition.optional(),
     stages: z
@@ -767,6 +770,26 @@ export function evaluate(
             : left <= right;
   return { result: matched ? "TRUE" : "FALSE", left, right };
 }
+/** Each AND entry unit has equal weight. OR/HOLD remain atomic, lifecycle checks stay strict. */
+export function evaluateEntry(spec: Strategy, series: Series, time: number): Evidence {
+  const side = signalSide(spec),
+    base = spec.timeframe;
+  const percent = spec.entryMatchPercent ?? 100;
+  if (percent === 100) return evaluate(spec.entry, series, time, base, undefined, side);
+  const children = entryUnits(spec.entry).map(c =>
+    evaluate(c, series, time, base, undefined, side),
+  );
+  const { total, needed } = flexibilityCounts(spec.entry, percent);
+  const matched = children.filter(x => x.result === "TRUE").length;
+  const unknown = children.filter(x => x.result === "UNKNOWN").length;
+  const result: Truth = matched >= needed ? "TRUE"
+    : matched + unknown < needed ? "FALSE" : "UNKNOWN";
+  return {
+    result,
+    children,
+    reason: `ผ่าน ${matched}/${total} ข้อ · ต้องผ่านอย่างน้อย ${needed} ข้อ (${percent}%)`,
+  };
+}
 export type Signal = {
   market: Strategy["market"];
   side: "SPOT" | "LONG" | "SHORT" | "UNSPECIFIED";
@@ -888,7 +911,7 @@ function advanceSingle(
     }
     return { state, events };
   }
-  const evidence = check(spec.entry);
+  const evidence = evaluateEntry(spec, series, time);
   if (evidence.result === "FALSE") state.latched = false;
   if (
     evidence.result !== "TRUE" ||

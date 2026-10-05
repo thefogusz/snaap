@@ -19,6 +19,7 @@
     "test:backup": "tsx scripts/backup-check.ts",
     "test:soak": "tsx scripts/soak.ts",
     "test:harness": "tsx scripts/harness-contract-check.ts",
+    "test:flexibility": "tsx scripts/entry-flexibility-check.ts",
     "eval:prepare": "tsx scripts/eval-cases.ts",
     "eval:agent": "node --env-file-if-exists=.env --import tsx scripts/evaluate-agent.ts"
   },

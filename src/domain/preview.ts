@@ -5,6 +5,7 @@ import {
   type Condition,
   value,
   evaluate,
+  evaluateEntry,
   advance,
   emptyLifecycle,
   replay,
@@ -68,7 +69,7 @@ export function preview(
         );
       return {
         side: signalSide(branch),
-        entry: check(branch.entry),
+        entry: evaluateEntry(branch, series, bar.time),
         stages: branch.stages.map((s) => check(s.condition)),
         exit: branch.exit ? check(branch.exit) : null,
         cancel: branch.cancel ? check(branch.cancel) : null,

@@ -21,7 +21,8 @@ export function diffSetup(before, after) {
     }
     changes.push({ path, label, action: a === undefined ? 'add' : b === undefined ? 'remove' : 'change', ...(a === undefined ? {} : { before: a }), ...(b === undefined ? {} : { after: b }) });
   }
-  for (const key of ['name','exchange','market','side','mirrorShort','short','pairs','timeframe','entry','exit','cancel','stages','cooldownBars','destinations']) {
+  labels.entryMatchPercent = 'ต้องผ่านเงื่อนไขอย่างน้อย (%)';
+  for (const key of ['name','exchange','market','side','mirrorShort','short','pairs','timeframe','entry','entryMatchPercent','exit','cancel','stages','cooldownBars','destinations']) {
     walk(before?.[key], after?.[key], key, labels[key]);
   }
   return changes;

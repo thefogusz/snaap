@@ -539,6 +539,39 @@ try {
     const untouched = (await db.query('SELECT draft,draft_revision FROM conversations WHERE id=$1',[id])).rows[0];
     assert.deepEqual(untouched,stored);
     console.log('PASS Harness creates and edits 20-condition MTF drafts; chart views preserve replay clock, conditions and persisted draft');
+    await db.query("INSERT INTO entitlements(owner_id,pro_until) VALUES($1,now()+interval '1 day') ON CONFLICT(owner_id) DO UPDATE SET pro_until=excluded.pro_until",[owner]);
+    const flexible = strategySchema.parse({...mtf,entryMatchPercent:80});
+    round=0;
+    reply=async body=>{
+      assert.match(body.instructions,/Entry flexibility:/);
+      const tool=body.tools.find((tool:any)=>tool.name==='propose_strategy');
+      assert.ok(JSON.stringify(tool.parameters).includes('entryMatchPercent'));
+      return ++round===1 ? {...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'flex-create',arguments:JSON.stringify({spec:flexible})}]} : response('ส่งร่างความยืดหยุ่นเข้า editor แล้ว ยังไม่ได้เปิดใช้งาน');
+    };
+    const flexibleTurn=await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'ปรับให้ผ่านเงื่อนไขอย่างน้อย 80% จากทั้งหมด',mode:'standard',draft:mtf}});
+    assert.equal(flexibleTurn.statusCode,200,flexibleTurn.body);assert.deepEqual(flexibleTurn.json().draft,flexible);
+    assert.ok(flexibleTurn.json().changes.some((change:any)=>change.path==='entryMatchPercent'));
+    const flexiblePreview=await app.inject({method:'POST',url:'/api/v1/preview',headers,payload:{spec:flexible}});
+    assert.equal(flexiblePreview.statusCode,200,flexiblePreview.body);
+    const expected=flexiblePreview.json();round=0;
+    reply=async body=>{
+      if(++round===1)return {...response(''),output:[{type:'function_call',name:'replay_strategy',call_id:'flex-replay',arguments:JSON.stringify({spec:flexible})}]};
+      const result=JSON.parse(body.input.find((item:any)=>item.type==='function_call_output'&&item.call_id==='flex-replay').output);
+      assert.deepEqual(result.events,expected.events.slice(-20));
+      assert.deepEqual(result.current[0].evidence,expected.timeline.at(-1).entry);
+      return response('ผลทดสอบใช้ความยืดหยุ่น 80% ตามร่าง');
+    };
+    const flexReplay=await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'ทดสอบย้อนหลังร่างนี้',mode:'standard',draft:flexible}});
+    assert.equal(flexReplay.statusCode,200,flexReplay.body);
+    const renamed={...flexible,name:'Preserved flexibility'};round=0;
+    reply=async body=>{
+      assert.ok(body.instructions.includes(JSON.stringify(strategySchema.parse(flexible))));
+      return ++round===1?{...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'flex-rename',arguments:JSON.stringify({spec:renamed})}]}:response('ปรับชื่อร่างแล้ว');
+    };
+    const renamedTurn=await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'เปลี่ยนชื่อเท่านั้น',mode:'standard',draft:flexible}});
+    assert.equal(renamedTurn.statusCode,200,renamedTurn.body);assert.deepEqual(renamedTurn.json().draft,renamed);
+    assert.deepEqual(renamedTurn.json().changes.map((change:any)=>change.path),['name']);
+    console.log('PASS Harness flexibility schema, proposals, receipts, replay/preview evidence and unrelated edits agree');
   } finally {
     ccxt.mexc.prototype.loadMarkets = loadMarkets;
     ccxt.mexc.prototype.fetchOHLCV = fetchOHLCV;

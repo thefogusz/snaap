@@ -12,7 +12,7 @@ import { contextBundle, sourceIds } from "../context.js";
 import {
   strategySchema,
   replay,
-  evaluate,
+  evaluateEntry,
   strategyBranches,
   signalSide,
 } from "../domain/engine.js";
@@ -362,6 +362,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         additionalProperties: false,
       };
       let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use exactly one exchange and one or more supported pairs (at most 5000). Preserve all existing pairs unless the user asks to change them. A setup has at most 20 leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than 20; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
+      instructions += '\nEntry flexibility: entryMatchPercent is the single optional integer 1..100 setting. Omit it or use 100 for the original strict entry. Lower values require at least ceil(entryUnitCount * entryMatchPercent / 100) matching units, with equal weight for every unit. Flatten AND entry groups; each OR or HOLD group stays one indivisible unit. The same percentage applies independently to Long and Short, including an independent short branch; do not combine matches from opposite sides. Preserve entryMatchPercent unless asked to change it. Waiting stages, exits, cancels and crossing timing remain strict. There are no required-condition flags, per-condition weights or crossing-window settings. Matching percent is not win probability. Tool proposals change a draft only; saving is separate.';
       const loadedSpecialists = new Set<string>();
       instructions +=
         "\nAdditional supported indicators (name, parameter defaults): " +
@@ -692,14 +693,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                 current: strategyBranches(spec).map((branch) => ({
                   side: signalSide(branch),
                   evidence: last
-                    ? evaluate(
-                        branch.entry,
-                        series,
-                        last.time,
-                        spec.timeframe,
-                        undefined,
-                        signalSide(branch),
-                      )
+                    ? evaluateEntry(branch, series, last.time)
                     : { result: "UNKNOWN" },
                 })),
                 limitation: "Signal replay only; not returns or real positions",
