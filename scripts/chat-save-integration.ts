@@ -190,15 +190,8 @@ try {
   );
   const history = await call(`/conversations/${conv.id}/messages`);
   assert.equal(history[0].ui_card.ruleId, firstId);
-  const riskPlan = {
-    enabled: true,
-    atrPeriod: 14,
-    stopAtr: 1.5,
-    rewardRisk: 2,
-  };
-  const risk = await call(`/rules/${firstId}/risk-plan`, "PUT", {
-    expectedRevision: 1,
-    riskPlan,
+  const editedRule = await call(`/rules/${firstId}`, "PUT", {
+    expectedRevision: 1, spec: {...spec, name: "แก้เซตอัปจากภายนอกแชท"},
   });
   const changed = { ...spec, name: "แก้จากแชท" };
   draft = await call(`/conversations/${conv.id}/draft`, "PUT", {
@@ -228,11 +221,11 @@ try {
   );
   saved = await call(nextUrl, "POST", {
     expectedRevision: draft.draft_revision,
-    expectedRuleRevision: risk.revision,
+    expectedRuleRevision: editedRule.revision,
     destinations: [],
   });
   assert.equal(saved.rule.id, firstId);
-  assert.deepEqual(saved.rule.risk_plan, riskPlan);
+  assert.equal("risk_plan" in saved.rule, false);
   assert.equal(saved.rule.revision, 3);
   await call(`/rules/${firstId}/activation`, "POST", {
     active: true,
@@ -336,7 +329,7 @@ try {
     0,
   );
   console.log(
-    "PASS: chat save, retry deduplication, history, existing rule revisions, risk plan preservation, activation/pause, superseded cards, owner/workspace isolation, editor binding, zero AI calls",
+    "PASS: chat save, retry deduplication, history, existing rule revisions, activation/pause, superseded cards, owner/workspace isolation, editor binding, zero AI calls",
   );
   if (serve) {
     await app.listen({ host: "127.0.0.1", port: 4175 });

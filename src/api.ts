@@ -1,4 +1,3 @@
-import { registerRiskPlans } from "./risk-plans.js";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
@@ -702,7 +701,7 @@ export async function buildApp(
       .parse(req.query);
     return (
       await db.query(
-        `SELECT s.*,o.risk_snapshot,o.result AS outcome,rv.spec->>'name' AS setup_name,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side,rv.spec->>'timeframe' AS setup_timeframe FROM signals s LEFT JOIN signal_outcomes o ON o.signal_id=s.id LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE s.owner_id=$1 AND ($3::uuid IS NULL OR s.rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$3)) AND ($2::uuid IS NULL OR (s.created_at,s.id)<(SELECT created_at,id FROM signals WHERE id=$2 AND owner_id=$1)) AND ($4::uuid IS NULL OR (s.created_at,s.id)>(SELECT created_at,id FROM signals WHERE id=$4 AND owner_id=$1)) AND ($5::text IS NULL OR ($5='status' AND s.event->>'kind'='EXPIRED') OR ($5='signals' AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED')) ORDER BY s.created_at ${after ? "ASC" : "DESC"},s.id ${after ? "ASC" : "DESC"} LIMIT 100`,
+        `SELECT s.*,rv.spec->>'name' AS setup_name,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side,rv.spec->>'timeframe' AS setup_timeframe FROM signals s LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE s.owner_id=$1 AND ($3::uuid IS NULL OR s.rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$3)) AND ($2::uuid IS NULL OR (s.created_at,s.id)<(SELECT created_at,id FROM signals WHERE id=$2 AND owner_id=$1)) AND ($4::uuid IS NULL OR (s.created_at,s.id)>(SELECT created_at,id FROM signals WHERE id=$4 AND owner_id=$1)) AND ($5::text IS NULL OR ($5='status' AND s.event->>'kind'='EXPIRED') OR ($5='signals' AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED')) ORDER BY s.created_at ${after ? "ASC" : "DESC"},s.id ${after ? "ASC" : "DESC"} LIMIT 100`,
         [req.userId, before ?? null, req.workspaceId ?? null, after ?? null, view ?? null],
       )
     ).rows.map(({ setup_timeframe, ...row }) => ({
@@ -714,7 +713,7 @@ export async function buildApp(
   app.get("/api/v1/export", async (req) => ({
     rules: (
       await db.query(
-        "SELECT spec,revision,active,risk_plan FROM rules WHERE deleted_at IS NULL AND owner_id=$1",
+        "SELECT spec,revision,active FROM rules WHERE deleted_at IS NULL AND owner_id=$1",
         [req.userId],
       )
     ).rows,
@@ -734,7 +733,6 @@ export async function buildApp(
   registerSetupFiles(app, db);
   registerSetupShares(app, db);
   registerPresets(app, db, { instruments: options.presetInstruments });
-  registerRiskPlans(app, db);
   registerRuleRemoval(app, db);
   await app.register(staticFiles, {
     root: path.resolve("dist"),

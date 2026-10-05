@@ -16,8 +16,6 @@ import {
   evaluateEntry,
 } from "./domain/engine.js";
 import { seriesFreshness, progress, explain, explainEntry } from "./domain/insights.js";
-import { freezeRisk, measureOutcome } from "./domain/outcomes.js";
-import { updateSignalOutcome } from "./signal-outcomes.js";
 import { strategySeries, invalidateCandles } from "./markets.js";
 import { deliver } from "./destinations.js";
 import { captureChart } from "./signal-chart.js";
@@ -208,39 +206,6 @@ export async function evaluateTarget(
             ),
           ],
         );
-        if (inserted.rowCount && event.kind === "ENTRY") {
-          const risk = freezeRisk(
-            current.risk_plan,
-            event,
-            series,
-            spec.timeframe,
-          );
-          const observed = (series[spec.timeframe] ?? []).filter(
-            (b) =>
-              b.time > event.time &&
-              b.time <= event.time + 20 * frames[spec.timeframe] &&
-              b.time <= checkedAt,
-          );
-          const outcome = measureOutcome(
-            event,
-            spec.timeframe,
-            observed,
-            risk,
-            20,
-            checkedAt,
-          );
-          await c.query(
-            "INSERT INTO signal_outcomes(signal_id,frame,risk_snapshot,candles,result,finalized) VALUES($1,$2,$3,$4,$5,$6)",
-            [
-              id,
-              spec.timeframe,
-              risk,
-              JSON.stringify(observed),
-              outcome,
-              outcome.status === "COMPLETE",
-            ],
-          );
-        }
         if (inserted.rowCount && event.kind !== 'EXPIRED' && event.time === latest && spec.destinations.length)
           deliveryIds.push(
             ...(
@@ -349,7 +314,8 @@ export async function startMonitor(
     retentionSeconds: 86400,
   });
   await boss.updateQueue("evaluate-market", { notify: true });
-  await boss.createQueue("outcome", { retryLimit: 3, retryDelay: 30 });
+  // Remove jobs left by the retired post-signal price tracker.
+  if (await boss.getQueue("outcome")) await boss.deleteQueue("outcome");
   await boss.updateQueue("evaluate", { notify: true });
   await boss.updateQueue("deliver", { notify: true });
   const insertJobs = async (
@@ -392,20 +358,6 @@ export async function startMonitor(
       )
     ).rows;
     realtime.reconcile(rows);
-    for (const pending of (
-      await db.query(
-        "SELECT signal_id FROM signal_outcomes WHERE NOT finalized ORDER BY checked_at LIMIT 500",
-      )
-    ).rows)
-      await boss.send(
-        "outcome",
-        { id: pending.signal_id },
-        {
-          singletonKey: pending.signal_id,
-          singletonSeconds: 55,
-          expireInSeconds: 120,
-        },
-      );
     const checkpoints = new Map<string, number>(
       (
         await db.query(
@@ -518,13 +470,6 @@ export async function startMonitor(
     },
     async (jobs) => {
       for (const job of jobs) await deliver(db, job.data.id);
-    },
-  );
-  await boss.work<{ id: string }>(
-    "outcome",
-    { localConcurrency: 2 },
-    async (jobs) => {
-      for (const job of jobs) await updateSignalOutcome(db, job.data.id);
     },
   );
   await boss.schedule("scan", "* * * * *");

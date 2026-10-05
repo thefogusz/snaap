@@ -15,8 +15,8 @@ function openSetupImport(){
    const code=field.value.trim();
    if(previewCode===code){await api('/setup-shares/'+encodeURIComponent(code)+'/import','POST',{});dialog.close();await refresh();toast('เพิ่มเซตอัปแล้ว');location.hash='notifications';}
    else{
-    const {setup,riskPlan}=await api('/setup-shares/'+encodeURIComponent(code));if(field.value.trim()!==code)return;
-    preview.innerHTML=`<strong>${esc(setup.name)}</strong><small>${esc(setup.exchange.join(', '))} · ${esc(setup.market)} · ${esc(setup.pairs.join(', '))} · ${esc(setup.timeframe)}</small><p>${esc(fullSummary(setup))}</p>${riskPlan?.enabled?`<p>แผน ATR ${riskPlan.atrPeriod} · SL ${riskPlan.stopAtr} ATR · เป้า ${riskPlan.rewardRisk}R</p>`:''}<small>เพิ่มใน ${esc(state.workspaces.find(w=>w.id===workspaceId)?.name??'พื้นที่หลัก')} · ยังไม่เปิดแจ้งเตือน</small>`;
+    const {setup}=await api('/setup-shares/'+encodeURIComponent(code));if(field.value.trim()!==code)return;
+    preview.innerHTML=`<strong>${esc(setup.name)}</strong><small>${esc(setup.exchange.join(', '))} · ${esc(setup.market)} · ${esc(setup.pairs.join(', '))} · ${esc(setup.timeframe)}</small><p>${esc(fullSummary(setup))}</p><small>เพิ่มใน ${esc(state.workspaces.find(w=>w.id===workspaceId)?.name??'พื้นที่หลัก')} · ยังไม่เปิดแจ้งเตือน</small>`;
     preview.hidden=false;previewCode=code;button.textContent='เพิ่มเซตอัป';
    }
   }catch(error){errorBox.textContent=error.message;errorBox.hidden=false;}finally{button.disabled=false;}

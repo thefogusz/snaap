@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { PgBoss } from "pg-boss";
 import { localDatabase } from "./postgres.js";
 import { migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
-import { evaluateTarget } from "../src/monitor.js";
-import { updateSignalOutcome } from "../src/signal-outcomes.js";
+import { evaluateTarget, startMonitor } from "../src/monitor.js";
 import { frames, strategySchema } from "../src/domain/engine.js";
 import { preview } from "../src/domain/preview.js";
 const postgres = await localDatabase(),
@@ -72,7 +72,7 @@ bars[54].close = 101;
 for (let i = 55; i < 59; i++) bars[i].close = 99;
 const spec = strategySchema.parse({
   schemaVersion: 2,
-  name: "ATR · ทดสอบผลสัญญาณ",
+  name: "ทดสอบสัญญาณ",
   exchange: ["Binance"],
   market: "Spot",
   side: "SPOT",
@@ -115,6 +115,7 @@ if (serve) {
 async function cleanup() {
   await app.close();
   await db.end();
+  await admin.query(`DROP SCHEMA IF EXISTS ${schema}_queue CASCADE`);
   await admin.query(`DROP SCHEMA ${schema} CASCADE`);
   await admin.end();
   await postgres.stop();
@@ -135,36 +136,11 @@ try {
     [space, owner, otherSpace],
   );
   const rule = await call("/rules", "POST", spec, 201);
-  assert.equal((await call("/rules"))[0].risk_plan, null);
-  await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')", [
-    hash(otherToken),
-    other,
-  ]);
-  const outsider = {
-    host: headers.host,
-    "x-snaap-client": "web",
-    cookie: `snaap_session=${otherToken}`,
-  };
+  assert.equal("risk_plan" in (await call("/rules"))[0], false);
   const config = { enabled: true, atrPeriod: 14, stopAtr: 1.5, rewardRisk: 2 };
-  const riskRule = await call(`/rules/${rule.id}/risk-plan`, "PUT", {
-    expectedRevision: 1,
-    riskPlan: config,
-  });
-  assert.equal(riskRule.revision, 2);
-  assert.equal(riskRule.active, false);
-  await call(
-    `/rules/${rule.id}/risk-plan`,
-    "PUT",
-    { expectedRevision: 1, riskPlan: config },
-    409,
-  );
-  await call(
-    `/rules/${rule.id}/risk-plan`,
-    "PUT",
-    { expectedRevision: 2, riskPlan: config },
-    404,
-    { ...headers, "x-snaap-workspace": otherSpace },
-  );
+  await call(`/rules/${rule.id}/risk-plan`, "PUT", {
+    expectedRevision: 1, riskPlan: config,
+  }, 404);
   const destination = randomUUID();
   await db.query(
     "INSERT INTO destinations(id,owner_id,kind,name,config,verified) VALUES($1,$2,'WEBHOOK','Never sent','{}',true)",
@@ -180,7 +156,7 @@ try {
   );
   const target = {
     ruleId: rule.id,
-    revision: 2,
+    revision: 1,
     exchange: "Binance" as const,
     pair: "BTC/USDT",
   };
@@ -199,51 +175,42 @@ try {
   assert.equal(deliveries.rowCount, 1, "only latest event delivered");
   assert.equal(signals.filter((s: any) => s.event.recovered).length, 2);
   const latest = signals.find((s: any) => s.event.time === now);
-  assert.equal(latest.risk_snapshot.status, "READY");
+  assert.equal("risk_snapshot" in latest, false);
+  assert.equal("outcome" in latest, false);
   await evaluateTarget(db, target, async () => ({ "1h": bars }), now);
   assert.equal((await call("/signals")).length, 3);
   assert.equal((await db.query("SELECT * FROM deliveries")).rowCount, 1);
-  await call(
-    `/rules/${rule.id}/risk-plan`,
-    "PUT",
-    { expectedRevision: 2, riskPlan: config },
-    404,
-    outsider,
-  );
-  await call(`/signals/${latest.id}/outcome`, "GET", undefined, 404, outsider);
-  const snapshot = (await call(`/signals/${latest.id}/outcome`)).risk_snapshot;
-  await call(`/signals/${latest.id}/outcome`, "GET", undefined, 404, {
-    ...headers,
-    "x-snaap-workspace": otherSpace,
-  });
-  await call(`/rules/${rule.id}/risk-plan`, "PUT", {
-    expectedRevision: 2,
-    riskPlan: { ...config, stopAtr: 3 },
-  });
-  assert.deepEqual(
-    (await call(`/signals/${latest.id}/outcome`)).risk_snapshot,
-    snapshot,
-  );
-  const future = Array.from({ length: 20 }, (_, i) => ({
-    ...bars[59],
-    time: now + (i + 1) * step,
-    high: i ? 106 : 140,
-    low: i ? 95 : 70,
-  }));
-  await updateSignalOutcome(db, latest.id, async () => future, now + 20 * step);
-  const outcome = await call(`/signals/${latest.id}/outcome`);
-  assert.equal(outcome.result.status, "COMPLETE");
-  assert.equal(outcome.result.firstTouch, "AMBIGUOUS");
-  assert.equal(outcome.finalized, true);
+  await call(`/signals/${latest.id}/outcome`, "GET", undefined, 404);
+  // Upgrade a database that previously stored tracking data without losing signals.
+  await db.query(`
+    ALTER TABLE rules ADD COLUMN risk_plan jsonb;
+    ALTER TABLE rule_revisions ADD COLUMN risk_plan jsonb;
+    CREATE FUNCTION snapshot_rule_risk() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN SELECT risk_plan INTO NEW.risk_plan FROM rules WHERE id=NEW.rule_id; RETURN NEW; END $$;
+    CREATE TRIGGER rule_risk_snapshot BEFORE INSERT ON rule_revisions FOR EACH ROW EXECUTE FUNCTION snapshot_rule_risk();
+    CREATE TABLE signal_outcomes(signal_id uuid PRIMARY KEY REFERENCES signals, result jsonb);
+  `);
+  await db.query("UPDATE rules SET risk_plan=$2 WHERE id=$1", [rule.id, config]);
+  await db.query("INSERT INTO signal_outcomes VALUES($1,$2)", [latest.id, {status: "PENDING"}]);
+  await migrate(db);
+  await migrate(db);
+  assert.equal((await db.query("SELECT to_regclass('signal_outcomes') AS table_name")).rows[0].table_name, null);
+  assert.equal((await db.query("SELECT * FROM signals")).rowCount, 3);
+  assert.equal("risk_plan" in (await call("/rules"))[0], false);
   const share = await call("/setup-shares", "POST", { ruleId: rule.id }, 201);
-  assert.equal((await call("/setup-shares/" + share.code)).riskPlan.stopAtr, 3);
+  assert.equal("riskPlan" in await call("/setup-shares/" + share.code), false);
+  // Older share wrappers remain readable and have their retired settings removed.
+  await db.query("UPDATE setup_shares SET setup=$1", [{spec, riskPlan: config}]);
+  await migrate(db);
+  assert.equal((await db.query("SELECT setup FROM setup_shares")).rows[0].setup.riskPlan, undefined);
+  assert.equal((await call("/setup-shares/" + share.code)).setup.name, spec.name);
   const imported = await call(
     "/setup-shares/" + share.code + "/import",
     "POST",
     {},
     201,
   );
-  assert.equal(imported.risk_plan.stopAtr, 3);
+  assert.equal("risk_plan" in imported, false);
   assert.equal(imported.active, false);
   const file = await call(
     "/setup-files/import",
@@ -256,16 +223,7 @@ try {
     },
     201,
   );
-  assert.deepEqual(file.items[0].risk_plan, config);
-  const revisions = await call(`/rules/${rule.id}/revisions`);
-  assert.equal(
-    revisions.find((r: any) => r.revision === 2).risk_plan.stopAtr,
-    1.5,
-  );
-  assert.equal(
-    revisions.find((r: any) => r.revision === 3).risk_plan.stopAtr,
-    3,
-  );
+  assert.equal("risk_plan" in file.items[0], false);
   assert.equal((await db.query("SELECT * FROM usage_ledger")).rowCount, 0);
   assert.deepEqual(
     await call(`/rules/${rule.id}/revisions`, "GET", undefined, 200, {
@@ -275,14 +233,12 @@ try {
     [],
   );
   const revised = await call(`/rules/${rule.id}`, "PUT", {
-    expectedRevision: 3,
-    spec: { ...spec, name: "แก้เงื่อนไข แต่รักษาแผน" },
+    expectedRevision: 1,
+    spec: { ...spec, name: "แก้เงื่อนไขสัญญาณ" },
   });
-  assert.equal(revised.risk_plan.stopAtr, 3);
-  assert.equal(
-    (await call(`/rules/${rule.id}/revisions`))[0].risk_plan.stopAtr,
-    3,
-  );
+  assert.equal(revised.revision, 2);
+  assert.equal("risk_plan" in revised, false);
+  assert.equal("risk_plan" in (await call(`/rules/${rule.id}/revisions`))[0], false);
   const both = await call(
     "/rules",
     "POST",
@@ -348,8 +304,24 @@ try {
     expectedRevision: 2,
     riskPlan: config,
   }, 404);
+  await db.query("UPDATE rules SET active=false");
+  const queueSchema = schema + "_queue";
+  const legacyQueue = new PgBoss({connectionString: postgres.url, schema: queueSchema});
+  await legacyQueue.start();
+  await legacyQueue.createQueue("outcome");
+  await legacyQueue.send("outcome", {id: latest.id});
+  await legacyQueue.stop();
+  const monitor = await startMonitor(db, postgres.url, queueSchema);
+  try {
+    assert.equal(await monitor.getQueue("outcome"), null);
+    assert.ok(await monitor.getQueue("evaluate"));
+    assert.ok(await monitor.getQueue("deliver"));
+    assert.equal((await db.query(`SELECT count(*) AS count FROM ${queueSchema}.job WHERE name='outcome'`)).rows[0].count, "0");
+  } finally {
+    await monitor.stop();
+  }
   console.log(
-    "PASS: freshness, recovery suppression, deduplication, immutable ATR, durable outcomes after pause, sharing/import, revisions, workspace isolation, zero LLM usage",
+    "PASS: freshness, recovery suppression, deduplication, tracking removal and migration, legacy sharing/import, revisions, workspace isolation, zero LLM usage",
   );
   if (serve) {
     // Local UI fixture only; no exchanges, LLMs, notification delivery or paid calls.

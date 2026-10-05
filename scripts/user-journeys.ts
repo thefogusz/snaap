@@ -344,19 +344,6 @@ export async function runUserJourneys(
             u.revision = saved.draft_revision;
             u.rule = saved.rule;
             u.oldCard = card.id;
-            if ((u.index === 4 || u.index === 5) && day === 2) {
-              u.rule = await call(u, `/rules/${u.rule.id}/risk-plan`, "PUT", {
-                expectedRevision: u.rule.revision,
-                riskPlan: {
-                  enabled: true,
-                  atrPeriod: 14,
-                  stopAtr: 1.5,
-                  rewardRisk: 2,
-                },
-              });
-            }
-            if ((u.index === 4 || u.index === 5) && day >= 2)
-              assert.equal(u.rule.risk_plan.enabled, true);
             u.rule = await call(u, `/rules/${u.rule.id}/activation`, "POST", {
               active: true,
               expectedRevision: u.rule.revision,
@@ -403,7 +390,7 @@ export async function runUserJourneys(
                 users[6],
                 `/setup-shares/${u.share}`,
               );
-              assert.equal(u.sharedSnapshot.riskPlan.enabled, true);
+              assert.equal("riskPlan" in u.sharedSnapshot, false);
             } else if (day > 3 && day < 7) {
               assert.deepEqual(
                 await call(users[6], `/setup-shares/${u.share}`),
