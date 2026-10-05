@@ -347,7 +347,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await page.locator(".studio-footer-actions [data-save]").click();
     await page
       .locator("#editor-feedback")
-      .filter({ hasText: "บันทึกเซตอัพแล้ว" })
+      .filter({ hasText: "บันทึกเซตอัปแล้ว" })
       .waitFor();
     assert.equal(
       await page.locator(".studio-footer-actions [data-studio-activate]").isEnabled(),
