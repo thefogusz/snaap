@@ -120,7 +120,7 @@ function paintNotifications() {
     add.dataset.action = "new-rule";
     add.innerHTML = uiIcon("plus") + "เพิ่มเซตอัพ";
     const actions=document.createElement('div');actions.className='notification-setup-actions';
-    const importSetup=document.createElement('button');importSetup.type='button';importSetup.className='secondary';importSetup.dataset.importSetupCode='';importSetup.innerHTML=uiIcon('upload')+'นำเข้าเซตอัป';
+    const importSetup=document.createElement('button');importSetup.type='button';importSetup.className='secondary with-icon';importSetup.dataset.importSetupCode='';importSetup.innerHTML=uiIcon('upload')+'<span>นำเข้าเซตอัป</span>';
     actions.append(importSetup,add);
     $(".notification-heading [data-notification-refresh]").replaceWith(actions);
   }
