@@ -12,10 +12,10 @@
 .notification-rules .watch-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 20px;margin:0;padding:14px 16px;border-radius:10px;box-shadow:none;background:var(--white);border:1px solid var(--line)}
 .notification-rules .watch-row-heading{display:block;min-width:0;margin:0;grid-column:1;align-self:center}
 .notification-rules .watch-row h2{font-size:15px;line-height:1.5;letter-spacing:-.01em;overflow-wrap:anywhere}
-.notification-rules .watch-setup-meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:12px;line-height:1.6;color:var(--muted)}
-.notification-rules .watch-pairs{color:var(--ink);overflow-wrap:anywhere}
+.notification-rules .watch-setup-meta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:12px;line-height:1.6;color:var(--muted)}
+.notification-rules .watch-pairs{display:inline-flex;align-items:center;color:var(--ink);overflow-wrap:anywhere}
 .notification-rules .watch-pair-count{color:var(--muted);white-space:nowrap;font-size:11px;margin-left:4px}
-.notification-rules .watch-tags{display:inline-flex;flex-wrap:wrap;gap:4px}
+.notification-rules .watch-tags{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px}
 .notification-rules .watch-tag{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--line);font-size:11px;line-height:1.6;color:var(--muted)}
 .notification-rules .watch-direction{color:var(--ink)}
 .notification-rules .watch-row :is(.status.paused,.status.is-active){font-size:11px;padding:0;background:transparent;box-shadow:none!important;white-space:nowrap;border-radius:0;flex-shrink:0;max-width:none;margin-right:8px}
@@ -67,9 +67,12 @@
 .notification-rules .flex-slider-row output{text-align:right;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
 .notification-rules .flex-actions{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
 .notification-rules .flex-result{color:var(--muted);font-size:12px;margin-right:auto}
-.notification-rules .watch-details .flex-actions button{min-height:32px;padding:4px 8px;font-size:12px}
+.notification-rules .watch-details .flex-actions button{min-height:32px;min-width:56px;justify-content:center;padding:4px 8px;font-size:12px;border:1px solid var(--line);background:transparent;color:var(--ink)}
 .notification-rules .flex-error{color:var(--danger,#c63939);font-size:12px;margin:4px 0}
-.notification-rules .watch-flexibility button:focus-visible,.notification-rules .watch-flexibility input:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.notification-rules .watch-flexibility button:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.notification-rules .flex-slider-row input[type="range"]:focus{outline:none}
+.notification-rules .flex-slider-row input[type="range"]:focus-visible::-webkit-slider-thumb{border-radius:50%;box-shadow:0 0 0 3px var(--white),0 0 0 4px var(--accent-ink)}
+.notification-rules .flex-slider-row input[type="range"]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 3px var(--white),0 0 0 4px var(--accent-ink)}
 .notification-rules .watch-flexibility button:disabled{opacity:.5}
 @media(max-width:600px), (pointer:coarse){.notification-rules .watch-details .flex-summary button,.notification-rules .watch-details .flex-actions button,.notification-rules .flex-slider-row input[type="range"]{min-height:44px}}
 .browser-alert-settings {

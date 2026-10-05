@@ -49,7 +49,6 @@ export function mountFlexibility(
       panel.hidden = false;
       toggle.setAttribute("aria-expanded", "true");
       toggle.textContent = "ปิด";
-      panel.querySelector("[data-flex-percent]").focus({ preventScroll: true });
     });
     panel.addEventListener("input", (event) => {
       if (busy || !event.target.hasAttribute("data-flex-percent")) return;
