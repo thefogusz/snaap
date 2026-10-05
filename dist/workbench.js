@@ -970,7 +970,7 @@ function renderDesigner() {
     )
     .join(
       "",
-    )}</fieldset><div class="design-actions"><button class="primary" data-save>ตรวจและบันทึก</button><button class="secondary" data-replay>ดูผลบนกราฟ</button></div><p class="field-note">บันทึกก่อน แล้วเปิดใช้งานในแท็บเซตอัพที่ตั้งไว้</p><div id="replay-result"></div></div>`;
+    )}</fieldset><div class="design-actions studio-footer-actions"><button type="button" class="secondary" data-save>บันทึก</button><button type="button" class="primary" data-studio-activate disabled>เปิดใช้งาน</button></div><div id="replay-result"></div></div>`;
   const conditionCount = setupConditionCount(d);
   const limitLabel = document.createElement("p");
   limitLabel.className = "field-note setup-condition-limit";

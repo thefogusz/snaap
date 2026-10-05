@@ -69,7 +69,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     assert.equal(await page.locator('.studio-toolbar-meta .saved-label').isVisible(), false);
     assert.equal(await page.locator('.studio-toolbar-meta [data-draft-status]').isVisible(), true);
     assert.equal(await page.locator('.studio-toolbar-meta [data-draft-status]').innerText(), 'ร่างใหม่');
-    assert.equal(await page.locator('.design-body > .design-actions').isVisible(), false);
+    assert.equal(await page.locator('.design-body > .studio-footer-actions').isVisible(), true);
     assert.equal(await page.locator('.rule-review').getAttribute('open'), null);
     assert.ok(await page.locator(".studio-setup-settings").evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector(".studio-condition-overview")) & Node.DOCUMENT_POSITION_FOLLOWING)));
     const panelBox = (selector) => page.locator(selector).boundingBox();
@@ -347,10 +347,10 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .filter({ hasText: "บันทึกเซตอัพแล้ว" })
       .waitFor();
     assert.equal(
-      await page.locator("[data-studio-activate]").isEnabled(),
+      await page.locator(".studio-workspace-header [data-studio-activate]").isEnabled(),
       true,
     );
-    await page.locator("[data-studio-activate]").click();
+    await page.locator(".studio-workspace-header [data-studio-activate]").click();
     await page
       .getByRole("button", { name: "ยังไม่เปิดใช้งาน", exact: true })
       .click();

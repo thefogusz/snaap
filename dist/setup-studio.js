@@ -391,10 +391,12 @@
     header.querySelector("[data-studio-draft]").textContent = state.saved
       ? "ร่าง · เวอร์ชัน " + state.saved.revision
       : "ร่างใหม่";
-    header.querySelector("[data-studio-activate]").disabled =
-      !state.saved ||
-      JSON.stringify(comparableSpec(state.saved.spec)) !==
-        JSON.stringify(comparableSpec(state.draft));
+    const activationDisabled = !state.saved ||
+      JSON.stringify(comparableSpec(state.saved.spec)) !== JSON.stringify(comparableSpec(state.draft));
+    [header,panel].forEach(container=>container.querySelectorAll('[data-studio-activate]').forEach(button=>{
+      button.disabled=activationDisabled;
+      button.title=activationDisabled ? 'บันทึกเซตอัปก่อนเปิดใช้งาน' : 'เปิดตรวจและแจ้งเตือนเซตอัปนี้';
+    }));
     if (!panel.querySelector(".studio-condition-overview")) {
       const body = panel.querySelector(".design-body");
       const settings = document.createElement("section");
