@@ -378,6 +378,21 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await page.locator('[data-chart-status]').filter({hasText:/\d+ แท่งปิด/}).waitFor();
     assert.equal(await page.locator('.studio-condition-card').filter({hasText:'EMA 200'}).count(), 1);
     console.log('PASS new chat clears conditions, overlays and delayed preview; blank draft is checkpointed and accepts a new condition');
+    await page.setViewportSize({width:1440,height:1000});
+    const beforePaste = await page.evaluate(() => ({draft:JSON.stringify(state.draft),frame:window.SnaapChart.frame}));
+    const clipboardPng = require('node:fs').readFileSync('.local/audit/studio-volume.png').toString('base64');
+    await page.locator('#followup-input').evaluate((input, encoded) => {
+      const bytes = Uint8Array.from(atob(encoded),c => c.charCodeAt(0));
+      const data = new DataTransfer();
+      data.items.add(new File([bytes],'clipboard-chart.png',{type:'image/png'}));
+      input.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));
+    }, clipboardPng);
+    await page.locator('.attachment-preview img[alt="clipboard-chart.png"]').waitFor();
+    assert.equal(await page.locator('.workbench').getAttribute('data-tab'),'split');
+    assert.equal(await page.locator('.setup-studio').isVisible(),true);
+    assert.deepEqual(await page.evaluate(() => ({draft:JSON.stringify(state.draft),frame:window.SnaapChart.frame})),beforePaste);
+    await page.screenshot({path:'.local/audit/studio-pasted-image.png'});
+    console.log('PASS image paste preserves split workspace, draft and chart timeframe');
     assert.deepEqual(errors, []);
     console.log(
       "PASS studio interaction, MTF separation, stale preview rejection, 1440/1024/390 both themes, agent conflicts, receipts/undo and save/activation separation; no JS errors",

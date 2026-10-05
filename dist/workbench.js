@@ -1332,7 +1332,6 @@ async function attachChatImages(files) {
   updateProgress(1);
   try{
     showDesigner();
-    setWorkbenchTab('chat');
     await ensureConversation('บทสนทนาภาพ');
     const uploadConversation=state.conversation;
     for(const [index,file] of valid.entries()){
