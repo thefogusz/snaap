@@ -38,9 +38,9 @@
 .monitor-status-footer { padding: 0 20px 16px; margin-top: 16px; font-size: 11px; color: var(--muted); line-height: 1.6; }
 .monitor-progress-list + .monitor-status-footer { margin-top: 0; }
 .monitor-details { border-top: 1px solid var(--line); font-size: 12px; }
-.monitor-details summary { cursor: pointer; padding: 12px 20px; min-height: 44px; color: var(--muted); line-height: 1.6; }
-.monitor-details summary::after { content: ''; float: right; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin: 4px 2px 0 12px; }
-.monitor-details[open] summary::after { transform: rotate(225deg); margin-top: 8px; }
+.monitor-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; cursor: pointer; padding: 12px 20px; min-height: 44px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.monitor-details summary::after { content: ''; flex: none; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin: 0 2px 0 auto; }
+.monitor-details[open] summary::after { transform: rotate(225deg); }
 .monitor-details summary:hover { background: var(--pale); color: var(--ink); }
 .monitor-details summary:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -3px; }
 .monitor-details-content { padding: 0 20px 16px; }
