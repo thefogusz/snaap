@@ -908,7 +908,7 @@ function renderDesigner() {
   limitLabel.className = "field-note setup-condition-limit";
   limitLabel.setAttribute("role", "status");
   limitLabel.textContent = `เงื่อนไข ${conditionCount}/${MAX_SETUP_CONDITIONS} · รวมเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก`;
-  panel.querySelector(".design-toolbar").after(limitLabel);
+  panel.querySelector("#editor-feedback").after(limitLabel);
   if (conditionCount >= MAX_SETUP_CONDITIONS) panel.querySelectorAll("[data-add], [data-group], [data-stage], [data-optional]").forEach(button => {
     button.disabled = true;
     button.title = "ครบ 20 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";

@@ -10,6 +10,7 @@ test("provider acceptance requires Telegram message id and Discord id", () => {
     "SENT",
   );
   assert.equal(providerResult("DISCORD", 200, {}).status, "UNKNOWN");
+  assert.equal(providerResult("DISCORD", 200, { id: "message" }).detail, "ผู้ให้บริการรับคำขอแล้ว");
 });
 test("LINE retry 409 is accepted only with accepted request id", () => {
   assert.equal(providerResult("LINE", 409, {}, "request-id").status, "SENT");

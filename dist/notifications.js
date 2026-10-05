@@ -144,6 +144,31 @@ async function loadNotifications(workspace) {
     view.insertAdjacentHTML('beforeend', `<div class="notification-error" role="alert"><p>${esc(error.message)}</p><button class="secondary" data-notification-refresh>ลองอีกครั้ง</button></div>`);
   }
 }
+function monitorTone(status) {
+  return ['CURRENT', 'READY', 'SENT'].includes(status) ? 'ready'
+    : ['PAUSED', 'CANCELLED', 'DISCONNECTED'].includes(status) ? 'quiet' : 'attention';
+}
+function statusOverview(monitor, deliveries) {
+  const ready = monitor.filter(row => monitorTone(row.status) === 'ready').length;
+  const attention = monitor.filter(row => monitorTone(row.status) === 'attention').length;
+  const sent = deliveries.filter(row => row.status === 'SENT').length;
+  return `<div class="status-overview" aria-label="ภาพรวมสถานะ"><div><span>รายการติดตาม</span><strong>${monitor.length}</strong></div><div data-tone="ready"><span>ข้อมูลพร้อม</span><strong>${ready}</strong></div><div data-tone="${attention ? 'attention' : 'quiet'}"><span>ต้องตรวจสอบ</span><strong>${attention}</strong></div><div><span>ส่งสำเร็จในประวัติ</span><strong>${sent}<small> / ${deliveries.length}</small></strong></div></div>`;
+}
+function deliveryStatusRow(row) {
+  const kind = row.kind ?? '';
+  const icon = channelInfo[kind]?.icon ?? 'send';
+  return `<article class="delivery-status-row"><span class="delivery-status-icon" aria-hidden="true">${uiIcon(icon)}</span><div class="delivery-status-content"><h3>${esc(row.name)}</h3>${row.status !== 'SENT' && row.detail ? `<p>${esc(row.detail.replace(/\s*·\s*ไม่ใช่การยืนยันว่าอ่านแล้ว/g, ''))}</p>` : ''}</div><span class="monitor-status-label" data-tone="${monitorTone(row.status)}">${esc(deliveryLabels[row.status] ?? row.status)}</span></article>`;
+}
+function monitorStatusCard(row) {
+  const label = { PAUSED: 'พักการติดตาม', QUOTA_BLOCKED: 'หยุดตรวจ · เกินสิทธิ์แพ็กเกจ', DIRECTION_REQUIRED: 'เลือกฝั่ง Long / Short ในเซตอัป' }[row.status]
+    ?? freshnessLabels[row.status] ?? 'ข้อมูลขาด / เชื่อมต่อไม่ได้';
+  const checked = new Date(row.checked_at);
+  const validTime = row.checked_at != null && Number.isFinite(checked.getTime());
+  const progress = row.progress ?? [];
+  const freshness = row.freshness ?? [];
+  const setupName = state.rules?.find(rule => rule.id === row.rule_id)?.spec?.name;
+  return `<article class="monitor-status-card"><header class="monitor-status-heading"><div><h3>${esc(row.pair)} <span>${esc(row.exchange)}</span></h3>${setupName ? `<p class="monitor-setup-name">${esc(setupName)}</p>` : ''}</div><span class="monitor-status-label" data-tone="${monitorTone(row.status)}">${esc(label)}</span></header>${freshness.length ? `<div class="monitor-frames" aria-label="สถานะแต่ละกรอบเวลา">${freshness.map(f => `<span data-tone="${monitorTone(f.status)}">${esc(f.frame)}<span>${esc(freshnessLabels[f.status] ?? f.status)}</span></span>`).join('')}</div>` : ''}${progress.length ? `<div class="monitor-progress-list">${progress.map(p => `<section class="monitor-direction"><h4 data-side="${esc(p.side)}">${esc(p.side)}</h4><div>${progressUI(p)}${p.explanations?.length ? `<p class="monitor-condition-summary">${esc(p.explanations[0].text)}</p>` : ''}</div></section>`).join('')}</div>` : ''}<footer class="monitor-status-footer">${validTime ? `<time datetime="${checked.toISOString()}">ตรวจล่าสุด ${esc(checked.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</time>` : '<span>ยังไม่ได้ตรวจ</span>'}</footer>${freshness.length || progress.some(p => p.explanations?.length) ? `<details class="monitor-details"><summary>ดูรายละเอียดข้อมูลและเงื่อนไข</summary><div class="monitor-details-content">${freshness.length ? `<section><h4>ความพร้อมของข้อมูล</h4>${freshnessUI(freshness)}</section>` : ''}${progress.filter(p => p.explanations?.length).map(p => `<section><h4>เงื่อนไข ${esc(p.side)}</h4>${explanationsUI(p.explanations)}</section>`).join('')}</div></details>` : ''}</article>`;
+}
 function paintNotifications() {
   const { signals: allSignals, channels, deliveries, monitor } = notificationData;
   const signals = allSignals.filter(canDisplaySignal);
@@ -174,7 +199,7 @@ function paintNotifications() {
         "",
       )}</div><div id="channel-setup"></div>${channels.items.length ? `<section class="connected-channels"><h2>ช่องทางของคุณ</h2>${channels.items.map((x) => `<div class="connected-channel"><div><strong>${esc(x.name)}</strong><p>${channelInfo[x.kind]?.name ?? esc(x.kind)} · ${x.verified ? "เชื่อมแล้ว" : "รอยืนยันการเชื่อมต่อ"}</p></div><div class="channel-row-actions"><button class="secondary" data-channel-design="${x.id}">ปรับหน้าตา</button>${x.verified?`<button class="secondary" data-channel-test="${x.id}">ส่งทดสอบ</button>`:''}<button class="text-button" data-disconnect="${x.id}">ตัดการเชื่อมต่อ</button></div></div>`).join("")}</section>` : ""}<p class="notification-note">${Object.values(channels.available).some(Boolean) ? "เชื่อมแล้ว เลือกช่องทางในเซตอัปที่ต้องการรับแจ้งเตือน · สัญญาณยังเก็บในเว็บเสมอ" : "ผู้ดูแลยังไม่ได้ตั้งค่าช่องทางภายนอก คุณยังเปิดเซตอัพและรับสัญญาณในเว็บได้"}</p>`;
   } else {
-    content = `<section class="activity-section"><div class="notification-section-heading"><h2>${uiIcon("chart")}สถานะข้อมูลตลาด</h2></div>${monitor.length ? monitor.map((x) => `<div class="activity-row"><div><strong>${esc(x.exchange)} · ${esc(x.pair)}</strong><p>${x.status === "PAUSED" ? "พักการติดตาม" : x.status === "QUOTA_BLOCKED" ? "หยุดตรวจ · เลือกเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ" : x.status === "DIRECTION_REQUIRED" ? "เลือกฝั่ง Long / Short ในเซตอัป" : freshnessLabels[x.status] ?? "ข้อมูลขาด / เชื่อมต่อไม่ได้"}</p>${freshnessUI(x.freshness)}${(x.progress??[]).map(p=>`<strong>${esc(p.side)}</strong>${progressUI(p)}${explanationsUI(p.explanations)}`).join('')}</div><time>${new Date(x.checked_at).toLocaleString("th-TH")}</time></div>`).join("") : '<p class="activity-empty">ยังไม่มีเซตอัพที่เริ่มตรวจ — เปิดเซตอัพจากแท็บเซตอัพที่ตั้งไว้</p>'}</section><section class="activity-section"><div class="notification-section-heading"><h2>${uiIcon("send")}ประวัติการส่งข้อความ</h2></div>${deliveries.length ? deliveries.map((x) => `<div class="activity-row"><div><strong>${esc(x.name)}</strong><p>${deliveryLabels[x.status] ?? esc(x.status)}</p>${x.detail ? `<small>${esc(x.detail)}</small>` : ""}</div></div>`).join("") : '<p class="activity-empty">ยังไม่มีการส่งไปยังช่องทางภายนอก</p>'}</section>`;
+    content = `${statusOverview(monitor, deliveries)}<div class="status-workspace"><section class="status-market-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("chart")}การติดตามตลาด</h2><span>${monitor.length} รายการ</span></div><div class="monitor-status-list">${monitor.length ? monitor.map(monitorStatusCard).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('chart')+'</span><h3>ยังไม่มีการติดตาม</h3><p>เปิดเซตอัปเพื่อเริ่มตรวจข้อมูลตลาด</p><a class="secondary" href="#watch">ดูเซตอัปที่ตั้งไว้</a></div>'}</div></section><section class="status-delivery-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("send")}การส่งข้อความ</h2><span>${deliveries.length} รายการ</span></div><div class="delivery-status-list">${deliveries.length ? deliveries.map(deliveryStatusRow).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('send')+'</span><h3>ยังไม่มีประวัติส่ง</h3><p>ข้อความที่ส่งไปยังช่องทางของคุณจะแสดงที่นี่</p></div>'}</div></section></div>`;
   }
   if(notificationSection === "inbox" && notificationData.more) content += '<button class="secondary" data-more-signals>โหลดสัญญาณก่อนหน้า</button>';
   if (notificationSection !== 'rules' && notificationData.loaded === false) content = '<p role="status">กำลังอัปเดตข้อมูลส่วนนี้…</p>';

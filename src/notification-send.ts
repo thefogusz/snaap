@@ -46,7 +46,7 @@ export function providerResult(
     return { status: "UNKNOWN", detail: "Discord ยังไม่ยืนยันข้อความ" };
   return {
     status: "SENT",
-    detail: "ผู้ให้บริการรับคำขอแล้ว · ไม่ใช่การยืนยันว่าอ่านแล้ว",
+    detail: "ผู้ให้บริการรับคำขอแล้ว",
   };
 }
 export async function sendNotification(
