@@ -1116,6 +1116,7 @@ async function refresh({ reuseMe = false } = {}) {
   ]);
   if (workspace !== state.workspaceId) return;
   state.rules = rules;
+  state.destinationAvailability = destinations.available;
   if(state.saved)state.saved=rules.find(rule=>rule.id===state.saved.id)??null;
   state.me = me;
   window.dispatchEvent(new Event('snaap-account-ready'));
