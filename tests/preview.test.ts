@@ -32,6 +32,25 @@ const bar = (time: number, close: number): Candle => ({
   close,
   volume: 10,
 });
+test('MACD chart includes engine signal and histogram without changing strategy evaluation', () => {
+  const series={'15m':Array.from({length:80},(_,i)=>bar((i+1)*900000,100+Math.sin(i/4)*12+i/3))};
+  const macd={kind:'INDICATOR' as const,name:'MACD',period:8,slow:21,signal:5,timeframe:'15m' as const};
+  const before=JSON.stringify(spec);
+  const plain=preview(spec,series,[],'15m');
+  const result=preview(spec,series,[macd],'15m');
+  assert.deepEqual(result.overlays.map(o=>o.operand.kind==='INDICATOR'&&o.operand.name),['MACD','MACD_HIST','MACD_SIGNAL']);
+  for(const overlay of result.overlays) {
+    for(const point of overlay.points) assert.equal(point.value,value(overlay.operand,series,point.time,undefined,'15m')??null);
+    if(overlay.operand.kind==='INDICATOR' && overlay.operand.name!=='MACD') assert.deepEqual(overlay.chartOperand,macd);
+  }
+  assert.equal(result.overlays[1].points[0].value,null);
+  assert.deepEqual(result.timeline,plain.timeline);
+  assert.deepEqual(result.events,plain.events);
+  assert.equal(JSON.stringify(spec),before);
+  const explicit=preview(spec,series,[macd,{...macd,name:'MACD_SIGNAL'},{...macd,name:'MACD_HIST'}],'15m');
+  assert.equal(explicit.overlays.length,3);
+  assert.ok(explicit.overlays.every(o=>!o.chartOperand));
+});
 test("chart-only preview renders prices and selected overlays without strategy evidence or events", () => {
   const series = { "15m": [bar(900000, 100), bar(1800000, 102)] };
   const result = preview(spec, series, [{kind:"INDICATOR",name:"SMA",period:2,timeframe:"15m"}], "15m", true);

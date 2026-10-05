@@ -33,8 +33,23 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = [], c
       }
   };
   if (!chartOnly) strategyConditions(spec).forEach(walk);
-  const overlays = [...operands.values()].filter(o => !chartTimeframe || (o.kind === "INDICATOR" && o.timeframe === frame)).map((o) => ({
+  const chartOperands = [...operands.values()].filter(o => !chartTimeframe || (o.kind === "INDICATOR" && o.timeframe === frame));
+  const studies: {operand: Operand; chartOperand?: Operand}[] = chartOperands.map(operand => ({operand}));
+  // Complete the familiar MACD chart without adding strategy operands or conditions.
+  for (const operand of chartOperands) {
+    if (operand.kind !== 'INDICATOR' || operand.name !== 'MACD') continue;
+    for (const name of ['MACD_HIST', 'MACD_SIGNAL'] as const) {
+      const companion = {...operand,name};
+      const exists = chartOperands.some(o => o.kind === 'INDICATOR' && o.name === name &&
+        o.timeframe === operand.timeframe && o.period === operand.period &&
+        (o.slow ?? 26) === (operand.slow ?? 26) && (o.signal ?? 9) === (operand.signal ?? 9) &&
+        (o.source ?? 'close') === (operand.source ?? 'close'));
+      if (!exists) studies.push({operand:companion,chartOperand:operand});
+    }
+  }
+  const overlays = studies.map(({operand:o,chartOperand}) => ({
     operand: o,
+    ...(chartOperand ? {chartOperand} : {}),
     points: candles.map((c) => ({
       time: c.time,
       value: value(o, series, c.time, undefined, frame) ?? null,

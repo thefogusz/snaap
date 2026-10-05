@@ -168,40 +168,49 @@
     });
     markers = LightweightCharts.createSeriesMarkers(candles, []);
     let pane = 0;
+    const macdPanes = new Map();
     lines = data.overlays.map((o, i) => {
       const overlay = window.SnaapIndicatorCatalog?.indicatorByName[o.operand.name]?.overlay ?? ["EMA", "SMA", "BB_UPPER", "BB_LOWER","WMA","RMA","VWMA","HIGHEST","LOWEST","DONCHIAN_UPPER","DONCHIAN_LOWER","DONCHIAN_MID","BB_MIDDLE"].includes(
         o.operand.name,
       );
       const title = operandText(o.operand);
       const histogram = ['VOLUME', 'MACD_HIST', 'AO'].includes(o.operand.name);
+      const macd = ['MACD','MACD_SIGNAL','MACD_HIST'].includes(o.operand.name);
+      const macdKey = macd ? JSON.stringify([o.operand.timeframe,o.operand.period,o.operand.slow??26,o.operand.signal??9,o.operand.source??'close']) : null;
+      let studyPane = 0;
+      if (!overlay) {
+        studyPane = macdPanes.get(macdKey) ?? ++pane;
+        if (macd) macdPanes.set(macdKey,studyPane);
+      }
+      const displayOperand = o.chartOperand ?? o.operand;
       const series = chart.addSeries(
         histogram ? LightweightCharts.HistogramSeries : LightweightCharts.LineSeries,
         {
-          color: colors[i % colors.length],
+          color: macd ? (o.operand.name==='MACD_SIGNAL' ? '#e8ab42' : '#32a9df') : colors[i % colors.length],
           lineWidth: 2,
           ...(o.operand.name === 'PSAR' ? {lineVisible:false,pointMarkersVisible:true,pointMarkersRadius:2} : {}),
           title,
           priceFormat: o.operand.name === 'VOLUME' ? {type:'volume'} : {type:'price',precision:overlay?precision:2,minMove:overlay?10**-precision:.01},
           priceLineVisible: false,
           lastValueVisible: false,
-          visible: !window.SnaapStudio?.isHidden(o.operand),
+          visible: !window.SnaapStudio?.isHidden(displayOperand),
         },
-        overlay ? 0 : ++pane,
+        studyPane,
       );
-      if (!overlay) chart.panes()[pane].setHeight(Math.max(32, Math.min(110, canvas.clientHeight * .25)));
+      if (!overlay) chart.panes()[studyPane].setHeight(Math.max(32, Math.min(110, canvas.clientHeight * .25)));
       const candleByTime = new Map(data.candles.map(c => [c.time,c]));
       const points = histogram ? o.points.map(p => {
         const candle = candleByTime.get(p.time);
         const up = o.operand.name === 'VOLUME' ? candle && candle.close >= candle.open : p.value >= 0;
         return {...p,color:up ? (dark ? '#35ba8a' : '#168063') : (dark ? '#eb7480' : '#c13d51')};
       }) : o.points;
-      return { series, points, operand:o.operand };
+      return { series, points, operand:displayOperand };
     });
     fitStudyPanes();
     studio.querySelector(".chart-legend").innerHTML = data.overlays
       .map(
         (o, i) =>
-          window.SnaapStudio?.isHidden(o.operand) ? "" : `<span class="studio-legend-chip" style="color:${colors[i % colors.length]}"><button type="button" class="studio-legend-item" data-chart-indicator="${i}">${esc(operandText(o.operand))} ⚙</button><button type="button" class="studio-legend-remove" data-remove-chart-indicator="${i}" aria-label="นำ ${esc(operandText(o.operand))} ออกจากกราฟ" title="นำออกจากกราฟ · คงเงื่อนไขไว้">×</button></span>`,
+          o.chartOperand || window.SnaapStudio?.isHidden(o.operand) ? "" : `<span class="studio-legend-chip" style="color:${colors[i % colors.length]}"><button type="button" class="studio-legend-item" data-chart-indicator="${i}">${esc(operandText(o.operand))} ⚙</button><button type="button" class="studio-legend-remove" data-remove-chart-indicator="${i}" aria-label="นำ ${esc(operandText(o.operand))} ออกจากกราฟ" title="นำออกจากกราฟ · คงเงื่อนไขไว้">×</button></span>`,
       )
       .join("");
     studio
