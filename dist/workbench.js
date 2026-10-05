@@ -73,11 +73,6 @@ const initial = () => ({
   cooldownBars: 0,
   destinations: [],
 });
-const status = document.createElement("div");
-status.className = "runtime-status";
-status.setAttribute("role", "status");
-status.hidden = true;
-$(".topbar").after(status);
 // The page content supplies its heading; keep the header utilities in place.
 $("#page-name").classList.add("sr-only");
 const workbench = document.createElement("div");
@@ -2215,7 +2210,6 @@ async function boot() {
     sessionStorage.removeItem('snaap-signed-out');
     await refresh({ reuseMe: true });
     await restoreRecovery();
-    status.textContent = `${state.me?.local ? "บัญชีทดสอบ · " : ""}${state.health.ai ? "AI พร้อมเชื่อมต่อ" : "ยังไม่เชื่อม AI · ตั้งเงื่อนไขและดูกราฟได้"}`;
   } catch (error) {
     if(error.statusCode===401){location.replace('/login.html?error=expired');return;}
     window.SnaapBoot?.fail(error.message);
