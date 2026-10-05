@@ -16,7 +16,7 @@
   const header = document.createElement("header");
   header.className = "studio-workspace-header";
   header.innerHTML =
-    '<div><strong data-studio-name>เซตอัป</strong><span data-studio-draft>ร่าง</span></div><div><button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button><button type="button" data-studio-undo>ย้อนกลับ</button><button type="button" class="secondary" data-studio-save>บันทึก</button><button type="button" class="primary" data-studio-activate>เปิดใช้งาน</button></div>';
+    '<div><strong data-studio-name>เซตอัป</strong><span data-studio-draft>ร่าง</span></div><div><button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button><button type="button" class="secondary" data-studio-save>บันทึก</button><button type="button" class="primary" data-studio-activate>เปิดใช้งาน</button></div>';
   workbench.before(header);
   const tabsBar = document.createElement("nav");
   tabsBar.className = "studio-inspector-tabs";
@@ -390,7 +390,6 @@
     header.querySelector("[data-studio-draft]").textContent = state.saved
       ? "ร่าง · เวอร์ชัน " + state.saved.revision
       : "ร่างใหม่";
-    header.querySelector("[data-studio-undo]").disabled = !state.undo.length;
     header.querySelector("[data-studio-activate]").disabled =
       !state.saved ||
       JSON.stringify(comparableSpec(state.saved.spec)) !==
@@ -856,7 +855,6 @@
       );
     }
     for (const [attr, target] of [
-      ["data-studio-undo", "[data-undo]"],
       ["data-studio-save", "[data-save]"],
     ])
       if (b.hasAttribute(attr)) panel.querySelector(target)?.click();

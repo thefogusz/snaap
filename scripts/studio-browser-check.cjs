@@ -36,6 +36,8 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     assert.ok(await page.locator('.studio-name-field').evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector('.studio-setup-settings')) & Node.DOCUMENT_POSITION_FOLLOWING)));
     assert.equal(await page.locator('.studio-setup-details [data-path="name"]').count(), 0);
     assert.equal(await page.locator('.studio-setup-details > summary').innerText(), 'รอบตรวจสัญญาณ');
+    assert.equal(await page.locator('[data-studio-undo]').count(), 0);
+    assert.equal(await page.locator('.design-toolbar [data-undo]').count(), 1);
     assert.ok(await page.locator(".studio-setup-settings .exchange-fieldset").isVisible());
     assert.equal(await page.locator('.studio-setup-settings [data-path="market"]').count(), 1);
     assert.ok(await page.locator('.studio-setup-settings > label').isVisible());
