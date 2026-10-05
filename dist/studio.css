@@ -8,9 +8,28 @@
 .setup-studio header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 20px;
+}
+.studio-header-info {
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studio-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.studio-header-actions [data-chart-refresh] {
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 .setup-studio header p {
   font-size: 12px;
@@ -193,6 +212,8 @@
   .setup-studio header {
     padding: 14px;
   }
+  .studio-header-info { flex-basis: 100%; }
+  .studio-header-actions { margin-left: 0; }
   .replay-controls {
     padding: 12px;
   }
