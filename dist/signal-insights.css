@@ -40,46 +40,6 @@
   margin: 0.25rem 0;
   overflow-wrap: anywhere;
 }
-.signal-outcome {
-  grid-column: 1/-1;
-  font-size: 0.8rem;
-  line-height: 1.6;
-  border-top: 1px solid var(--border, #8885);
-  padding-top: 0.5rem;
-  min-width: 0;
-}
-.signal-outcome summary {
-  cursor: pointer;
-}
-.signal-outcome p {
-  margin: 0.5rem 0;
-}
-.signal-outcome small {
-  opacity: 0.8;
-}
-.risk-plan-form {
-  display: grid;
-  gap: 0.75rem;
-}
-.risk-plan-form label {
-  display: grid;
-  gap: 0.25rem;
-}
-.risk-plan-form input {
-  max-width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--border, #8885);
-  border-radius: 0.375rem;
-  background: transparent;
-  color: inherit;
-}
-.risk-plan-form .risk-enabled {
-  display: flex;
-  align-items: center;
-}
-.risk-plan-form [role="alert"] {
-  color: var(--danger, #c13d51);
-}
 .setup-insights {
   padding: 0 0.75rem;
   min-width: 0;
@@ -97,9 +57,6 @@
   }
   .watch-row-footer {
     flex-wrap: wrap;
-  }
-  .signal-outcome {
-    width: 100%;
   }
 }
 

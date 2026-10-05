@@ -9,16 +9,15 @@ export function registerSetupFiles(app: FastifyInstance, db: pg.Pool) {
     const file = setupFile(req.body);
     const items = await transaction(db, async (c) => {
       const items = [];
-      for (const [index, spec] of file.setups.entries()) {
+      for (const spec of file.setups) {
         const id = randomUUID();
         await c.query(
-          "INSERT INTO rules(id,owner_id,spec,workspace_id,active,risk_plan) VALUES($1,$2,$3,$4,false,$5)",
+          "INSERT INTO rules(id,owner_id,spec,workspace_id,active) VALUES($1,$2,$3,$4,false)",
           [
             id,
             req.userId,
             spec,
             req.workspaceId ?? null,
-            file.riskPlans?.[index] ?? null,
           ],
         );
         await c.query(
@@ -30,7 +29,6 @@ export function registerSetupFiles(app: FastifyInstance, db: pg.Pool) {
           spec,
           revision: 1,
           active: false,
-          risk_plan: file.riskPlans?.[index] ?? null,
         });
       }
       return items;

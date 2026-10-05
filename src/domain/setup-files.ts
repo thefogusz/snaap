@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { strategySchema } from "./engine.js";
-import { riskPlanSchema } from "./outcomes.js";
 const fileSchema = z
   .object({
     format: z.literal("snaap.trade-setups"),
     version: z.literal(1),
     setups: z.array(strategySchema).min(1).max(50),
-    riskPlans: z.array(riskPlanSchema.nullable()).max(50).optional(),
+    // Accept older files, but discard retired price-tracking settings.
+    riskPlans: z.array(z.unknown()).max(50).optional(),
   })
   .strict()
   .refine(
@@ -20,7 +20,8 @@ export function setupFile(input: unknown) {
       : input,
   );
   return {
-    ...file,
+    format: file.format,
+    version: file.version,
     setups: file.setups.map((spec) => ({ ...spec, destinations: [] })),
   };
 }

@@ -1048,7 +1048,7 @@ function watchSetupRow(r) {
       <p class="watch-all-pairs"><strong>คู่เทรด</strong> ${esc(pairs.join(", "))}</p>
       <div class="watch-flexibility" data-flex-rule="${esc(r.id)}"><div class="flex-summary"><strong>ความยืดหยุ่น</strong><span>${esc(entryFlexUI.flexibilitySummary(r.spec))}</span><button type="button" data-flex-toggle aria-label="ปรับความยืดหยุ่น" aria-expanded="false" aria-controls="flex-${esc(r.id)}">ปรับ</button></div><div class="flex-panel" id="flex-${esc(r.id)}" data-flex-panel hidden></div></div>
       <p class="watch-rule-summary"><strong>เงื่อนไขเข้า</strong> ${esc(setupEntrySummary(r.spec))}</p>
-      <div class="watch-details-actions"><button class="secondary" data-risk-plan="${esc(r.id)}">แผน ATR${r.risk_plan?.enabled?' · เปิด':''}</button><button class="secondary" data-export-setup-code="${esc(r.id)}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="text-button watch-delete" data-delete-rule="${esc(r.id)}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">${uiIcon("trash")}ลบเซตอัป</button></div>
+      <div class="watch-details-actions"><button class="secondary" data-export-setup-code="${esc(r.id)}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="text-button watch-delete" data-delete-rule="${esc(r.id)}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">${uiIcon("trash")}ลบเซตอัป</button></div>
     </div></details>
   </article>`;
 }
