@@ -84,7 +84,7 @@ export function registerPresets(
           )
         ).rowCount
       )
-        throw new ApiError(404, "RULE_NOT_FOUND", "ไม่พบเซตอัปที่บันทึกไว้");
+        throw new ApiError(404, "RULE_NOT_FOUND", "ไม่พบเซ็ตอัพที่บันทึกไว้");
       if (
         latest &&
         isDeepStrictEqual(latest.ui_card.spec, spec) &&
@@ -236,7 +236,7 @@ export function registerPresets(
           throw new ApiError(
             409,
             "PRESET_SUPERSEDED",
-            "ใช้การ์ดเซตอัปล่าสุดในบทสนทนานี้",
+            "ใช้การ์ดเซ็ตอัพล่าสุดในบทสนทนานี้",
           );
         const spec = strategySchema.parse({
           ...conv.draft,
@@ -264,14 +264,14 @@ export function registerPresets(
             throw new ApiError(
               404,
               "RULE_NOT_FOUND",
-              "เซตอัพถูกลบแล้ว เลือกพรีเซ็ตใหม่",
+              "เซ็ตอัพถูกลบแล้ว เลือกพรีเซ็ตใหม่",
             );
           if (!isDeepStrictEqual(rule.spec, spec)) {
             if (rule.revision !== input.expectedRuleRevision)
               throw new ApiError(
                 409,
                 "REVISION_CONFLICT",
-                "เซตอัพเปลี่ยนแล้ว กรุณาเปิดบทสนทนาใหม่",
+                "เซ็ตอัพเปลี่ยนแล้ว กรุณาเปิดบทสนทนาใหม่",
               );
             rule = (
               await c.query(

@@ -129,7 +129,7 @@ export function initPresets(ctx){
   const current=()=>state.conversation===conversation&&state.workspaceId===workspace&&node.isConnected;
   function paint(){
    const latest=[...cards.values()].filter(r=>r.node.isConnected).sort((a,b)=>new Date(b.m.created_at)-new Date(a.m.created_at)||b.m.id.localeCompare(a.m.id))[0];
-   if(latest!==record){node.innerHTML='<details><summary>เซตอัปก่อนหน้า</summary><div class="preset-review-text">'+esc(fullSummary(m.ui_card.spec))+'</div></details>';return;}
+   if(latest!==record){node.innerHTML='<details><summary>เซ็ตอัพก่อนหน้า</summary><div class="preset-review-text">'+esc(fullSummary(m.ui_card.spec))+'</div></details>';return;}
    const rule=state.rules.find(r=>r.id===m.ui_card.ruleId);
    if(rule)state.saved=rule;
    const p=presets.find(p=>p.id===m.ui_card.presetId);
@@ -139,9 +139,9 @@ export function initPresets(ctx){
    const dirty=!!rule&&(canonical(spec)!==canonical(rule.spec)||canonical([...selected].sort())!==canonical([...rule.spec.destinations].sort()));
    const status=dirty?(rule.active?'ร่างใหม่ยังไม่บันทึก · รุ่นเดิมยังแจ้งเตือน':'มีการปรับค่า · ยังไม่บันทึก'):rule?.active?'กำลังแจ้งเตือน':rule?'บันทึกแล้ว · ยังไม่เปิด':'ร่าง · ยังไม่บันทึก';
    const channels=`<details class="setup-card-channels"><summary><span>การแจ้งเตือน</span><span class="setup-card-channel-preview">ในเว็บ${selected.length?' + '+selected.length+' ช่องทาง':''}</span></summary><fieldset class="preset-destinations"><legend class="sr-only">เลือกช่องทางแจ้งเตือน</legend><span class="preset-inline-note">รับสัญญาณในเว็บเสมอ</span>${state.destinations.filter(d=>d.verified).map(d=>`<label><input type="checkbox" data-channel="${esc(d.id)}" ${selected.includes(d.id)?'checked':''}>${esc(d.name)}</label>`).join('')}<button class="text-button" type="button" data-channels>เพิ่มช่องทาง ↗</button></fieldset></details>`;
-   const save=`<button class="primary" type="button" data-preset-save ${busy?'disabled':''}>${rule?'บันทึกการปรับค่า':'บันทึกเซตอัป'}</button>`;
+   const save=`<button class="primary" type="button" data-preset-save ${busy?'disabled':''}>${rule?'บันทึกการปรับค่า':'บันทึกเซ็ตอัพ'}</button>`;
    const activate=rule?`<button class="${rule.active?'secondary':'primary'}" type="button" data-activate ${busy?'disabled':''}>${rule.active?'หยุดแจ้งเตือน':'เปิดแจ้งเตือน'}</button>`:'';
-   node.innerHTML=setupCardMarkup({spec,title:spec.name===`${p?.title} · ${spec.pairs.join(', ')} · ${spec.side}`?p.title:spec.name,status,version:rule?.revision,active:rule?.active,channels,actions:`<button class="secondary" type="button" data-edit>แก้ไขเซตอัป</button>${!rule||dirty?save:''}${rule&&(!dirty||rule.active)?activate:''}`,note:dirty?(rule.active?'ยังติดตามเงื่อนไขรุ่นที่บันทึก · บันทึกการปรับค่าแล้วจะพักแจ้งเตือน':'บันทึกการปรับค่าก่อนเปิดแจ้งเตือน'):rule?.active?'ตรวจแท่งปิด · ส่งสัญญาณเท่านั้น':rule?'เปิดเมื่อพร้อมให้ Snaap ติดตาม':'บันทึกก่อน แล้วค่อยเปิดแจ้งเตือน'},{esc,fullSummary});
+   node.innerHTML=setupCardMarkup({spec,title:spec.name===`${p?.title} · ${spec.pairs.join(', ')} · ${spec.side}`?p.title:spec.name,status,version:rule?.revision,active:rule?.active,channels,actions:`<button class="secondary" type="button" data-edit>แก้ไขเซ็ตอัพ</button>${!rule||dirty?save:''}${rule&&(!dirty||rule.active)?activate:''}`,note:dirty?(rule.active?'ยังติดตามเงื่อนไขรุ่นที่บันทึก · บันทึกการปรับค่าแล้วจะพักแจ้งเตือน':'บันทึกการปรับค่าก่อนเปิดแจ้งเตือน'):rule?.active?'ตรวจแท่งปิด · ส่งสัญญาณเท่านั้น':rule?'เปิดเมื่อพร้อมให้ Snaap ติดตาม':'บันทึกก่อน แล้วค่อยเปิดแจ้งเตือน'},{esc,fullSummary});
    node.querySelectorAll('[data-channel]').forEach(input=>input.onchange=()=>{chosenChannels=[...node.querySelectorAll('[data-channel]:checked')].map(n=>n.dataset.channel);paint();});
    node.querySelector('.setup-card-channels').open=channelsOpen;
    node.querySelector('[data-edit]').onclick=()=>{if(!current())return;setWorkbenchTab('split');showDesigner();document.querySelector('#designer')?.scrollIntoView({block:'start',behavior:'smooth'});};
@@ -160,7 +160,7 @@ export function initPresets(ctx){
     await api('/strategies/validate','POST',state.draft);if(!current())return;
     const result=await api(`/conversations/${conversation}/${m.ui_card.type==='preset'?'preset':'setup-card'}/${m.id}/save`,'POST',{expectedRevision:state.draftRevision,expectedRuleRevision:rule?.revision,destinations});
     if(!current())return;
-    state.saved=result.rule;state.draft=result.spec;state.draftRevision=result.draft_revision;state.persistedDraft=JSON.stringify(result.spec);m.ui_card=result.card;persistRecovery();renderDesigner();await refresh();chosenChannels=null;toast('บันทึกเซตอัพเรียบร้อย');
+    state.saved=result.rule;state.draft=result.spec;state.draftRevision=result.draft_revision;state.persistedDraft=JSON.stringify(result.spec);m.ui_card=result.card;persistRecovery();renderDesigner();await refresh();chosenChannels=null;toast('บันทึกเซ็ตอัพเรียบร้อย');
    }));
    node.querySelector('[data-activate]')?.addEventListener('click',()=>run(async()=>{
     if(!rule)return;

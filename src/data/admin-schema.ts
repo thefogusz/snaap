@@ -97,7 +97,7 @@ export async function migrateAdmin(db: pg.Pool) {
     CREATE OR REPLACE FUNCTION close_paused_admin_incidents() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN
       IF NOT NEW.active OR NEW.deleted_at IS NOT NULL THEN
-        UPDATE admin_events SET status='resolved',severity='info',detail='เซตอัปหยุดเฝ้าตลาดแล้ว',updated_at=now(),resolved_at=now()
+        UPDATE admin_events SET status='resolved',severity='info',detail='เซ็ตอัพหยุดเฝ้าตลาดแล้ว',updated_at=now(),resolved_at=now()
         WHERE category='market' AND status='open' AND metadata->>'ruleId'=NEW.id::text;
       END IF;
       RETURN NEW;

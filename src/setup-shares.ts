@@ -16,7 +16,7 @@ function codeHash(params: unknown) {
   try {
     return setupCodeHash(code);
   } catch {
-    throw new ApiError(400, "INVALID_CODE", "โค้ดเซตอัปไม่ถูกต้อง");
+    throw new ApiError(400, "INVALID_CODE", "โค้ดเซ็ตอัพไม่ถูกต้อง");
   }
 }
 export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
@@ -31,7 +31,7 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
         [ruleId, req.userId, req.workspaceId ?? null],
       )
     ).rows[0];
-    if (!row) throw new ApiError(404, "NOT_FOUND", "ไม่พบเซตอัป");
+    if (!row) throw new ApiError(404, "NOT_FOUND", "ไม่พบเซ็ตอัพ");
     const setup = setupFile(row.spec).setups[0];
     for (let attempt = 0; attempt < 3; attempt++) {
       const code = makeSetupCode();

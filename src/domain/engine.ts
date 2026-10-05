@@ -187,7 +187,7 @@ const strategyStructure = z
           ),
       )
       .min(1)
-      .max(10, "เลือกคู่เทรดได้สูงสุด 10 คู่ต่อเซตอัป"),
+      .max(10, "เลือกคู่เทรดได้สูงสุด 10 คู่ต่อเซ็ตอัพ"),
     timeframe,
     entry: condition,
     entryMatchPercent: entryMatchPercentSchema.optional(),
@@ -379,7 +379,7 @@ const strategyStructure = z
       ctx.addIssue({
         code: "custom",
         message:
-          `เซตอัปมีได้สูงสุด ${MAX_SETUP_CONDITIONS} เงื่อนไข รวมเงื่อนไขเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก`,
+          `เซ็ตอัพมีได้สูงสุด ${MAX_SETUP_CONDITIONS} เงื่อนไข รวมเงื่อนไขเริ่มต้น รอยืนยัน ออก ยกเลิก และ Short ที่ตั้งแยก`,
       });
     if (
       new Set(s.exchange).size !== s.exchange.length ||

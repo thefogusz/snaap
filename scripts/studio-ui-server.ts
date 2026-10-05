@@ -91,7 +91,7 @@ const provider = http.createServer(async (req, res) => {
           role: "assistant",
           status: "completed",
           content: [
-            { type: "output_text", text: "เลือกเซตอัปก่อนเริ่มปรับร่าง" },
+            { type: "output_text", text: "เลือกเซ็ตอัพก่อนเริ่มปรับร่าง" },
           ],
         },
       ];

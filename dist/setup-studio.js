@@ -17,11 +17,11 @@
   const header = document.createElement("header");
   header.className = "studio-workspace-header";
   header.innerHTML =
-    '<div><strong data-studio-name>เซตอัป</strong><span data-studio-draft>ร่าง</span></div><div><button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button></div>';
+    '<div><strong data-studio-name>เซ็ตอัพ</strong><span data-studio-draft>ร่าง</span></div><div><button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button></div>';
   workbench.before(header);
   const tabsBar = document.createElement("nav");
   tabsBar.className = "studio-inspector-tabs";
-  tabsBar.setAttribute("aria-label", "พื้นที่ทำงานเซตอัป");
+  tabsBar.setAttribute("aria-label", "พื้นที่ทำงานเซ็ตอัพ");
   tabsBar.innerHTML = ["agent", "conditions", "evidence"]
     .map(
       (name, i) =>
@@ -48,7 +48,7 @@
     handle.tabIndex = 0;
     handle.setAttribute("role", "separator");
     handle.setAttribute("aria-orientation", "vertical");
-    handle.setAttribute("aria-label", name === "agent" ? "ปรับความกว้างแชท" : "ปรับความกว้างแผงออกแบบเซตอัป");
+    handle.setAttribute("aria-label", name === "agent" ? "ปรับความกว้างแชท" : "ปรับความกว้างแผงออกแบบเซ็ตอัพ");
     handle.title = "ลากเพื่อปรับความกว้าง · ลูกศรซ้าย/ขวา · ดับเบิลคลิกคืนขนาดเดิม";
     workbench.append(handle);
     return handle;
@@ -319,11 +319,11 @@
     const box = panel.querySelector(".studio-condition-overview");
     if (!box || !state.draft) return;
     if (!hasEntryCondition()) {
-      box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซตอัป</h3><span>0/${MAX_SETUP_CONDITIONS}</span></div><p class="field-note">ยังไม่มีเงื่อนไข เริ่มเพิ่มเองหรือให้ Snaap ช่วยออกแบบ</p><button type="button" class="secondary" data-add="entry">เพิ่มเงื่อนไขเข้า</button>`;
+      box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซ็ตอัพ</h3><span>0/${MAX_SETUP_CONDITIONS}</span></div><p class="field-note">ยังไม่มีเงื่อนไข เริ่มเพิ่มเองหรือให้ Snaap ช่วยออกแบบ</p><button type="button" class="secondary" data-add="entry">เพิ่มเงื่อนไขเข้า</button>`;
       return;
     }
     const rows = conditionRows(state.draft);
-    box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซตอัป</h3><span>${setupConditionCount(state.draft)}/${MAX_SETUP_CONDITIONS}</span></div><label class="studio-filter">ไทม์เฟรมเงื่อนไข<select data-condition-frame><option value="">ทุกไทม์เฟรม</option>${tf.map((t) => `<option value="${t}" ${filter === t ? "selected" : ""}>${t.toUpperCase()}</option>`).join("")}</select></label><p class="field-note">ตรวจสัญญาณเมื่อแท่ง ${esc(state.draft.timeframe.toUpperCase())} ปิด · ใช้แท่งปิดล่าสุดของแต่ละไทม์เฟรม</p>${
+    box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซ็ตอัพ</h3><span>${setupConditionCount(state.draft)}/${MAX_SETUP_CONDITIONS}</span></div><label class="studio-filter">ไทม์เฟรมเงื่อนไข<select data-condition-frame><option value="">ทุกไทม์เฟรม</option>${tf.map((t) => `<option value="${t}" ${filter === t ? "selected" : ""}>${t.toUpperCase()}</option>`).join("")}</select></label><p class="field-note">ตรวจสัญญาณเมื่อแท่ง ${esc(state.draft.timeframe.toUpperCase())} ปิด · ใช้แท่งปิดล่าสุดของแต่ละไทม์เฟรม</p>${
       rows
         .filter((r) => !filter || r.frames.includes(filter))
         .map((r) => {
@@ -397,7 +397,7 @@
     panel.querySelectorAll('[data-studio-activate]').forEach(button=>{
       button.disabled=activationDisabled;
       button.textContent=currentSetupActive ? 'เปิดใช้งานแล้ว' : 'เปิดใช้งาน';
-      button.title=currentSetupActive ? 'เซตอัปนี้กำลังตรวจสัญญาณ' : activationDisabled ? 'บันทึกเซตอัปก่อนเปิดใช้งาน' : 'เปิดตรวจและแจ้งเตือนเซตอัปนี้';
+      button.title=currentSetupActive ? 'เซ็ตอัพนี้กำลังตรวจสัญญาณ' : activationDisabled ? 'บันทึกเซ็ตอัพก่อนเปิดใช้งาน' : 'เปิดตรวจและแจ้งเตือนเซ็ตอัพนี้';
     });
     if (!panel.querySelector(".studio-condition-overview")) {
       const body = panel.querySelector(".design-body");
