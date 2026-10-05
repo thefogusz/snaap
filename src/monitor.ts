@@ -169,7 +169,7 @@ export async function evaluateTarget(
             ),
           ],
         );
-        if (inserted.rowCount && spec.destinations.length)
+        if (inserted.rowCount && event.kind !== 'EXPIRED' && spec.destinations.length)
           deliveryIds.push(
             ...(
               await c.query(
