@@ -317,6 +317,7 @@
     const pairs = [...state.draft.pairs];
     const hint = panel.querySelector("[data-pair-availability]");
     if (!hint) return;
+    hint.hidden = false;
     hint.textContent = `กำลังตรวจคู่เทรดบน ${exchange} · ${market}…`;
     try {
       const data = await api(`/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(market)}`);
@@ -325,7 +326,8 @@
       const missing = pairs.filter(pair => !available.has(pair));
       hint.textContent = missing.length
         ? `${missing.join(", ")} ไม่มีหรือยังไม่รองรับบน ${exchange} · ${market} กรุณาเลือกคู่เทรดใหม่`
-        : `คู่เทรดพร้อมใช้บน ${exchange} · ${market}`;
+        : "";
+      hint.hidden = !missing.length;
       hint.style.color = missing.length ? "#f2bb70" : "";
     } catch (error) {
       if (token === availabilityGeneration && hint.isConnected) hint.textContent = error.message;

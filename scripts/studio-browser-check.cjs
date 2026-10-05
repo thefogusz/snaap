@@ -41,6 +41,8 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     assert.ok(await page.locator(".studio-setup-settings .exchange-fieldset").isVisible());
     assert.equal(await page.locator('.studio-setup-settings [data-path="market"]').count(), 1);
     assert.ok(await page.locator('.studio-setup-settings > label').isVisible());
+    await page.locator('[data-pair-availability]').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.studio-setup-settings .setup-direction-spot').isVisible(), false);
     assert.equal(await page.locator('.studio-toolbar-meta [data-draft-status]').count(), 1);
     assert.equal(await page.locator('.design-panel > [data-draft-status]').count(), 0);
     assert.equal(await page.locator('.studio-toolbar-meta .saved-label').isVisible(), false);
