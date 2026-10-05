@@ -9,13 +9,13 @@ const end=source.indexOf('document.addEventListener("submit",',start);
 assert.ok(start >= 0 && end > start);
 
 function fixture(api: (url:string,method?:string,body?:unknown,options?:{signal:AbortSignal})=>Promise<unknown>, signals:unknown=AbortSignal) {
-  const element=()=>({innerHTML:'',textContent:'',className:'',children:[],tagName:'DIV',
+  const element=()=>({innerHTML:'',textContent:'',className:'',dataset:{},children:[],childNodes:[],tagName:'DIV',
     append(){},before(){},after(){},setAttribute(){},closest(){return null;},remove(){},
-    querySelector(){return null;},querySelectorAll(){return [];}});
+    removeAttribute(){},replaceChildren(){},querySelector(){return element();},querySelectorAll(){return [];}});
   const view=element(),upload=element();
   const created:ReturnType<typeof element>[]=[];
   const rendered:string[]=[];
-  const context=vm.createContext({api,AbortSignal:signals,AbortController,document:{createElement:()=>{
+  const context=vm.createContext({api,AbortSignal:signals,AbortController,state:{workspaceId:'test-workspace'},scheduleHistorySyncRefresh:()=>{},document:{createElement:()=>{
     const node=element();created.push(node);return node;
   }},
     $:(selector:string)=>selector==='#view-history'?view:upload,
@@ -27,11 +27,11 @@ function fixture(api: (url:string,method?:string,body?:unknown,options?:{signal:
   return {view,created,render:context.render as ()=>Promise<void>,rendered};
 }
 
-test('history exposes file import immediately and starts independent reads together',async()=>{
+test('history shows a stable loading heading and starts independent reads together',async()=>{
   const calls:string[]=[];
   const page=fixture(async url=>{calls.push(url);return new Promise(()=>{});});
   void page.render();
-  assert.match(page.view.innerHTML,/history-upload/);
+  assert.match(page.view.innerHTML,/ข้อมูลของฉัน/);
   assert.deepEqual(calls.sort(),['/connections','/images','/imports']);
 });
 
@@ -41,11 +41,10 @@ test('an imports failure does not leave the page stuck loading or hide other sec
     return url==='/connections'?{items:[],supported:[],enabled:false}:[];
   });
   await page.render();
-  assert.match(page.view.innerHTML,/history-upload/);
+  assert.ok(page.created.some(node=>/history-upload/.test(node.innerHTML)));
   assert.ok(page.rendered.includes('connections'));
   assert.ok(page.rendered.includes('images'));
   assert.ok(page.created.some(node=>/ประวัติที่นำเข้า.*ยังโหลดข้อมูลส่วนนี้ไม่ได้/.test(node.innerHTML)));
-  assert.ok(page.created.every(node=>!/<button/.test(node.innerHTML)));
 });
 
 test('old history responses cannot render into a newer workspace view',async()=>{

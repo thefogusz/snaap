@@ -7,6 +7,9 @@ function parkNotificationRules() {
   document.querySelector("#main").append(notificationRules);
 }
 let notificationData;
+let notificationWorkspace;
+let notificationLoadedAt = 0;
+let notificationFlight;
 let notificationRequest = 0;
 const channelInfo = {
   TELEGRAM: {
@@ -98,12 +101,22 @@ function signalCard(row) {
   const formattedTime=stamp.toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   return `<article class="signal-item signal-${appearance.direction}" data-signal-kind="${esc(row.event.kind)}"><span class="signal-symbol signal-tone-${appearance.tone}" aria-hidden="true">${uiIcon(appearance.icon)}</span><div class="signal-details"><div class="signal-heading"><h2>${esc(row.pair)} <span>${esc(row.exchange)}</span></h2><span class="signal-side signal-tone-${appearance.direction}">${esc(label)}</span>${signalValidityTag(row)}</div><p class="signal-meta"><span>${esc(kindLabel)}</span><span class="signal-meta-dot" aria-hidden="true">·</span><span class="signal-setup-name" title="${esc(metaTitle)}">${esc(meta)}</span></p></div><div class="signal-price"><strong>${Number(row.event.referencePrice).toLocaleString('th-TH')}</strong><small>ราคาอ้างอิง</small></div><time datetime="${stamp.toISOString()}" title="${esc(stamp.toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}">${esc(formattedTime)}</time></article>`;
 }
-async function renderNotifications() {
+async function renderNotifications(force = true) {
+  const workspace = state.workspaceId;
+  if (notificationFlight?.workspace === workspace) return notificationFlight.promise;
+  if (!force && notificationData && notificationWorkspace === workspace && Date.now() - notificationLoadedAt < 30000) return;
+  const promise = loadNotifications(workspace);
+  notificationFlight = { workspace, promise };
+  try { await promise; } finally { if (notificationFlight?.promise === promise) notificationFlight = null; }
+}
+async function loadNotifications(workspace) {
   const request = ++notificationRequest;
   const view = $("#view-notifications");
-  if (!notificationData)
+  if (!notificationData || notificationWorkspace !== workspace) {
+    parkNotificationRules();
     view.innerHTML =
       '<div class="page-heading"><h1>การแจ้งเตือน</h1></div><p class="notification-loading" role="status">กำลังโหลดการแจ้งเตือน…</p>';
+  }
   try {
     const [signals, channels, deliveries, monitor] = await Promise.all([
       api("/signals?view=signals"),
@@ -111,12 +124,14 @@ async function renderNotifications() {
       api("/deliveries"),
       api("/monitor"),
     ]);
-    if (request !== notificationRequest) return;
+    if (request !== notificationRequest || workspace !== state.workspaceId) return;
     state.destinations = channels.items;
     notificationData = { signals, channels, deliveries, monitor, more: signals.length === 100 };
+    notificationWorkspace = workspace;
+    notificationLoadedAt = Date.now();
     paintNotifications();
   } catch (error) {
-    if (request !== notificationRequest) return;
+    if (request !== notificationRequest || workspace !== state.workspaceId) return;
     parkNotificationRules();
     view.innerHTML = `<div class="page-heading"><h1>การแจ้งเตือน</h1></div><div class="notification-error" role="alert"><p>${esc(error.message)}</p><button class="secondary" data-notification-refresh>ลองอีกครั้ง</button></div>`;
   }

@@ -5,13 +5,13 @@ async function renderLabImageChoices() {
   state.libraryImages=images.slice(0,5);
   target.innerHTML=`<h3>ภาพจากข้อมูลของฉัน</h3><p class="field-note">${images.length ? `ใช้ภาพในคลังอัตโนมัติ ${state.libraryImages.length} ภาพ · พิมพ์ @ชื่อภาพ เพื่อระบุภาพที่ต้องการอ้างอิง` : 'ยังไม่มีภาพ เพิ่มภาพอ้างอิงได้ที่ข้อมูลของฉัน'}</p>`;
 }
-async function renderTradingLab(images) {
+async function renderTradingLab(host = $('#view-history'), images) {
   images ??= await api('/images');
-  state.allLibraryImages=images;
+  if (host.isConnected) state.allLibraryImages=images;
   const section=document.createElement('section');
   section.className='runtime-card trading-lab-images';
   section.innerHTML=`<div class="library-heading"><h2>ภาพอ้างอิงของฉัน</h2><span class="library-count">${images.length}/5 ภาพ</span></div><p class="library-intro">อัปโหลดกราฟ อินดิเคเตอร์ หรือภาพอ้างอิง · Snaap ใช้ร่วมกับประวัติที่นำเข้าเมื่อเปิด “ใช้ข้อมูลของฉัน”</p><label class="file-drop"><span><strong>เพิ่มภาพ</strong><small>PNG / JPEG / WebP · ไม่เกิน 5 MB</small></span><input type="file" id="lab-image-upload" accept="image/png,image/jpeg,image/webp"></label><div class="lab-image-grid">${images.map(i=>`<article><img src="${esc(i.url)}" alt="${esc(i.name)}" loading="lazy"><div class="library-image-slot"></div></article>`).join('')}</div><p class="field-note library-retention">เก็บไว้จนกว่าคุณจะลบ · เปลี่ยนชื่อแล้วใช้ @ชื่อภาพ ในแชทได้</p>`;
-  $$('#view-history .trading-lab-images').forEach(existing=>existing.remove());
+  host.querySelectorAll('.trading-lab-images').forEach(existing=>existing.remove());
   section.querySelector('#lab-image-upload').disabled=images.length>=5;
   section.querySelectorAll('.lab-image-grid article').forEach((card,index)=>{
     const image=images[index],tools=document.createElement('div');tools.className='library-image-tools';
@@ -22,7 +22,7 @@ async function renderTradingLab(images) {
     };
     tools.querySelector('[data-delete-image]').onclick=event=>showLibraryImageDelete(image,event.currentTarget);
   });
-  $('#view-history .page-heading').after(section);
+  host.querySelector('.page-heading').after(section);
   section.querySelector('#lab-image-upload').onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
     e.target.disabled=true;

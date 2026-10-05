@@ -52,6 +52,7 @@
     lines = [],
     result,
     key = "",
+    pendingKey = "",
     timer,
     playTimer,
     generation = 0,
@@ -85,7 +86,7 @@
   let wasVisible = false;
   new ResizeObserver(() => {
     const visible = canvas.clientWidth > 0 && canvas.clientHeight > 0;
-    if (visible && !wasVisible) requestAnimationFrame(fitFrame);
+    if (visible && !wasVisible) requestAnimationFrame(() => { if (chart) fitFrame(); else update(); });
     wasVisible = visible;
   }).observe(canvas);
   document.addEventListener("workbench-mode-changed", () => {
@@ -231,31 +232,39 @@
     const spec = {...state.draft,pairs:[chartPair]};
     const next = JSON.stringify({spec,chartFrame});
     const draftAtRequest=JSON.stringify(state.draft);
-    if (!force && next === key && result) return;
-    key = next;
+    if (!force && ((next === key && result) || next === pendingKey)) return;
+    pendingKey = next;
     const token = ++generation;
     stop();
     studio.querySelector("[data-chart-title]").textContent =
       `${state.draft.exchange.join(", ")} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
     if (state.draft.exchange.length !== 1 || !state.draft.pairs.length) {
+      pendingKey = "";
       status.textContent = "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ";
       return;
     }
     status.textContent = "กำลังคำนวณกราฟและสัญญาณ…";
     try {
       const data = await api("/preview", "POST", JSON.parse(next));
-      if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==spec.pairs[0]) return;
+      if (token !== generation) return;
+      if (JSON.stringify(state.draft) !== draftAtRequest || chartPair !== spec.pairs[0]) { pendingKey = ""; schedule(); return; }
       render(data);
+      key = next;
     } catch (e) {
       if (token === generation) {
         status.textContent = e.message;
         key = "";
       }
+    } finally {
+      if (token === generation) pendingKey = "";
     }
   }
   function schedule() {
+    if (!state.draft) return;
     if (JSON.stringify({spec:{...state.draft,pairs:[chartPair]},chartFrame}) === key && result) return;
+    if (JSON.stringify({spec:{...state.draft,pairs:[chartPair]},chartFrame}) === pendingKey) return;
     generation++;
+    pendingKey = "";
     stop();
     studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
     clearTimeout(timer);
@@ -264,7 +273,7 @@
     timer = setTimeout(() => {
       canvas.style.opacity = "1";
       update();
-    }, 450);
+    }, 120);
   }
   document.addEventListener("setup-rendered", schedule);
   document.addEventListener('studio-refresh',()=>update(true));
