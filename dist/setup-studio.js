@@ -381,20 +381,32 @@
         JSON.stringify(comparableSpec(state.draft));
     if (!panel.querySelector(".studio-condition-overview")) {
       const body = panel.querySelector(".design-body");
-      const settings = document.createElement("details");
+      const settings = document.createElement("section");
       settings.className = "studio-setup-settings";
-      settings.innerHTML = "<summary>ตลาด คู่เทรด และรอบตรวจสัญญาณ</summary>";
-      for (const child of [...body.children]) {
-        if (child.classList.contains("setup-section")) break;
-        if (child.id !== "editor-feedback") settings.append(child);
-      }
+      settings.setAttribute("aria-label", "ตลาดและประเภทการเทรด");
+      const exchange = body.querySelector(".exchange-fieldset");
+      const market = body.querySelector('[data-path="market"]')?.closest("label");
+      const pair = body.querySelector(".pair-control");
+      const direction = body.querySelector(".setup-direction, .setup-direction-spot");
+      const name = body.querySelector('[data-path="name"]')?.closest("label");
+      const frameSelect = body.querySelector('[data-path="timeframe"]');
+      const evaluation = frameSelect?.closest("label");
+      for (const field of [exchange, market, pair, direction])
+        if (field) settings.append(field);
+      body.querySelector(":scope > .field-grid")?.remove();
       body.prepend(settings);
       const feedback = body.querySelector("#editor-feedback");
       if (feedback) body.prepend(feedback);
       const overview = document.createElement("section");
       overview.className = "studio-condition-overview";
-      settings.before(overview);
+      settings.after(overview);
       overview.after(overlayEditor);
+      const details = document.createElement("details");
+      details.className = "studio-setup-details";
+      details.innerHTML = "<summary>ชื่อเซตอัปและรอบตรวจสัญญาณ</summary>";
+      if (name) details.append(name);
+      if (evaluation) details.append(evaluation);
+      overlayEditor.after(details);
       body.querySelectorAll(":scope > .setup-section").forEach((section) => {
         const details = document.createElement("details");
         details.className = "studio-original-editor";
@@ -403,7 +415,6 @@
         section.before(details);
         details.append(section);
       });
-      const frameSelect = body.querySelector('[data-path="timeframe"]');
       if (frameSelect?.parentElement.firstChild)
         frameSelect.parentElement.firstChild.textContent =
           "ตรวจสัญญาณเมื่อแท่ง … ปิด";

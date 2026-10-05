@@ -229,6 +229,7 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   flex: none;
 }
 .studio-setup-settings,
+.studio-setup-details,
 .studio-original-editor {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -236,6 +237,7 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   margin-bottom: 12px;
 }
 .studio-setup-settings > summary,
+.studio-setup-details > summary,
 .studio-original-editor > summary {
   cursor: pointer;
   font-size: 12px;
@@ -244,6 +246,41 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
 }
 .studio-setup-settings[open] > summary {
   margin-bottom: 12px;
+}
+.studio-setup-settings {
+  padding: 0;
+  border: 0;
+}
+.studio-setup-settings .exchange-fieldset {
+  margin-top: 0;
+}
+.studio-setup-settings > label {
+  display: block;
+  margin-block: 12px;
+}
+.studio-setup-settings > label select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+.studio-toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.studio-toolbar-meta .saved-label,
+.studio-toolbar-meta [data-draft-status] {
+  font-size: 11px;
+  margin: 0;
+  padding: 0;
+}
+.studio-toolbar-meta [data-draft-status]::before {
+  display: none;
+}
+.studio-toolbar-meta [data-draft-status][data-state="saved"] {
+  color: var(--muted);
 }
 .studio-overview-heading,
 .studio-condition-card > div:first-child,

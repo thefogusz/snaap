@@ -30,6 +30,13 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .locator("[data-chart-status]")
       .filter({ hasText: /\d+ แท่งปิด/ })
       .waitFor();
+    assert.equal(await page.locator(".design-body > .studio-setup-settings").count(), 1);
+    assert.ok(await page.locator(".studio-setup-settings .exchange-fieldset").isVisible());
+    assert.equal(await page.locator('.studio-setup-settings [data-path="market"]').count(), 1);
+    assert.ok(await page.locator('.studio-setup-settings > label').isVisible());
+    assert.equal(await page.locator('.studio-toolbar-meta [data-draft-status]').count(), 1);
+    assert.equal(await page.locator('.design-panel > [data-draft-status]').count(), 0);
+    assert.ok(await page.locator(".studio-setup-settings").evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector(".studio-condition-overview")) & Node.DOCUMENT_POSITION_FOLLOWING)));
     const panelBox = (selector) => page.locator(selector).boundingBox();
     const beforeChat = await panelBox("#conversation");
     const beforeChart = await panelBox(".setup-studio");

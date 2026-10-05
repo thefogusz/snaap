@@ -630,6 +630,7 @@ function showDraftStatus(text) {
   const label = panel.querySelector("[data-draft-status]");
   if (label) {
     label.textContent = text;
+    label.hidden = !text;
     label.dataset.state =
       text === "บันทึกร่างแล้ว"
         ? "saved"
@@ -948,12 +949,16 @@ function renderDesigner() {
     button.title = "ครบ 24 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
   });
   if (d.stages.length >= 5) panel.querySelector("[data-stage]").disabled = true;
-  const draftLabel = document.createElement("p");
+  const draftLabel = document.createElement("span");
   draftLabel.className = "field-note";
   draftLabel.dataset.draftStatus = "";
   draftLabel.setAttribute("role", "status");
   draftLabel.textContent = draftStatus;
-  panel.querySelector(".design-toolbar").after(draftLabel);
+  const toolbarMeta = document.createElement("span");
+  toolbarMeta.className = "studio-toolbar-meta";
+  const savedLabel = panel.querySelector(".saved-label");
+  savedLabel.before(toolbarMeta);
+  toolbarMeta.append(savedLabel, draftLabel);
   showDraftStatus(draftStatus);
   panel
     .querySelector(".design-toolbar strong")
