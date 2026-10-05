@@ -1054,9 +1054,9 @@ function watchSetupRow(r) {
     <div class="watch-row-footer"><span class="status ${r.active && !r.quota_blocked ? "is-active" : "paused"}">${status}</span>
       <button class="secondary" data-activate-rule="${esc(r.id)}">${uiIcon(r.active ? "pause" : "play")}${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button>
       <button class="secondary watch-edit" data-open-rule="${esc(r.id)}" aria-label="แก้ไข ${esc(r.spec.name)}" title="แก้ไขเซตอัป">${uiIcon("sliders")}<span class="sr-only">แก้ไข</span></button>
+      <span class="watch-flexibility" data-flex-rule="${esc(r.id)}"><button type="button" class="watch-flex-toggle" data-flex-toggle aria-label="ปรับความยืดหยุ่น" title="ความยืดหยุ่น · ${esc(entryFlexUI.flexibilitySummary(r.spec))}" aria-expanded="false" aria-controls="flex-${esc(r.id)}">%</button><div class="flex-panel" id="flex-${esc(r.id)}" data-flex-panel popover="auto" role="dialog" aria-label="ความยืดหยุ่นในการเข้า" hidden></div></span>
     </div>
     ${r.quota_blocked ? '<p role="alert">เลือกหยุดเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ แล้วระบบจะติดตามรายการที่เหลือต่อ</p>' : ""}
-    <div class="watch-flexibility" data-flex-rule="${esc(r.id)}"><div class="flex-summary"><span>${esc(entryFlexUI.flexibilitySummary(r.spec))}</span><button type="button" class="secondary" data-flex-toggle aria-expanded="false" aria-controls="flex-${esc(r.id)}">ปรับความยืดหยุ่น</button></div><div class="flex-panel" id="flex-${esc(r.id)}" data-flex-panel hidden></div></div>
     <details class="watch-details"><summary>รายละเอียด</summary><div class="watch-details-content">
       <p class="watch-all-pairs"><strong>คู่เทรด</strong> ${esc(pairs.join(", "))}</p>
       <p class="watch-rule-summary"><strong>เงื่อนไขเข้า</strong> ${esc(setupEntrySummary(r.spec))}</p>

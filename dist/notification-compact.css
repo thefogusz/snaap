@@ -56,22 +56,21 @@
 @media(max-width:1000px){.notification-rules .watch-row{grid-template-columns:minmax(0,1fr);gap:6px}.notification-rules .watch-row-footer{grid-column:1;grid-row:auto;justify-content:flex-start}.notification-rules .watch-row-footer .status{margin-right:auto}#view-notifications .signal-item{grid-template-columns:28px minmax(0,1fr) auto;gap:10px 12px}#view-notifications .signal-item time{grid-column:2/-1;margin:0;font-size:11px}}
 @media(max-width:600px){#view-notifications{padding:24px 16px 40px}.notification-rules .watch-row{padding:12px;border-radius:8px}.notification-rules .watch-row-heading{align-items:flex-start}.notification-rules .watch-row :is(.status.paused,.status.is-active){white-space:normal}.notification-rules .watch-row-footer{gap:6px}.notification-rules .watch-row-footer button{min-height:40px;padding:8px 9px;font-size:11px}#view-notifications .signal-item{padding:14px 12px;gap:8px 10px}.notification-setup-actions{gap:6px}#view-notifications .notification-setup-actions button{padding:9px 10px;font-size:12px}}
 /* Browser alerts: one aligned row with clearly interactive controls. */
-.notification-rules .watch-flexibility{grid-column:1/-1;min-width:0;margin-top:4px}
-.notification-rules .flex-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
-.notification-rules .watch-flexibility button{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;color:var(--ink);background:transparent}
-.notification-rules .watch-flexibility:has(.flex-panel:not([hidden])) .flex-summary{display:none}
-.notification-rules .flex-panel{margin-top:4px;font-size:12px}
+.notification-rules .watch-flexibility{display:inline-flex;flex:none}
+.notification-rules .watch-row-footer .watch-flex-toggle{width:28px;min-height:34px;padding:4px;justify-content:center;border-color:transparent;color:var(--muted);font-size:13px}
+.notification-rules .flex-panel{position:fixed;inset:auto;width:280px;max-width:calc(100vw - 16px);box-sizing:border-box;margin:0;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--white);color:var(--ink);font-size:12px;box-shadow:0 6px 24px #0003}
 .notification-rules .flex-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.notification-rules .flex-panel button.primary{background:var(--lime);color:#17180f;border-color:var(--lime)}
-.notification-rules .flex-percent-label{display:flex;align-items:center;gap:8px;margin:0;font-size:12px;white-space:nowrap}
+.notification-rules .flex-percent-label{display:flex;align-items:center;gap:8px;margin:0;flex:1 1 100%;font-size:12px;white-space:nowrap}
 .notification-rules .flex-percent-label output{width:36px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
-.notification-rules .flex-percent-label input[type="range"]{width:140px;min-width:0;height:32px;margin:0;accent-color:var(--accent-ink)}
-.notification-rules .flex-result{color:var(--muted);font-size:12px}
+.notification-rules .flex-percent-label input[type="range"]{flex:1;width:80px;min-width:0;height:32px;margin:0;accent-color:var(--accent-ink)}
+.notification-rules .flex-result{color:var(--muted);font-size:12px;margin-right:auto}
+.notification-rules .flex-panel button{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;color:var(--ink);background:transparent}
 .notification-rules .flex-panel button.flex-close{border-color:transparent;padding:4px;min-width:32px;font-size:18px}
 .notification-rules .flex-error{color:var(--danger,#c63939);font-size:12px;margin:4px 0}
-.notification-rules .watch-flexibility button:focus-visible,.notification-rules .watch-flexibility input:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px}
+.notification-rules .watch-flexibility button:focus-visible,.notification-rules .watch-flexibility input:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
 .notification-rules .watch-flexibility button:disabled{opacity:.5}
-@media(max-width:600px){.notification-rules .watch-flexibility button{min-height:44px}.notification-rules .flex-percent-label{flex:1 1 100%}.notification-rules .flex-percent-label input[type="range"]{flex:1;height:44px}.notification-rules .flex-controls{gap:0 8px}.notification-rules .flex-panel button.flex-close{min-width:44px}.notification-rules .flex-result{margin-right:auto}}
+@media(max-width:600px), (pointer:coarse){.notification-rules .watch-row-footer .watch-flex-toggle{width:44px;min-height:44px}.notification-rules .flex-panel button,.notification-rules .flex-percent-label input[type="range"]{min-height:44px}}
+@media(max-width:600px){.notification-rules .watch-row{position:relative}.notification-rules .watch-flexibility{position:absolute;right:12px;top: auto;bottom:12px}}
 .browser-alert-settings {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 8px 16px; padding: 8px 12px; margin-bottom: 18px;

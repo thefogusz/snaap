@@ -26,18 +26,36 @@ export function mountFlexibility(
         .forEach((control) => (control.disabled = busy));
       toggle.disabled = busy;
     }
+    function close() {
+      panel.hidePopover();
+      panel.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+    }
+    panel.addEventListener("toggle", (event) => {
+      toggle.setAttribute("aria-expanded", String(event.newState === "open"));
+      if (event.newState === "closed") panel.hidden = true;
+    });
+    panel.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") toggle.focus();
+    });
     toggle.addEventListener("click", () => {
-      if (!panel.hidden) {
-        panel.hidden = true;
-        toggle.setAttribute("aria-expanded", "false");
+      if (panel.matches(":popover-open")) {
+        close();
         return;
       }
       if (!canEdit(rule)) return;
       percent = rule.spec.entryMatchPercent ?? 100;
-      panel.innerHTML = `<div class="flex-controls"><label class="flex-percent-label">ผ่านอย่างน้อย <output data-flex-value></output><input type="range" min="1" max="100" step="1" value="${percent}" data-flex-percent aria-label="ต้องผ่านเงื่อนไขอย่างน้อย (%)"></label><span class="flex-result" data-flex-result aria-live="polite"></span><button type="button" class="primary" data-flex-save>บันทึก</button><button type="button" class="flex-close" data-flex-cancel aria-label="ยกเลิก" title="ยกเลิก">×</button></div><p class="flex-error" role="alert" hidden></p><button type="button" data-flex-reload hidden>โหลดค่าล่าสุด</button>`;
+      panel.innerHTML = `<div class="flex-controls"><label class="flex-percent-label">ผ่านอย่างน้อย <output data-flex-value></output><input type="range" min="1" max="100" step="1" value="${percent}" data-flex-percent aria-label="ต้องผ่านเงื่อนไขอย่างน้อย (%)"></label><span class="flex-result" data-flex-result aria-live="polite"></span><button type="button" data-flex-save>บันทึก</button><button type="button" class="flex-close" data-flex-cancel aria-label="ยกเลิก" title="ยกเลิก">×</button></div><p class="flex-error" role="alert" hidden></p><button type="button" data-flex-reload hidden>โหลดค่าล่าสุด</button>`;
       update();
       panel.hidden = false;
+      panel.showPopover();
+      const anchor = toggle.getBoundingClientRect();
+      const box = panel.getBoundingClientRect();
+      panel.style.left = Math.max(8, Math.min(anchor.right - box.width, innerWidth - box.width - 8)) + "px";
+      panel.style.top = Math.max(8, anchor.bottom + box.height + 8 <= innerHeight
+        ? anchor.bottom + 6 : anchor.top - box.height - 6) + "px";
       toggle.setAttribute("aria-expanded", "true");
+      panel.querySelector("[data-flex-percent]").focus();
     });
     panel.addEventListener("input", (event) => {
       if (busy || !event.target.hasAttribute("data-flex-percent")) return;
@@ -48,8 +66,7 @@ export function mountFlexibility(
       const button = event.target.closest("button");
       if (!button || busy) return;
       if (button.hasAttribute("data-flex-cancel")) {
-        panel.hidden = true;
-        toggle.setAttribute("aria-expanded", "false");
+        close();
         toggle.focus();
         return;
       }
