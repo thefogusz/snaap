@@ -2271,12 +2271,12 @@ function evidenceUI(e) {
   const label = { TRUE: "ผ่าน", FALSE: "ไม่ผ่าน", UNKNOWN: "ข้อมูลไม่พอ" };
   return `<div class="evidence-row"><strong>${label[e.result] ?? "รอ"}</strong>${e.left !== undefined ? " · " + Number(e.left).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.right !== undefined ? " เทียบกับ " + Number(e.right).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.reason ? " · " + esc(e.reason) : ""}${e.children ? e.children.map(evidenceUI).join("") : ""}</div>`;
 }
-function barEvidence(bar) {
+function barEvidence(bar, { showProgress = true } = {}) {
   if(bar?.explanations){
     const e=bar.explanations;
-    return `<p>${esc(insightTime(bar.time))}</p>${progressUI(bar.progress)}<p>เงื่อนไขเริ่มต้น</p>${explanationsUI(e.entry)}${e.stages.map((lines,i)=>`<p>รอยืนยันขั้น ${i+1}</p>${explanationsUI(lines)}`).join('')}${e.exit.length?'<p>เงื่อนไขออก</p>'+explanationsUI(e.exit):''}${e.cancel.length?'<p>เงื่อนไขยกเลิก</p>'+explanationsUI(e.cancel):''}${timeframeUI(bar.timeframes)}`;
+    return `<p>ประเมิน ณ ${esc(insightTime(bar.time))}</p>${showProgress ? progressUI(bar.progress) : ''}<p>เงื่อนไขเริ่มต้น</p>${explanationsUI(e.entry)}${e.stages.map((lines,i)=>`<p>รอยืนยันขั้น ${i+1}</p>${explanationsUI(lines)}`).join('')}${e.exit.length?'<p>เงื่อนไขออก</p>'+explanationsUI(e.exit):''}${e.cancel.length?'<p>เงื่อนไขยกเลิก</p>'+explanationsUI(e.cancel):''}${timeframeUI(bar.timeframes, { showConditions: false })}`;
   }
-  if(bar?.branches)return bar.branches.map(b=>`<h4>${esc(directionLabel(b.side,b.side==='SPOT'?'Spot':'Perpetual Futures'))}</h4>`+barEvidence({...b,time:bar.time})).join('');
+  if(bar?.branches)return bar.branches.map(b=>`<h4>${esc(directionLabel(b.side,b.side==='SPOT'?'Spot':'Perpetual Futures'))}</h4>`+barEvidence({...b,time:bar.time}, { showProgress })).join('');
   return bar
     ? `<p>${new Date(bar.time).toLocaleString("th-TH")}${bar.waitingStage >= 0 ? " · รอขั้นตอน " + (bar.waitingStage + 2) : ""}${bar.activeSignal ? " · วงจรสัญญาณเข้าเปิดอยู่" : ""}</p><p>เงื่อนไขเริ่มต้น</p>${evidenceUI(bar.entry)}${bar.stages.map((s, i) => "<p>ขั้นตอน " + (i + 2) + "</p>" + evidenceUI(s)).join("")}${bar.exit ? "<p>สัญญาณออก</p>" + evidenceUI(bar.exit) : ""}`
     : "";
