@@ -653,20 +653,25 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   min-width: 0;
   touch-action: none;
   cursor: col-resize;
-  outline-offset: -2px;
+  outline: none;
 }
 .studio-panel-divider::after {
   content: "";
   position: absolute;
-  inset: 12px 4px;
-  border-radius: 4px;
+  inset-block: 12px;
+  left: 50%;
+  width: 1px;
   background: var(--line);
   transition: background .15s;
 }
 .studio-panel-divider:hover::after,
 .studio-panel-divider:focus-visible::after,
 .workbench[data-resizing="true"] .studio-panel-divider::after {
-  background: var(--lime);
+  background: var(--muted);
+}
+.studio-panel-divider:focus-visible {
+  outline: 1px dotted var(--muted);
+  outline-offset: -3px;
 }
 .workbench[data-resizing="true"] {
   cursor: col-resize;
