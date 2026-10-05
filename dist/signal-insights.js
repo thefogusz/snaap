@@ -13,7 +13,7 @@ function explanationsUI(lines = []) {
   return lines
     .map(
       (e) =>
-        `<p class="insight-evidence"><strong>${{ TRUE: "ผ่าน", FALSE: "ยังไม่ผ่าน", UNKNOWN: "ข้อมูลไม่พอ" }[e.result] ?? "รอ"}</strong> · ${esc(e.text)}</p>`,
+        `<p class="insight-evidence"><strong>${{ TRUE: "ผ่าน", FALSE: "ยังไม่ผ่าน", UNKNOWN: "ข้อมูลไม่พอ" }[e.result] ?? "รอ"}</strong> · ${esc(e.text.replace(/ · (?:ยังไม่ผ่าน|ข้อมูลไม่พอ)(?= \(|$)/, ""))}</p>`,
     )
     .join("");
 }
@@ -34,8 +34,8 @@ function freshnessUI(items = []) {
     ? `<div class="insight-freshness" role="status">${items.map((f) => `<p><strong>${esc(f.frame)} · ${esc(freshnessLabels[f.status] ?? f.status)}</strong><br><small>แท่งล่าสุด ${esc(insightTime(f.latestClose))} · ควรมีถึง ${esc(insightTime(f.expectedClose))} · ตรวจ ${esc(insightTime(f.checkedAt))}</small></p>`).join("")}</div>`
     : "";
 }
-function timeframeUI(rows = []) {
+function timeframeUI(rows = [], { showConditions = true } = {}) {
   return rows.length
-    ? `<div class="insight-table-wrap"><table class="insight-table"><caption>เงื่อนไขที่กำลังรอ แยกกรอบเวลา</caption><thead><tr><th>กรอบเวลา</th><th>แท่งปิดที่ใช้</th><th>ผลเงื่อนไข</th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row">${esc(r.frame)}</th><td>${esc(insightTime(r.latestClose))}</td><td>${r.conditions?.length ? explanationsUI(r.conditions) : "ไม่มีเงื่อนไขในขั้นนี้"}</td></tr>`).join("")}</tbody></table></div>`
+    ? `<div class="insight-table-wrap"><table class="insight-table"><caption>${showConditions ? "เงื่อนไขที่กำลังรอ แยกกรอบเวลา" : "แท่งปิดที่ใช้ประเมิน"}</caption><thead><tr><th>กรอบเวลา</th><th>แท่งปิดที่ใช้</th>${showConditions ? "<th>ผลเงื่อนไข</th>" : ""}</tr></thead><tbody>${rows.map((r) => `<tr><th scope="row">${esc(r.frame)}</th><td>${esc(insightTime(r.latestClose))}</td>${showConditions ? `<td>${r.conditions?.length ? explanationsUI(r.conditions) : "ไม่มีเงื่อนไขในขั้นนี้"}</td>` : ""}</tr>`).join("")}</tbody></table></div>`
     : "";
 }
