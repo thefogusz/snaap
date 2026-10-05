@@ -1,7 +1,7 @@
 .preset-composer-footer{display:flex;justify-content:flex-end;flex:none;width:100%;max-width:780px;align-self:center;box-sizing:border-box;padding:8px 2px 2px}
 .workbench[data-tab="split"] .preset-composer-footer{display:none}
 .workbench #conversation:has(#messages .chat-empty):not(:has(#messages .message)) .preset-composer-footer{margin-top:-24px}
-.workbench:is([data-tab="chat"],[data-tab="split"]) #conversation:has(#messages .chat-empty):not(:has(#messages .message)){padding-bottom:clamp(36px,calc(100dvh - 560px),260px)}
+.workbench:is([data-tab="chat"],[data-tab="split"]) #conversation:has(#messages .chat-empty):not(:has(#messages .message)){padding-bottom:var(--chat-empty-bottom-space,clamp(36px,calc(100dvh - 560px),260px))}
 @media(max-height:600px){.workbench #conversation:has(#messages .chat-empty):not(:has(#messages .message)) .preset-composer-footer{margin-top:-16px}}
 .chat-composer{position:relative}
 .preset-launch{display:inline-flex;align-items:center;gap:7px;border:1px solid #343538;border-radius:20px;background:#18191b;color:#dedfe1;padding:7px 13px;font-size:12px;cursor:pointer}
