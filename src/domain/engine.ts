@@ -898,7 +898,15 @@ function advanceSingle(
   };
   if (state.stage >= 0) {
     if (time > state.deadline) {
-      emit("EXPIRED", { result: "FALSE", reason: "หมดเวลารอ" });
+      const waiting = spec.stages[state.stage];
+      const condition = waiting.condition;
+      const operandName = (value: Operand): string =>
+        value.kind === 'INDICATOR' ? (value.name === 'MACD_SIGNAL' ? 'เส้นสัญญาณ MACD' : value.name)
+          : value.kind === 'PRICE' ? 'ราคา' : value.kind === 'CONSTANT' ? String(value.value) : 'ผลตอบแทน';
+      const description = condition.kind === 'COMPARE'
+        ? `${operandName(condition.left)} ${condition.op === 'CROSS_ABOVE' ? 'ตัดขึ้น' : condition.op === 'CROSS_BELOW' ? 'ตัดลง' : condition.op} ${operandName(condition.right)}`
+        : `ขั้นที่ ${state.stage + 1}`;
+      emit("EXPIRED", { result: "FALSE", reason: `เงื่อนไข ${description} ไม่ครบภายใน ${waiting.withinBars} แท่ง (${spec.timeframe})` });
       reset();
       return { state, events };
     }

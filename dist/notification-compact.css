@@ -85,6 +85,9 @@
 #view-notifications .signal-meta>span:first-child{color:var(--ink)}
 #view-notifications .signal-setup-name{font-size:12px;overflow-wrap:anywhere}
 #view-notifications .signal-meta-dot{opacity:.5}
+#view-notifications [data-signal-kind="EXPIRED"] .signal-meta{flex-wrap:nowrap;min-width:0}
+#view-notifications [data-signal-kind="EXPIRED"] .signal-meta>span:first-child{flex-shrink:0}
+#view-notifications [data-signal-kind="EXPIRED"] .signal-setup-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #view-notifications .signal-price{text-align:right;font-variant-numeric:tabular-nums;min-width:90px}
 #view-notifications .signal-price strong{font-size:14px;line-height:1.5;font-weight:550}
 #view-notifications .signal-price small{display:block;font-size:10px;line-height:1.5;color:var(--muted);margin-top:2px}

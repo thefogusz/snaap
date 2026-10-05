@@ -67,7 +67,7 @@
   }
   async function getSignals(query = "") {
     // Deliberately omit the workspace header: watch every workspace of this user.
-    const response = await fetch("/api/v1/signals" + query);
+    const response = await fetch("/api/v1/signals?view=signals" + (query ? '&'+query.slice(1) : ''));
     if (!response.ok) throw Error("Signal connection unavailable");
     return response.json();
   }
