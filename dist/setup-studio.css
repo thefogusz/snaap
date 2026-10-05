@@ -295,7 +295,6 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   flex-wrap: nowrap;
   gap: 6px;
   overflow-x: auto;
-  scrollbar-width: thin;
   padding: 4px;
   margin: 4px -4px 8px;
 }

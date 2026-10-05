@@ -1,0 +1,45 @@
+/* Shared, quiet scrollbars for every page and nested scroll region. */
+:root {
+  --scroll-thumb: color-mix(in srgb, var(--ink, #181818) 26%, transparent);
+  --scroll-thumb-active: color-mix(in srgb, var(--ink, #181818) 48%, transparent);
+}
+:root[data-theme="dark"] {
+  --scroll-thumb: color-mix(in srgb, var(--ink, #f4f4f5) 26%, transparent);
+  --scroll-thumb-active: color-mix(in srgb, var(--ink, #f4f4f5) 48%, transparent);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+/* Chromium's standard scrollbar properties take precedence over these pseudos. */
+@supports selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background: var(--scroll-thumb-active);
+  }
+  ::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+  ::-webkit-scrollbar-thumb { background: CanvasText; }
+}

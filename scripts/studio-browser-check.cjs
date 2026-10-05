@@ -201,6 +201,10 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .waitFor();
     for (const width of [1440, 1024, 390]) {
       await page.setViewportSize({ width, height: 1000 });
+      const scrollbar = await page.locator('.design-panel').evaluate(el => ({width:getComputedStyle(el,'::-webkit-scrollbar').width,arrows:getComputedStyle(el,'::-webkit-scrollbar-button').display,gutter:getComputedStyle(el).scrollbarGutter}));
+      assert.equal(scrollbar.width,'4px');
+      assert.equal(scrollbar.arrows,'none');
+      assert.equal(scrollbar.gutter,'auto');
       if (width < 1280)
         await page.locator('[data-studio-tab="conditions"]').click();
       await page.waitForTimeout(350);
