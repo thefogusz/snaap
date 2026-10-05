@@ -14,6 +14,7 @@ import {
   signalSide,
   frames,
 } from "./engine.js";
+import { explain, explainEntry, progress, seriesFreshness, usedFrames } from "./insights.js";
 
 // Rendering and alerts deliberately use the same evaluator, including closed-HTF rules.
 export function preview(
@@ -21,6 +22,7 @@ export function preview(
   series: Series,
   extra: Operand[] = [],
   chartFrame?: keyof typeof frames,
+  now = Date.now(),
 ) {
   const candles = series[spec.timeframe] ?? [];
   const chartCandles = chartFrame ? (series[chartFrame] ?? []) : candles;
@@ -50,8 +52,9 @@ export function preview(
       })),
     }));
   let state = emptyLifecycle();
+  const branchSpecs = strategyBranches(spec);
   const timeline = candles.map((bar) => {
-    const branches = strategyBranches(spec).map((branch) => {
+    const branches = branchSpecs.map((branch) => {
       const prior =
         spec.side === "BOTH"
           ? ((branch.side === "SHORT"
@@ -73,6 +76,16 @@ export function preview(
         stages: branch.stages.map((s) => check(s.condition)),
         exit: branch.exit ? check(branch.exit) : null,
         cancel: branch.cancel ? check(branch.cancel) : null,
+        explanations: {
+          entry: explainEntry(branch, evaluateEntry(branch, series, bar.time)),
+          stages: branch.stages.map((s) =>
+            explain(s.condition, check(s.condition)),
+          ),
+          exit: branch.exit ? explain(branch.exit, check(branch.exit)) : [],
+          cancel: branch.cancel
+            ? explain(branch.cancel, check(branch.cancel))
+            : [],
+        },
       };
     });
     const { entry, stages, exit, cancel } = branches[0];
@@ -85,17 +98,54 @@ export function preview(
       cancel,
       waitingStage: state.stage,
       activeSignal: state.active,
-      branches: branches.map((branch) => {
+      branches: branches.map((branch, index) => {
         const next =
           spec.side === "BOTH"
             ? branch.side === "SHORT"
               ? state.sides!.short
               : state.sides!.long
             : state;
+        const branchSpec = branchSpecs[index];
+        const pending =
+          next.active && branchSpec.exit
+            ? branchSpec.exit
+            : next.stage >= 0
+              ? (branchSpec.stages[next.stage]?.condition ?? branchSpec.entry)
+              : branchSpec.entry;
+        const pendingEntry = pending === branchSpec.entry;
+        const lines = pendingEntry ? explainEntry(branchSpec, evaluateEntry(branchSpec, series, bar.time)) : explain(
+          pending,
+          evaluate(
+            pending,
+            series,
+            bar.time,
+            spec.timeframe,
+            next.entryPrice,
+            branch.side,
+          ),
+        );
         return {
           ...branch,
           waitingStage: next.stage,
           activeSignal: next.active,
+          progress: progress(
+            next,
+            spec.timeframe,
+            bar.time,
+            branchSpec.stages.length,
+            pending,
+          ),
+          timeframes: usedFrames(branchSpec).map((frame) => ({
+            frame,
+            latestClose:
+              series[frame]?.filter((c) => c.time <= bar.time).at(-1)?.time ??
+              null,
+            conditions: lines.filter(
+              (e) =>
+                e.frames.includes(frame) ||
+                (!e.frames.length && frame === spec.timeframe),
+            ),
+          })),
         };
       }),
     };
@@ -122,5 +172,6 @@ export function preview(
     chartTimeline,
     events,
     chartEvents,
+    freshness: seriesFreshness(spec, series, now),
   };
 }

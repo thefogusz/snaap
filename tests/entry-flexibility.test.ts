@@ -54,11 +54,26 @@ test("all checks have equal weight; 80% rounds up and 100% keeps original evalua
   assert.equal(replay(strict, data([19])).length, 0);
   assert.equal(replay(flex, data([18])).length, 0); // eight of eleven is below 80%
   assert.equal(replay(flex, data([19])).length, 1); // nine of eleven meets 80%
+  const now = Date.now();
   assert.deepEqual(
-    preview({ ...strict, entryMatchPercent: 100 }, data([19, 21])),
-    preview(strict, data([19, 21])),
+    preview({ ...strict, entryMatchPercent: 100 }, data([19, 21]), [], undefined, now),
+    preview(strict, data([19, 21]), [], undefined, now),
   );
 });
+test("signal explanations preserve flexible entry results and flattened nested units", () => {
+  const spec = strategySchema.parse({ ...base, entryMatchPercent: 50, entry: {
+    kind: "GROUP", op: "AND", children: [cmp(5), {
+      kind: "GROUP", op: "AND", children: [cmp(15), cmp(20)],
+    }],
+  }});
+  const result = preview(spec, data([18])).timeline[0].branches[0];
+  assert.equal(result.entry.result, "TRUE");
+  assert.equal(result.explanations.entry[0].result, "TRUE");
+  assert.match(result.explanations.entry[0].text, /ผ่าน 2\/3 ข้อ/);
+  assert.deepEqual(result.explanations.entry.slice(1).map(e => e.result), ["TRUE", "TRUE", "FALSE"]);
+  assert.equal(result.timeframes[0].conditions[0].result, "TRUE");
+});
+
 test("OR and HOLD remain atomic; missing data earns no matches", () => {
   const entry = {
     kind: "GROUP",

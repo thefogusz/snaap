@@ -5,6 +5,7 @@ import type pg from "pg";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "./errors.js";
 import { preview } from "./domain/preview.js";
+import { freshness } from "./domain/insights.js";
 import { indicatorByName } from "../dist/indicator-catalog.js";
 import {
   frames,
@@ -247,8 +248,9 @@ export async function candles(
         throw new Error("STALE");
       cache.set(key, { at: now, data: dedup });
       if (cache.size > 500) cache.delete(cache.keys().next().value!);
+      const readiness = freshness(frame, dedup, now).status;
       marketHealth.set(clientKey, {
-        status: "READY",
+        status: readiness === "CURRENT" ? "READY" : readiness,
         lastSuccess: new Date().toISOString(),
       });
       return dedup;
@@ -449,6 +451,7 @@ export function registerMarkets(
       events: simulation.events,
       candles: series[input.spec.timeframe],
       timeline: simulation.timeline.slice(-100),
+      freshness: simulation.freshness,
       source: {
         exchange: input.exchange,
         pair: input.pair,

@@ -10,8 +10,15 @@ import {
   type Series,
   type Strategy,
   type Lifecycle,
+  strategyBranches,
+  signalSide,
+  evaluate,
+  evaluateEntry,
 } from "./domain/engine.js";
-import { strategySeries } from "./markets.js";
+import { seriesFreshness, progress, explain, explainEntry } from "./domain/insights.js";
+import { freezeRisk, measureOutcome } from "./domain/outcomes.js";
+import { updateSignalOutcome } from "./signal-outcomes.js";
+import { strategySeries, invalidateCandles } from "./markets.js";
 import { deliver } from "./destinations.js";
 import { captureChart } from "./signal-chart.js";
 import { RealtimeMarkets } from "./realtime.js";
@@ -32,6 +39,7 @@ export async function evaluateTarget(
   db: pg.Pool,
   target: Target,
   fetchSeries = strategySeries,
+  now?: number,
 ) {
   const row = (
     await db.query(
@@ -77,28 +85,58 @@ export async function evaluateTarget(
     return;
   }
   let series: Series;
+  await db.query(
+    "INSERT INTO monitor_status VALUES($1,$2,$3,'RECOVERING',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
+    [row.id, target.exchange, target.pair],
+  );
   try {
     series = await fetchSeries(spec, target.exchange, target.pair);
   } catch {
+    await db.query(
+      "INSERT INTO monitor_insights(rule_id,revision,exchange,pair,freshness) VALUES($1,$2,$3,$4,$5) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET revision=excluded.revision,freshness=excluded.freshness,progress=NULL WHERE monitor_insights.revision<=excluded.revision",
+      [
+        row.id,
+        target.revision,
+        target.exchange,
+        target.pair,
+        JSON.stringify(seriesFreshness(spec, {}, now ?? Date.now())),
+      ],
+    );
     await db.query(
       "INSERT INTO monitor_status VALUES($1,$2,$3,'DATA_UNAVAILABLE',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
       [row.id, target.exchange, target.pair],
     );
     return;
   }
-  const latest = series[spec.timeframe]?.at(-1)?.time;
-  if (
-    latest &&
-    Object.entries(series).some(
-      ([frame, bars]) =>
-        (bars?.at(-1)?.time ?? 0) <
-        Math.floor(latest / frames[frame as keyof typeof frames]) *
-          frames[frame as keyof typeof frames],
-    )
-  ) {
+  const checkedAt = now ?? Date.now();
+  const freshness = seriesFreshness(spec, series, checkedAt);
+  await db.query(
+    "INSERT INTO monitor_insights(rule_id,revision,exchange,pair,freshness) VALUES($1,$2,$3,$4,$5) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET revision=excluded.revision,freshness=excluded.freshness,progress=NULL WHERE monitor_insights.revision<=excluded.revision",
+    [
+      row.id,
+      target.revision,
+      target.exchange,
+      target.pair,
+      JSON.stringify(freshness),
+    ],
+  );
+  const latest = series[spec.timeframe]
+    ?.filter((b) => b.time <= checkedAt)
+    .at(-1)?.time;
+  if (freshness.some((f) => f.status !== "CURRENT")) {
+    for (const f of freshness)
+      if (f.status !== "CURRENT")
+        invalidateCandles(target.exchange, spec.market, target.pair, f.frame);
     await db.query(
-      "INSERT INTO monitor_status VALUES($1,$2,$3,'DATA_UNAVAILABLE',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
-      [row.id, target.exchange, target.pair],
+      "INSERT INTO monitor_status VALUES($1,$2,$3,$4,now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
+      [
+        row.id,
+        target.exchange,
+        target.pair,
+        freshness.some((f) => f.status === "INSUFFICIENT")
+          ? "INSUFFICIENT"
+          : "DELAYED",
+      ],
     );
     return;
   }
@@ -137,6 +175,7 @@ export async function evaluateTarget(
       state.lastTime =
         Math.floor(after / frames[spec.timeframe]) * frames[spec.timeframe];
     for (const bar of series[spec.timeframe] ?? []) {
+      if (bar.time > checkedAt) continue;
       if (bar.time <= after || bar.time <= state.lastTime) continue;
       const result = advance(spec, series, bar, state);
       state = result.state;
@@ -160,7 +199,7 @@ export async function evaluateTarget(
             target.revision,
             target.exchange,
             target.pair,
-            event,
+            { ...event, recovered: event.time !== latest },
             dedup,
             captureChart(
               series[spec.timeframe] ?? [],
@@ -169,7 +208,40 @@ export async function evaluateTarget(
             ),
           ],
         );
-        if (inserted.rowCount && event.kind !== 'EXPIRED' && spec.destinations.length)
+        if (inserted.rowCount && event.kind === "ENTRY") {
+          const risk = freezeRisk(
+            current.risk_plan,
+            event,
+            series,
+            spec.timeframe,
+          );
+          const observed = (series[spec.timeframe] ?? []).filter(
+            (b) =>
+              b.time > event.time &&
+              b.time <= event.time + 20 * frames[spec.timeframe] &&
+              b.time <= checkedAt,
+          );
+          const outcome = measureOutcome(
+            event,
+            spec.timeframe,
+            observed,
+            risk,
+            20,
+            checkedAt,
+          );
+          await c.query(
+            "INSERT INTO signal_outcomes(signal_id,frame,risk_snapshot,candles,result,finalized) VALUES($1,$2,$3,$4,$5,$6)",
+            [
+              id,
+              spec.timeframe,
+              risk,
+              JSON.stringify(observed),
+              outcome,
+              outcome.status === "COMPLETE",
+            ],
+          );
+        }
+        if (inserted.rowCount && event.kind !== 'EXPIRED' && event.time === latest && spec.destinations.length)
           deliveryIds.push(
             ...(
               await c.query(
@@ -188,6 +260,56 @@ export async function evaluateTarget(
       "INSERT INTO monitor_status VALUES($1,$2,$3,'READY',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
       [row.id, target.exchange, target.pair],
     );
+    const branchProgress = strategyBranches(spec).map((branch) => {
+      const currentState =
+        spec.side === "BOTH"
+          ? ((branch.side === "SHORT"
+              ? state.sides?.short
+              : state.sides?.long) ?? emptyLifecycle())
+          : state;
+      const condition =
+        currentState.active && branch.exit
+          ? branch.exit
+          : currentState.stage >= 0
+            ? (branch.stages[currentState.stage]?.condition ?? branch.entry)
+            : branch.entry;
+      const pendingEntry = condition === branch.entry;
+      const evidence = pendingEntry ? evaluateEntry(branch, series, latest!) : evaluate(
+        condition,
+        series,
+        latest!,
+        spec.timeframe,
+        currentState.entryPrice,
+        signalSide(branch),
+      );
+      return {
+        side: signalSide(branch),
+        ...progress(
+          currentState,
+          spec.timeframe,
+          latest!,
+          branch.stages.length,
+          condition,
+        ),
+        explanations: pendingEntry ? explainEntry(branch, evidence) : explain(condition, evidence),
+        result: evidence.result,
+      };
+    });
+    await c.query(
+      "UPDATE monitor_insights SET progress=$4 WHERE rule_id=$1 AND exchange=$2 AND pair=$3 AND revision=$5",
+      [
+        row.id,
+        target.exchange,
+        target.pair,
+        JSON.stringify(branchProgress),
+        target.revision,
+      ],
+    );
+    if (branchProgress.some((p) => p.result === "UNKNOWN"))
+      await c.query(
+        "UPDATE monitor_status SET status='INSUFFICIENT' WHERE rule_id=$1 AND exchange=$2 AND pair=$3",
+        [row.id, target.exchange, target.pair],
+      );
   });
   return deliveryIds;
 }
@@ -227,6 +349,7 @@ export async function startMonitor(
     retentionSeconds: 86400,
   });
   await boss.updateQueue("evaluate-market", { notify: true });
+  await boss.createQueue("outcome", { retryLimit: 3, retryDelay: 30 });
   await boss.updateQueue("evaluate", { notify: true });
   await boss.updateQueue("deliver", { notify: true });
   const insertJobs = async (
@@ -269,6 +392,20 @@ export async function startMonitor(
       )
     ).rows;
     realtime.reconcile(rows);
+    for (const pending of (
+      await db.query(
+        "SELECT signal_id FROM signal_outcomes WHERE NOT finalized ORDER BY checked_at LIMIT 500",
+      )
+    ).rows)
+      await boss.send(
+        "outcome",
+        { id: pending.signal_id },
+        {
+          singletonKey: pending.signal_id,
+          singletonSeconds: 55,
+          expireInSeconds: 120,
+        },
+      );
     const checkpoints = new Map<string, number>(
       (
         await db.query(
@@ -381,6 +518,13 @@ export async function startMonitor(
     },
     async (jobs) => {
       for (const job of jobs) await deliver(db, job.data.id);
+    },
+  );
+  await boss.work<{ id: string }>(
+    "outcome",
+    { localConcurrency: 2 },
+    async (jobs) => {
+      for (const job of jobs) await updateSignalOutcome(db, job.data.id);
     },
   );
   await boss.schedule("scan", "* * * * *");

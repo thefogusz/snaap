@@ -9,17 +9,29 @@ export function registerSetupFiles(app: FastifyInstance, db: pg.Pool) {
     const file = setupFile(req.body);
     const items = await transaction(db, async (c) => {
       const items = [];
-      for (const spec of file.setups) {
+      for (const [index, spec] of file.setups.entries()) {
         const id = randomUUID();
         await c.query(
-          "INSERT INTO rules(id,owner_id,spec,workspace_id,active) VALUES($1,$2,$3,$4,false)",
-          [id, req.userId, spec, req.workspaceId ?? null],
+          "INSERT INTO rules(id,owner_id,spec,workspace_id,active,risk_plan) VALUES($1,$2,$3,$4,false,$5)",
+          [
+            id,
+            req.userId,
+            spec,
+            req.workspaceId ?? null,
+            file.riskPlans?.[index] ?? null,
+          ],
         );
         await c.query(
           "INSERT INTO rule_revisions(rule_id,revision,spec) VALUES($1,1,$2)",
           [id, spec],
         );
-        items.push({ id, spec, revision: 1, active: false });
+        items.push({
+          id,
+          spec,
+          revision: 1,
+          active: false,
+          risk_plan: file.riskPlans?.[index] ?? null,
+        });
       }
       return items;
     });
