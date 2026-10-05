@@ -662,12 +662,14 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   left: 50%;
   width: 1px;
   background: var(--line);
-  transition: background .15s;
+  opacity: 0;
+  transition: opacity .15s;
 }
 .studio-panel-divider:hover::after,
 .studio-panel-divider:focus-visible::after,
 .workbench[data-resizing="true"] .studio-panel-divider::after {
   background: var(--muted);
+  opacity: 1;
 }
 .studio-panel-divider:focus-visible {
   outline: 1px dotted var(--muted);
