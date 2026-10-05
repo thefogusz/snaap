@@ -72,6 +72,7 @@ function compute(
   o: ExtendedOperand,
   frame: number,
 ): number[] {
+  if (definition.method === 'volume') return rows.map(c => c.volume);
   const params = Object.fromEntries(
     definition.params.map((p) => [
       p.key,

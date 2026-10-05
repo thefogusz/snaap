@@ -20,7 +20,7 @@ test('hidden/absent designer hint does not fetch pair availability',async()=>{
   const fixture=checker({exchange:['Binance'],market:'Spot',pairs:['BTC/USDT']});await fixture.check();assert.equal(fixture.calls(),0);
 });
 test('visible designer resolves pair availability using the selected draft',async()=>{
-  const hint={textContent:'',isConnected:true,style:{color:''}};
+  const hint={textContent:'',hidden:false,isConnected:true,style:{color:''}};
   const fixture=checker({exchange:['Binance'],market:'Spot',pairs:['BTC/USDT']},hint);
-  await fixture.check();assert.equal(fixture.calls(),1);assert.match(hint.textContent,/คู่เทรดพร้อมใช้/);
+  await fixture.check();assert.equal(fixture.calls(),1);assert.equal(hint.textContent,'');assert.equal(hint.hidden,true);
 });

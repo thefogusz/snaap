@@ -117,6 +117,15 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       ),
     );
     await page.locator("[data-add-chart-indicator]").click();
+    await page.locator('dialog[open] input[type=search]').fill('ปริมาณซื้อขาย');
+    await page.locator('[data-pick-indicator="VOLUME"]').click();
+    await page.locator('[data-chart-indicator]').filter({hasText:/^Volume/}).waitFor();
+    assert.equal(await page.locator('[data-indicator-form] input[name=period]').count(),0);
+    assert.equal(await page.locator('[data-indicator-form] select[name=source]').count(),0);
+    assert.equal(await page.locator('[data-indicator-form] button[type=submit]').count(),0);
+    await page.screenshot({path:'.local/audit/studio-volume.png'});
+    await page.locator('.studio-legend-chip').filter({hasText:/^Volume/}).locator('[data-remove-chart-indicator]').click();
+    await page.locator("[data-add-chart-indicator]").click();
     await page.locator('[data-pick-indicator="VOLUME_RATIO"]').click();
     await page.locator('[data-chart-indicator]').filter({hasText:'VOLUME_RATIO'}).waitFor();
     const draftBeforeRemove = await page.evaluate(() => JSON.stringify(state.draft));

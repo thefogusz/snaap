@@ -70,8 +70,15 @@
     chart.timeScale().setVisibleLogicalRange({ from: Math.max(-1, at - visibleBars + 1), to: at + Math.max(2, Math.round(visibleBars * .035)) });
   }
   let wasVisible = false;
+  function fitStudyPanes() {
+    if (!chart) return;
+    const studies = chart.panes().slice(1);
+    const height = Math.max(32, Math.min(110, canvas.clientHeight * .35 / Math.max(1,studies.length)));
+    studies.forEach(p => p.setHeight(height));
+  }
   new ResizeObserver(() => {
     const visible = canvas.clientWidth > 0 && canvas.clientHeight > 0;
+    if (visible) fitStudyPanes();
     if (visible && !wasVisible) requestAnimationFrame(fitFrame);
     wasVisible = visible;
   }).observe(canvas);
@@ -96,7 +103,7 @@
           .map((p) =>
             p.value === null
               ? { time: p.time / 1000 }
-              : { time: p.time / 1000, value: p.value },
+              : { time: p.time / 1000, value: p.value, ...(p.color ? {color:p.color} : {}) },
           ),
       ),
     );
@@ -166,22 +173,31 @@
         o.operand.name,
       );
       const title = operandText(o.operand);
+      const histogram = ['VOLUME', 'MACD_HIST', 'AO'].includes(o.operand.name);
       const series = chart.addSeries(
-        LightweightCharts.LineSeries,
+        histogram ? LightweightCharts.HistogramSeries : LightweightCharts.LineSeries,
         {
           color: colors[i % colors.length],
           lineWidth: 2,
+          ...(o.operand.name === 'PSAR' ? {lineVisible:false,pointMarkersVisible:true,pointMarkersRadius:2} : {}),
           title,
-          priceFormat: {type:'price',precision:overlay?precision:2,minMove:overlay?10**-precision:.01},
+          priceFormat: o.operand.name === 'VOLUME' ? {type:'volume'} : {type:'price',precision:overlay?precision:2,minMove:overlay?10**-precision:.01},
           priceLineVisible: false,
           lastValueVisible: false,
           visible: !window.SnaapStudio?.isHidden(o.operand),
         },
         overlay ? 0 : ++pane,
       );
-      if (!overlay) chart.panes()[pane].setHeight(110);
-      return { series, points: o.points, operand:o.operand };
+      if (!overlay) chart.panes()[pane].setHeight(Math.max(32, Math.min(110, canvas.clientHeight * .25)));
+      const candleByTime = new Map(data.candles.map(c => [c.time,c]));
+      const points = histogram ? o.points.map(p => {
+        const candle = candleByTime.get(p.time);
+        const up = o.operand.name === 'VOLUME' ? candle && candle.close >= candle.open : p.value >= 0;
+        return {...p,color:up ? (dark ? '#35ba8a' : '#168063') : (dark ? '#eb7480' : '#c13d51')};
+      }) : o.points;
+      return { series, points, operand:o.operand };
     });
+    fitStudyPanes();
     studio.querySelector(".chart-legend").innerHTML = data.overlays
       .map(
         (o, i) =>

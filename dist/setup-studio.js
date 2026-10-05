@@ -4,6 +4,7 @@
     await import("./studio-model.js");
   await indicatorCatalogReady;
   await timeframeToolsReady;
+  const { basicIndicators, basicByName } = await import('./basic-indicators.js');
   const chartPane = setupPane.querySelector(".setup-studio");
   const sessions = new Map();
   let sessionKey = "",
@@ -451,42 +452,8 @@
       window.SnaapChart.view(view.frame);
   }
   function catalogEntries() {
-    const legacy = [
-      "EMA",
-      "SMA",
-      "RSI",
-      "MACD",
-      "MACD_SIGNAL",
-      "MACD_HIST",
-      "BB_UPPER",
-      "BB_LOWER",
-      "ATR",
-      "VOLUME_RATIO",
-      "WMA",
-      "RMA",
-      "VWMA",
-      "ROC",
-      "MOM",
-      "STDDEV",
-      "VARIANCE",
-      "HIGHEST",
-      "LOWEST",
-      "DONCHIAN_UPPER",
-      "DONCHIAN_LOWER",
-      "DONCHIAN_MID",
-      "STOCH_K",
-      "WILLIAMS_R",
-      "CCI",
-      "MFI",
-      "CMF",
-      "BB_MIDDLE",
-      "BB_WIDTH",
-      "BB_PERCENT",
-      "TR",
-    ];
-    return [...new Set([...legacy, ...indicatorCatalog.extendedNames])].map(
-      (name) => ({ name, ...indicatorCatalog.indicatorByName[name] }),
-    );
+    const essentials = ['STOCH_SMOOTH_K','STOCH_D','STOCH_RSI_K','STOCH_RSI_D','VWAP_SESSION','VWAP_ROLLING','OBV','ADX','DI_PLUS','DI_MINUS','PSAR','SUPERTREND_LINE','ICHIMOKU_TENKAN','ICHIMOKU_KIJUN','ICHIMOKU_SPAN_A','ICHIMOKU_SPAN_B'];
+    return [indicatorCatalog.indicatorByName.VOLUME, ...basicIndicators, ...essentials.map(name => indicatorCatalog.indicatorByName[name]), ...indicatorCatalog.extendedIndicators.filter(d => d.name !== 'VOLUME' && !essentials.includes(d.name))];
   }
   function defaultOperand(name) {
     const d = indicatorCatalog.indicatorByName[name];
@@ -495,7 +462,7 @@
       name,
       period:
         d?.params.find((p) => p.key === "period")?.value ??
-        (name === "EMA" || name === "SMA" ? 20 : 14),
+        basicByName[name]?.period ?? 14,
       timeframe: session().frame,
       source: "close",
     };
@@ -535,13 +502,13 @@
       el.querySelector(".studio-indicator-results").innerHTML =
         catalogEntries()
           .filter((d) =>
-            `${d.name} ${d.label ?? ""} ${d.overlay ? "แนวโน้ม" : "โมเมนตัม"}`
+            `${d.name} ${d.label ?? ""} ${d.description ?? ""}`
               .toLowerCase()
               .includes(q),
           )
           .map(
             (d) =>
-              `<button type="button" data-pick-indicator="${d.name}"><strong>${esc(d.label ?? d.name)}</strong><small>${esc(d.name)} · ${esc(d.unit ?? "ค่าจากราคาและวอลุ่ม")}</small></button>`,
+              `<button type="button" data-pick-indicator="${d.name}"><strong>${esc(d.label ?? d.name)}</strong><small>${esc(d.description ?? d.unit ?? "")}</small></button>`,
           )
           .join("") || "<p>ไม่พบอินดิเคเตอร์ที่ระบบรองรับ</p>";
     };
@@ -579,6 +546,7 @@
       (u) => indicatorKey(u.operand) === indicatorKey(selectedOperand),
     );
     const d = indicatorCatalog.indicatorByName[selectedOperand.name];
+    const usesSource = d?.source ?? basicByName[selectedOperand.name]?.source ?? true;
     const params = d?.params ?? [
       { key: "period", label: "ระยะ (แท่ง)", min: 2, max: 500, integer: true },
       ...(selectedOperand.name.startsWith("MACD")
@@ -605,7 +573,7 @@
           ]
         : []),
     ];
-    overlayEditor.innerHTML = `<header><h3>${esc(operandText(selectedOperand))}</h3><button type="button" data-close-inspector aria-label="ปิดการตั้งค่า">×</button></header><p class="studio-indicator-badge">${uses ? "ใช้ในเงื่อนไข " + uses.conditions.length + " จุด" : "ใช้ดูบนกราฟ · เก็บใน session"}</p><form data-indicator-form><div class="studio-indicator-fields">${params.map((p) => `<label>${esc(p.label)}<input type="number" name="${p.key}" min="${p.min}" max="${p.max}" step="${p.integer ? "1" : "any"}" value="${selectedOperand[p.key] ?? selectedOperand.params?.[p.key] ?? p.value ?? 14}" required></label>`).join("")}<label>แหล่งราคา<select name="source">${options(["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"], selectedOperand.source ?? "close")}</select></label></div><p data-indicator-error role="status"></p><div class="studio-indicator-actions"><button type="submit" class="secondary">ใช้ค่าที่ปรับ</button><button type="button" data-indicator-visibility>${session().hidden.has(indicatorKey(selectedOperand)) ? "แสดงเส้น" : "ซ่อนเส้น"}</button><button type="button" class="primary" data-indicator-condition>ใช้สร้างเงื่อนไข</button>${!uses ? '<button type="button" data-delete-chart-indicator>นำออกจากกราฟ</button>' : ""}</div></form>`;
+    overlayEditor.innerHTML = `<header><h3>${esc(operandText(selectedOperand))}</h3><button type="button" data-close-inspector aria-label="ปิดการตั้งค่า">×</button></header><p class="studio-indicator-badge">${uses ? "ใช้ในเงื่อนไข " + uses.conditions.length + " จุด" : "ใช้ดูบนกราฟ · เก็บใน session"}</p><form data-indicator-form><div class="studio-indicator-fields">${params.map((p) => `<label>${esc(p.label)}<input type="number" name="${p.key}" min="${p.min}" max="${p.max}" step="${p.integer ? "1" : "any"}" value="${selectedOperand[p.key] ?? selectedOperand.params?.[p.key] ?? p.value ?? 14}" required></label>`).join("")}${usesSource ? `<label>แหล่งราคา<select name="source">${options(["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"], selectedOperand.source ?? "close")}</select></label>` : ""}</div><p data-indicator-error role="status"></p><div class="studio-indicator-actions">${params.length || usesSource ? '<button type="submit" class="secondary">ใช้ค่าที่ปรับ</button>' : ""}<button type="button" data-indicator-visibility>${session().hidden.has(indicatorKey(selectedOperand)) ? "แสดงบนกราฟ" : "ซ่อนจากกราฟ"}</button><button type="button" class="primary" data-indicator-condition>ใช้สร้างเงื่อนไข</button>${!uses ? '<button type="button" data-delete-chart-indicator>นำออกจากกราฟ</button>' : ""}</div></form>`;
     overlayEditor.querySelector("form").onsubmit = async (e) => {
       e.preventDefault();
       const form = e.target;
@@ -620,7 +588,7 @@
           next.params[p.key] = val;
         } else next[p.key] = val;
       }
-      next.source = form.elements.source.value;
+      if (usesSource) next.source = form.elements.source.value;
       try {
         if (uses) {
           if (uses.paths.length > 1) {

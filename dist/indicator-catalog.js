@@ -5,6 +5,8 @@ const fast=p('fast','ระยะเร็ว (แท่ง)',12,2),slow=p('slow
 const smooth=p('smooth','ทำเส้น K ให้เรียบ (แท่ง)',3),signal=p('signal','ทำเส้น D ให้เรียบ (แท่ง)',3);
 const factor=p('factor','ตัวคูณ',3,.1,20,false);
 const entries=[];
+// Raw exchange volume has no lookback or price source.
+entries.push({name:'VOLUME',label:'Volume',method:'volume',args:['volume'],params:[],output:null,overlay:false,unit:'ปริมาณซื้อขาย',description:'ปริมาณซื้อขายแต่ละแท่ง ตามหน่วยที่กระดานส่งมา · วอลุ่ม volume',source:false});
 function add(name,label,method,args,params=[],output=null,overlay=false,unit='ค่าอินดิเคเตอร์',description=''){
  entries.push({name,label,method,args,params,output,overlay,unit,description:description||`${label} · ${unit}`,source:args.includes('source')});
 }
