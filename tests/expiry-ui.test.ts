@@ -60,6 +60,6 @@ test("expired cards escape reasons, retain legacy names and stay out of the sign
     context,
   );
   assert.ok(!view.innerHTML.includes('data-signal-kind="EXPIRED"'));
-  assert.ok(view.innerHTML.includes("สถานะข้อมูลตลาด"));
-  assert.ok(view.innerHTML.includes("ประวัติการส่งข้อความ"));
+  assert.ok(view.innerHTML.includes("การติดตามตลาด"));
+  assert.ok(view.innerHTML.includes("การส่งข้อความ"));
 });
