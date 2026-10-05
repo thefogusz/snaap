@@ -117,6 +117,18 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       ),
     );
     await page.locator("[data-add-chart-indicator]").click();
+    await page.locator('[data-pick-indicator="VOLUME_RATIO"]').click();
+    await page.locator('[data-chart-indicator]').filter({hasText:'VOLUME_RATIO'}).waitFor();
+    const draftBeforeRemove = await page.evaluate(() => JSON.stringify(state.draft));
+    await page.locator('.studio-legend-chip').filter({hasText:'VOLUME_RATIO'}).locator('[data-remove-chart-indicator]').click();
+    await page.locator('[data-chart-indicator]').filter({hasText:'VOLUME_RATIO'}).waitFor({state:'hidden'});
+    assert.equal(await page.evaluate(() => JSON.stringify(state.draft)), draftBeforeRemove);
+    await page.locator("[data-add-chart-indicator]").click();
+    await page.locator('[data-pick-indicator="VOLUME_RATIO"]').click();
+    await page.locator('[data-chart-indicator]').filter({hasText:'VOLUME_RATIO'}).waitFor();
+    await page.screenshot({path:'.local/audit/studio-indicator-remove.png'});
+    await page.locator('.studio-legend-chip').filter({hasText:'VOLUME_RATIO'}).locator('[data-remove-chart-indicator]').click();
+    await page.locator("[data-add-chart-indicator]").click();
     await checkDialogField('dialog[open] input[type=search]', 'studio-indicator-search');
     await page.locator("dialog[open] input[type=search]").fill("RSI");
     await page.locator('[data-pick-indicator="RSI"]').click();

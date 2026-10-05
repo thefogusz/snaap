@@ -205,6 +205,32 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+.studio-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.studio-legend-chip .studio-legend-item {
+  border: 0;
+  color: inherit;
+  padding-right: 4px;
+}
+.studio-legend-chip .studio-legend-remove {
+  flex: none;
+  min-height: 44px;
+  width: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+}
+.studio-legend-chip .studio-legend-remove:hover {
+  color: var(--ink);
+  background: var(--pale);
+}
 .workbench[data-tab="split"] .replay-controls {
   padding: 6px 12px;
   flex: none;

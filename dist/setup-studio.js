@@ -557,6 +557,7 @@
         return;
       }
       const o = defaultOperand(b.dataset.pickIndicator);
+      v.hidden.delete(indicatorKey(o));
       if (!extras.some((x) => indicatorKey(x) === indicatorKey(o)))
         extras.push(o);
       persist();
@@ -780,6 +781,23 @@
     if (b.dataset.studioTab) selectTab(b.dataset.studioTab);
     if (b.dataset.chartFrame) setView(b.dataset.chartFrame);
     if (b.hasAttribute("data-add-chart-indicator")) addIndicator(b);
+    if (b.dataset.removeChartIndicator !== undefined) {
+      const operand = window.SnaapChart.data?.overlays[Number(b.dataset.removeChartIndicator)]?.operand;
+      if (operand) {
+        const key = indicatorKey(operand);
+        view.extras[operand.timeframe] = (view.extras[operand.timeframe] ?? []).filter(o => indicatorKey(o) !== key);
+        session().hidden.add(key);
+        persist();
+        if (selectedOperand && indicatorKey(selectedOperand) === key) {
+          selectedOperand = null;
+          editorMode = null;
+          overlayEditor.hidden = true;
+        }
+        b.closest('.studio-legend-chip')?.remove();
+        window.SnaapChart.visibility();
+        window.SnaapChart.refresh();
+      }
+    }
     if (b.dataset.chartIndicator !== undefined) {
       const o =
         window.SnaapChart.data?.overlays[Number(b.dataset.chartIndicator)]

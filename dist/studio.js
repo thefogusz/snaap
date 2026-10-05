@@ -185,7 +185,7 @@
     studio.querySelector(".chart-legend").innerHTML = data.overlays
       .map(
         (o, i) =>
-          `<button type="button" class="studio-legend-item" data-chart-indicator="${i}" style="color:${colors[i % colors.length]}">${esc(operandText(o.operand))} ⚙</button>`,
+          window.SnaapStudio?.isHidden(o.operand) ? "" : `<span class="studio-legend-chip" style="color:${colors[i % colors.length]}"><button type="button" class="studio-legend-item" data-chart-indicator="${i}">${esc(operandText(o.operand))} ⚙</button><button type="button" class="studio-legend-remove" data-remove-chart-indicator="${i}" aria-label="นำ ${esc(operandText(o.operand))} ออกจากกราฟ" title="นำออกจากกราฟ · คงเงื่อนไขไว้">×</button></span>`,
       )
       .join("");
     studio
