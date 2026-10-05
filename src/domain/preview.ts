@@ -15,7 +15,7 @@ import {
 } from "./engine.js";
 
 // Rendering and alerts deliberately use the same evaluator, including closed-HTF rules.
-export function preview(spec: Strategy, series: Series, extra: Operand[] = [], chartTimeframe?: Strategy["timeframe"]) {
+export function preview(spec: Strategy, series: Series, extra: Operand[] = [], chartTimeframe?: Strategy["timeframe"], chartOnly = false) {
   const frame = chartTimeframe ?? spec.timeframe;
   const candles = series[frame] ?? [];
   const operands = new Map<string, Operand>();
@@ -32,7 +32,7 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = [], c
         if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
       }
   };
-  strategyConditions(spec).forEach(walk);
+  if (!chartOnly) strategyConditions(spec).forEach(walk);
   const overlays = [...operands.values()].filter(o => !chartTimeframe || (o.kind === "INDICATOR" && o.timeframe === frame)).map((o) => ({
     operand: o,
     points: candles.map((c) => ({
@@ -40,6 +40,7 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = [], c
       value: value(o, series, c.time, undefined, frame) ?? null,
     })),
   }));
+  if (chartOnly) return { candles, overlays, timeline: [], events: [], chartTimeframe: frame, evaluationTimeframe: spec.timeframe };
   let state = emptyLifecycle();
   const timeline = (series[spec.timeframe] ?? []).map((bar) => {
     const branches = strategyBranches(spec).map((branch) => {

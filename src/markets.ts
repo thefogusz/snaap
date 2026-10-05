@@ -379,6 +379,7 @@ export function registerMarkets(
         spec: strategySchema,
         indicators: z.array(operand).max(8).default([]),
         chartTimeframe: timeframe.optional(),
+        chartOnly: z.boolean().default(false),
       })
       .strict()
       .parse(req.body);
@@ -417,7 +418,7 @@ export function registerMarkets(
       [...input.indicators, { kind: "INDICATOR", name: "SMA", period: 2, timeframe: chartFrame }],
     );
     return {
-      ...preview(spec, series, input.indicators, input.chartTimeframe),
+      ...preview(spec, series, input.indicators, input.chartTimeframe, input.chartOnly),
       source: {
         exchange: spec.exchange[0],
         pair: spec.pairs[0],

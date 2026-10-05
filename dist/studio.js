@@ -120,8 +120,8 @@
     const bar = result.timeline.filter(b => b.time <= cut).at(-1);
     document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar,selectedTime:cut,source:result.source}}));
     studio.querySelector("[data-chart-evidence]").innerHTML =
-      barEvidence(bar) +
-      (bar.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+      (hasEntryCondition() ? barEvidence(bar) : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
+      (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
     if (fit) fitFrame();
   }
   function render(data) {
@@ -203,28 +203,29 @@
       const index = data.timeline.findLastIndex((b) => b.time <= selectedBarTime);
       if (index < 0) {
         document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar:null,selectedTime:selectedBarTime,source:data.source}}));
-        studio.querySelector('[data-chart-evidence]').textContent='ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้';
+        studio.querySelector('[data-chart-evidence]').textContent=hasEntryCondition() ? 'ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้' : 'ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ';
         return;
       }
       const bar = data.timeline[index];
       document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar,selectedTime:selectedBarTime,source:data.source}}));
       studio.querySelector("[data-chart-evidence]").innerHTML =
-        barEvidence(bar) +
-        (bar.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+        (hasEntryCondition() ? barEvidence(bar) : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
+        (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
       studio.querySelector(".chart-evidence").open = true;
     });
-    status.textContent = `${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
+    status.textContent = `${data.candles.length} แท่งปิด · ${hasEntryCondition() ? data.events.length + " สัญญาณ" : "ยังไม่มีเงื่อนไขสัญญาณ"} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
   }
   async function update(force = false) {
-    if (!hasEntryCondition()) { window.SnaapChart.reset(); return; }
     if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;
     if(!state.draft.pairs.includes(chartPair))chartPair=state.draft.pairs[0];
     chartPickerWrap.hidden=state.draft.pairs.length<2;
     chartPicker.innerHTML=state.draft.pairs.map(pair=>`<option value="${esc(pair)}">${esc(pair)}</option>`).join("");chartPicker.value=chartPair;
     chartFrame ??= state.draft.timeframe;
-    const request = {spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]};
+    const chartOnly = !hasEntryCondition();
+    // Supply a valid transport spec for market fetching only; never evaluate it.
+    const request = {spec:{...state.draft,pairs:[chartPair],...(chartOnly ? {entry:{kind:'COMPARE',op:'>',left:{kind:'CONSTANT',value:0},right:{kind:'CONSTANT',value:0}},stages:[],exit:undefined,cancel:undefined,short:undefined,mirrorShort:undefined,side:state.draft.market==='Spot'?'SPOT':'LONG'} : {})},chartOnly,chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]};
     const scope={conversation:state.conversation,workspace:state.workspaceId};
-    const next = JSON.stringify({request,...scope});
+    const next = JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:request.indicators},...scope});
     const draftAtRequest=JSON.stringify(state.draft);
     if (!force && next === key && result) return;
     key = next;
@@ -250,7 +251,6 @@
     }
   }
   function schedule() {
-    if (!hasEntryCondition()) { window.SnaapChart.reset(); return; }
     if (JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]},conversation:state.conversation,workspace:state.workspaceId}) === key && result) return;
     generation++;
     selectedBarTime=null;

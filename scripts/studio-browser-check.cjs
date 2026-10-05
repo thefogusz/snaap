@@ -322,8 +322,10 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     assert.equal(await page.locator('.studio-condition-card').count(), 0);
     assert.equal(await page.locator('[data-chart-indicator]').count(), 0);
     assert.equal(await page.locator('.studio-event-list').isVisible(), false);
-    assert.equal(await page.locator('.studio-canvas canvas').count(), 0);
-    assert.ok((await page.locator('[data-chart-status]').innerText()).includes('เพิ่มเงื่อนไข'));
+    await page.locator('[data-chart-status]').filter({hasText:/\d+ แท่งปิด/}).waitFor();
+    assert.ok(await page.locator('.studio-canvas canvas').count() > 0);
+    assert.equal((await page.evaluate(() => window.SnaapChart.data)).events.length, 0);
+    assert.equal((await page.evaluate(() => window.SnaapChart.data)).timeline.length, 0);
     assert.ok(await page.evaluate(() => Object.keys(localStorage).some(key => {
       try { const saved = JSON.parse(localStorage.getItem(key)); return saved?.version === 1 && saved.draft?.entry?.kind === 'GROUP' && saved.draft.entry.children.length === 0; } catch { return false; }
     })), 'blank draft is checkpointed for reload');

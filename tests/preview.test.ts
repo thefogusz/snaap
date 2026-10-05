@@ -32,6 +32,15 @@ const bar = (time: number, close: number): Candle => ({
   close,
   volume: 10,
 });
+test("chart-only preview renders prices and selected overlays without strategy evidence or events", () => {
+  const series = { "15m": [bar(900000, 100), bar(1800000, 102)] };
+  const result = preview(spec, series, [{kind:"INDICATOR",name:"SMA",period:2,timeframe:"15m"}], "15m", true);
+  assert.deepEqual(result.candles, series["15m"]);
+  assert.equal(result.overlays.length, 1);
+  assert.equal(result.overlays[0].operand.kind, "INDICATOR");
+  assert.deepEqual(result.timeline, []);
+  assert.deepEqual(result.events, []);
+});
 test("preview uses the alert engine and never reveals future higher-timeframe values", () => {
   const series = {
     "15m": Array.from({ length: 16 }, (_, i) => bar((i + 1) * 900000, 100 + i)),
