@@ -36,7 +36,7 @@
 .notification-rules .watch-channel-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .notification-rules .watch-channel-tag{gap:5px;max-width:210px;color:var(--muted)}
 .notification-rules .watch-channel-tag>span:first-of-type{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.notification-rules .watch-channel-tag.is-routing{color:var(--ink);border-color:var(--lime)}
+.notification-rules .watch-channel-tag.is-routing{color:var(--ink);border-color:var(--line)}
 .watch-channel-tag img,.watch-channel-menu img{object-fit:contain;flex-shrink:0}
 .notification-rules .watch-channel-picker{position:relative;padding:0;margin:0;border:0;flex-shrink:0}
 #main .notification-rules .watch-channel-picker>summary{display:inline-flex;align-items:center;gap:6px;cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:12px;line-height:1.5;min-height:34px;color:var(--ink);white-space:nowrap}
