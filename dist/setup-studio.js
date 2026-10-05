@@ -407,6 +407,13 @@
       if (name) details.append(name);
       if (evaluation) details.append(evaluation);
       overlayEditor.after(details);
+      // The overview already shows the setup; keep the full review available on demand.
+      const review = body.querySelector('.rule-review');
+      if (review) {
+        const currentView = session();
+        review.open = Boolean(currentView.reviewOpen);
+        review.ontoggle = () => { currentView.reviewOpen = review.open; };
+      }
       body.querySelectorAll(":scope > .setup-section").forEach((section) => {
         const details = document.createElement("details");
         details.className = "studio-original-editor";
@@ -579,7 +586,7 @@
           ]
         : []),
     ];
-    overlayEditor.innerHTML = `<header><h3>${esc(operandText(selectedOperand))}</h3><button type="button" data-close-inspector aria-label="ปิดการตั้งค่า">×</button></header><p class="studio-indicator-badge">${uses ? "ใช้ในเงื่อนไข " + uses.conditions.length + " จุด" : "ใช้ดูบนกราฟ · เก็บใน session"}</p><form data-indicator-form>${params.map((p) => `<label>${esc(p.label)}<input type="number" name="${p.key}" min="${p.min}" max="${p.max}" step="${p.integer ? "1" : "any"}" value="${selectedOperand[p.key] ?? selectedOperand.params?.[p.key] ?? p.value ?? 14}" required></label>`).join("")}<label>แหล่งราคา<select name="source">${options(["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"], selectedOperand.source ?? "close")}</select></label><p data-indicator-error role="status"></p><button type="submit" class="secondary">ใช้ค่าที่ปรับ</button></form><div class="studio-indicator-actions"><button type="button" data-indicator-visibility>${session().hidden.has(indicatorKey(selectedOperand)) ? "แสดงเส้น" : "ซ่อนเส้น"}</button><button type="button" class="primary" data-indicator-condition>ใช้สร้างเงื่อนไข</button>${!uses ? '<button type="button" data-delete-chart-indicator>นำออกจากกราฟ</button>' : ""}</div>`;
+    overlayEditor.innerHTML = `<header><h3>${esc(operandText(selectedOperand))}</h3><button type="button" data-close-inspector aria-label="ปิดการตั้งค่า">×</button></header><p class="studio-indicator-badge">${uses ? "ใช้ในเงื่อนไข " + uses.conditions.length + " จุด" : "ใช้ดูบนกราฟ · เก็บใน session"}</p><form data-indicator-form><div class="studio-indicator-fields">${params.map((p) => `<label>${esc(p.label)}<input type="number" name="${p.key}" min="${p.min}" max="${p.max}" step="${p.integer ? "1" : "any"}" value="${selectedOperand[p.key] ?? selectedOperand.params?.[p.key] ?? p.value ?? 14}" required></label>`).join("")}<label>แหล่งราคา<select name="source">${options(["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"], selectedOperand.source ?? "close")}</select></label></div><p data-indicator-error role="status"></p><div class="studio-indicator-actions"><button type="submit" class="secondary">ใช้ค่าที่ปรับ</button><button type="button" data-indicator-visibility>${session().hidden.has(indicatorKey(selectedOperand)) ? "แสดงเส้น" : "ซ่อนเส้น"}</button><button type="button" class="primary" data-indicator-condition>ใช้สร้างเงื่อนไข</button>${!uses ? '<button type="button" data-delete-chart-indicator>นำออกจากกราฟ</button>' : ""}</div></form>`;
     overlayEditor.querySelector("form").onsubmit = async (e) => {
       e.preventDefault();
       const form = e.target;

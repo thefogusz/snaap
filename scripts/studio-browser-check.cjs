@@ -36,6 +36,8 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     assert.ok(await page.locator('.studio-setup-settings > label').isVisible());
     assert.equal(await page.locator('.studio-toolbar-meta [data-draft-status]').count(), 1);
     assert.equal(await page.locator('.design-panel > [data-draft-status]').count(), 0);
+    assert.equal(await page.locator('.design-body > .design-actions').isVisible(), false);
+    assert.equal(await page.locator('.rule-review').getAttribute('open'), null);
     assert.ok(await page.locator(".studio-setup-settings").evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector(".studio-condition-overview")) & Node.DOCUMENT_POSITION_FOLLOWING)));
     const panelBox = (selector) => page.locator(selector).boundingBox();
     const beforeChat = await panelBox("#conversation");
@@ -88,6 +90,14 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .locator("[data-chart-indicator]")
       .filter({ hasText: "RSI" })
       .waitFor();
+    assert.equal(await page.locator('[data-indicator-form] .studio-indicator-actions > button[type=submit]').count(), 1);
+    assert.equal(await page.locator('[data-indicator-form] .studio-indicator-actions > [data-indicator-condition]').count(), 1);
+    assert.equal(await page.locator('[data-indicator-form] .studio-indicator-actions > [data-indicator-visibility]').count(), 1);
+    assert.equal(await page.locator('[data-indicator-error]').isVisible(), false);
+    await page.locator("[data-indicator-form] input[name=period]").fill("0");
+    await page.locator("[data-indicator-form] button[type=submit]").click();
+    assert.equal(await page.locator('[data-indicator-form] input[name=period]').evaluate(el => el.validity.valid), false);
+    assert.ok((await page.locator('[data-chart-indicator]').filter({hasText:'RSI'}).innerText()).includes('14'));
     await page.locator("[data-indicator-form] input[name=period]").fill("21");
     await page.locator("[data-indicator-form] button[type=submit]").click();
     await page

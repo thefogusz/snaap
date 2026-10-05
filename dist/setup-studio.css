@@ -387,9 +387,66 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
 }
 .studio-indicator-actions {
   display: flex;
-  gap: 6px;
   flex-wrap: wrap;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 8px;
+}
+.studio-indicator-actions button {
+  padding-inline: 8px;
+}
+.studio-indicator-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 8px;
+}
+.studio-indicator-fields > label {
+  min-width: 0;
+  margin: 8px 0 0;
+}
+.studio-indicator-badge {
+  margin: 4px 0;
+}
+[data-indicator-error]:empty {
+  display: none;
+}
+/* Compact the embedded editor, without changing the standalone designer or dialogs. */
+.workbench[data-tab="split"] .design-body > details {
+  margin: 8px 0;
+}
+.workbench[data-tab="split"] .design-body > details > summary {
+  min-height: 44px;
+  align-content: center;
+}
+.workbench[data-tab="split"] .studio-setup-details,
+.workbench[data-tab="split"] .studio-original-editor {
+  padding: 0 10px;
+}
+.workbench[data-tab="split"] .design-body .setup-section {
+  padding-block: 12px;
+}
+.workbench[data-tab="split"] .design-body .operand-block {
+  padding: 10px;
+}
+.workbench[data-tab="split"] .design-body .operand-title {
+  margin-bottom: 8px;
+}
+.workbench[data-tab="split"] .design-body .operand-fields,
+.workbench[data-tab="split"] .design-body .condition-line {
+  gap: 8px;
+}
+.workbench[data-tab="split"] .studio-operand-inspector .operand-fields {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+.workbench[data-tab="split"] .studio-operand-inspector .operand-fields > label {
+  min-width: 0;
+  margin: 4px 0;
+}
+.workbench[data-tab="split"] .design-body .rule-review {
+  padding-top: 8px;
+}
+.workbench[data-tab="split"] .design-body > .design-actions,
+.workbench[data-tab="split"] .design-body > .design-actions + .field-note {
+  display: none;
 }
 .studio-event-list {
   flex: none;
