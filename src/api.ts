@@ -12,7 +12,7 @@ import { signalValidUntil } from "./signal-validity.js";
 import { registerGoogle } from "./auth.js";
 import { registerFiles, cleanupChatImages } from "./files.js";
 import { registerHarness } from "./ai/harness.js";
-import { registerMarkets, instruments, strategySeries } from "./markets.js";
+import { registerMarkets, instruments } from "./markets.js";
 import { registerBilling } from "./billing.js";
 import { registerDestinations } from "./destinations.js";
 import { registerHistory } from "./history.js";
@@ -483,6 +483,10 @@ export async function buildApp(
       .strict()
       .parse(req.body);
     if (input.active) {
+      if (!options.monitoring)
+        throw new ApiError(409, "MONITOR_NOT_READY", "Worker ยังไม่พร้อม");
+      if (input.confirmation !== "ACTIVATE")
+        throw new ApiError(400, "CONFIRMATION_REQUIRED", "ยืนยันกฎก่อนเปิดใช้งาน");
       const owned = (
         await db.query(
           "SELECT spec FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND revision=$3",
@@ -515,11 +519,8 @@ export async function buildApp(
               "UNSUPPORTED_INSTRUMENT",
               "คู่เทรดนี้ไม่พร้อมให้ติดตามบนกระดานและตลาดที่เลือก",
             );
-          // Large catalogs warm up independently in the monitor, rather than blocking
-          // one HTTP activation request behind hundreds of rate-limited market reads.
-          if (spec.pairs.length <= 10)
-            for (const pair of spec.pairs)
-              await strategySeries(spec, exchange, pair);
+          // The monitor loads candles and records readiness independently. Activation
+          // validates instruments without waiting for historical data for every pair.
         }
     }
     return transaction(db, async (c) => {
