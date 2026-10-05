@@ -17,6 +17,18 @@
       key=""; stop(); update(true);
     },
     refresh(){key="";schedule();},
+    reset(){
+      generation++;
+      clearTimeout(timer);
+      key="";
+      chartPair=null;chartFrame=null;selectedBarTime=null;requestedBarTime=null;
+      clear();
+      chartPickerWrap.hidden=true;
+      scrub.value=0;
+      studio.querySelector('[data-chart-title]').textContent='กราฟเซตอัปใหม่';
+      status.textContent='เพิ่มเงื่อนไขเพื่อดูกราฟและสัญญาณของเซตอัปนี้';
+      canvas.inert=false;canvas.style.opacity='1';
+    },
     visibility(){lines.forEach(({series,operand})=>series.applyOptions({visible:!window.SnaapStudio?.isHidden(operand)}));},
   };
   const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector("header").append(chartPickerWrap);
@@ -204,6 +216,7 @@
     status.textContent = `${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
   }
   async function update(force = false) {
+    if (!hasEntryCondition()) { window.SnaapChart.reset(); return; }
     if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;
     if(!state.draft.pairs.includes(chartPair))chartPair=state.draft.pairs[0];
     chartPickerWrap.hidden=state.draft.pairs.length<2;
@@ -237,6 +250,7 @@
     }
   }
   function schedule() {
+    if (!hasEntryCondition()) { window.SnaapChart.reset(); return; }
     if (JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]},conversation:state.conversation,workspace:state.workspaceId}) === key && result) return;
     generation++;
     selectedBarTime=null;

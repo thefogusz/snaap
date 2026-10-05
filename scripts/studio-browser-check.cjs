@@ -302,6 +302,32 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     await page
       .getByRole("button", { name: "ยังไม่เปิดใช้งาน", exact: true })
       .click();
+    await page.route('**/api/v1/preview', async route => {
+      const response = await route.fetch();
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      await route.fulfill({response});
+    });
+    const oldPreview = page.waitForRequest(request => request.url().endsWith('/preview'));
+    await page.locator('[data-chart-frame="4h"]').click();
+    await oldPreview;
+    await page.getByRole('button', {name:'เริ่มบทสนทนาใหม่',exact:true}).click();
+    await page.locator('.workbench[data-tab="chat"]').waitFor({state:'visible'});
+    await page.getByRole('button', {name:'แชท + เซตอัป',exact:true}).click();
+    await page.locator('.studio-overview-heading span').filter({hasText:'0/24'}).waitFor();
+    await page.waitForTimeout(1500);
+    assert.equal(await page.locator('.studio-condition-card').count(), 0);
+    assert.equal(await page.locator('[data-chart-indicator]').count(), 0);
+    assert.equal(await page.locator('.studio-event-list').isVisible(), false);
+    assert.equal(await page.locator('.studio-canvas canvas').count(), 0);
+    assert.ok((await page.locator('[data-chart-status]').innerText()).includes('เพิ่มเงื่อนไข'));
+    assert.ok(await page.evaluate(() => Object.keys(localStorage).some(key => {
+      try { const saved = JSON.parse(localStorage.getItem(key)); return saved?.version === 1 && saved.draft?.entry?.kind === 'GROUP' && saved.draft.entry.children.length === 0; } catch { return false; }
+    })), 'blank draft is checkpointed for reload');
+    await page.locator('.studio-condition-overview [data-add="entry"]').click();
+    await page.locator('.studio-overview-heading span').filter({hasText:'1/24'}).waitFor();
+    await page.locator('[data-chart-status]').filter({hasText:/\d+ แท่งปิด/}).waitFor();
+    assert.equal(await page.locator('.studio-condition-card').filter({hasText:'EMA 200'}).count(), 1);
+    console.log('PASS new chat clears conditions, overlays and delayed preview; blank draft is checkpointed and accepts a new condition');
     assert.deepEqual(errors, []);
     console.log(
       "PASS studio interaction, MTF separation, stale preview rejection, 1440/1024/390 both themes, agent conflicts, receipts/undo and save/activation separation; no JS errors",

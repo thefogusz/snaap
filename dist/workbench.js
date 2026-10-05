@@ -73,6 +73,11 @@ const initial = () => ({
   cooldownBars: 0,
   destinations: [],
 });
+// An unfinished editor draft must never be evaluated as a sample strategy.
+const blankSetup = () => ({ ...initial(), entry: { kind: "GROUP", op: "AND", children: [] } });
+function hasEntryCondition(d = state.draft) {
+  return Boolean(d?.entry && !(d.entry.kind === "GROUP" && !d.entry.children.length));
+}
 const status = document.createElement("div");
 status.className = "runtime-status";
 status.setAttribute("role", "status");
@@ -662,6 +667,10 @@ async function ensureConversation(title = state.draft?.name ?? "เซตอั�
 }
 async function saveDraft() {
   clearTimeout(draftTimer);
+  if (!hasEntryCondition()) {
+    persistRecovery();
+    return;
+  }
   if (draftFlight) {
     await draftFlight;
     if (draftDirty()) return saveDraft();
@@ -707,6 +716,11 @@ function queueDraftSave() {
   if (undoButton) undoButton.disabled = state.undo.length === 0;
   const summary = panel.querySelector(".draft-diff");
   if (summary && state.draft) summary.textContent = fullSummary(state.draft);
+  if (!hasEntryCondition()) {
+    clearTimeout(draftTimer);
+    showDraftStatus("ร่างยังไม่มีเงื่อนไข");
+    return;
+  }
   if (!draftDirty()) {
     clearTimeout(draftTimer);
     if (!draftFlight)
@@ -762,6 +776,7 @@ function comparableSpec(value) {
   return value;
 }
 function conditionText(c) {
+  if (c.kind === "GROUP" && !c.children.length) return "ยังไม่มีเงื่อนไขเข้า";
   if (c.kind === "GROUP")
     return (
       "(" +
@@ -1008,6 +1023,10 @@ function showEditorFeedback(text, success = false, focus = true) {
   }
 }
 function validateEditor() {
+  if (!hasEntryCondition()) {
+    showEditorFeedback("เพิ่มเงื่อนไขเข้าก่อนบันทึกเซตอัป");
+    return false;
+  }
   if (setupConditionCount(state.draft) > MAX_SETUP_CONDITIONS) {
     showEditorFeedback("เซตอัปมีได้สูงสุด 24 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
     return false;
@@ -1240,8 +1259,8 @@ async function chat(text) {
         text,
         mode: $("#ai-mode").value,
         selection,
-        draft: state.draft,
-        editorContext: window.SnaapStudio?.context(),
+        draft: hasEntryCondition() ? state.draft : undefined,
+        editorContext: hasEntryCondition() ? window.SnaapStudio?.context() : undefined,
         useMyData:state.useMyData,
         imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))],
 
@@ -1794,11 +1813,13 @@ document.addEventListener("click", async (e) => {
       state.crop = null;
       renderImages();
       state.saved = null;
-      state.draft = initial();
+      state.draft = blankSetup();
       state.replay = null;
       state.undo = [];
       $("#messages").replaceChildren();
       state.editorNotice = null;
+      window.SnaapStudio?.reset();
+      window.SnaapChart?.reset();
       setWorkbenchTab(t.dataset.action === "new-rule" ? "design" : "chat");
       showDesigner();
       location.hash = "home";

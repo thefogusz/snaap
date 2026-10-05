@@ -236,7 +236,7 @@
       });
   }
   function context() {
-    if (!state.draft) return;
+    if (!hasEntryCondition()) return;
     session();
     const pair = state.draft.pairs.includes(window.SnaapChart.pair)
       ? window.SnaapChart.pair
@@ -257,6 +257,18 @@
     };
   }
   window.SnaapStudio = {
+    reset() {
+      const fresh = session();
+      fresh.frame = state.draft.timeframe;
+      fresh.extras = Object.fromEntries(tf.map(frame => [frame, []]));
+      fresh.hidden.clear();
+      fresh.reviewOpen = false;
+      focusPath = null;filter = "";bar = null;selectedOperand = null;editorMode = null;
+      overlayEditor.hidden = true;
+      eventList.hidden = true;eventList.replaceChildren();
+      reasonPane.innerHTML = '<h3>เหตุผลสัญญาณ</h3><p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>';
+      persist();
+    },
     adoptConversation(id) {
       const old = session();
       const key = [state.me?.id, state.workspaceId, id].join(":");
@@ -279,7 +291,7 @@
     eventList.hidden = true;
     renderOverview();
     reasonPane.innerHTML =
-      '<h3>เหตุผลสัญญาณ</h3><p role="status">กำลังคำนวณร่างล่าสุด…</p>';
+      `<h3>เหตุผลสัญญาณ</h3><p role="status">${hasEntryCondition() ? "กำลังคำนวณร่างล่าสุด…" : "ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ"}</p>`;
   }
   async function commit(next) {
     const original = JSON.stringify(state.draft),
@@ -305,6 +317,10 @@
   function renderOverview() {
     const box = panel.querySelector(".studio-condition-overview");
     if (!box || !state.draft) return;
+    if (!hasEntryCondition()) {
+      box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซตอัป</h3><span>0/${MAX_SETUP_CONDITIONS}</span></div><p class="field-note">ยังไม่มีเงื่อนไข เริ่มเพิ่มเองหรือให้ Snaap ช่วยออกแบบ</p><button type="button" class="secondary" data-add="entry">เพิ่มเงื่อนไขเข้า</button>`;
+      return;
+    }
     const rows = conditionRows(state.draft);
     box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซตอัป</h3><span>${setupConditionCount(state.draft)}/${MAX_SETUP_CONDITIONS}</span></div><label class="studio-filter">ไทม์เฟรมเงื่อนไข<select data-condition-frame><option value="">ทุกไทม์เฟรม</option>${tf.map((t) => `<option value="${t}" ${filter === t ? "selected" : ""}>${t.toUpperCase()}</option>`).join("")}</select></label><p class="field-note">ตรวจสัญญาณเมื่อแท่ง ${esc(state.draft.timeframe.toUpperCase())} ปิด · ใช้แท่งปิดล่าสุดของแต่ละไทม์เฟรม</p>${
       rows
@@ -742,6 +758,7 @@
   document.addEventListener("setup-changed", invalidate);
   document.addEventListener("workbench-mode-changed", decorate);
   document.addEventListener("studio-evidence", (e) => {
+    if (!hasEntryCondition()) return;
     bar = e.detail.bar;
     renderOverview();
     reasonPane.innerHTML = `<h3>เหตุผลสัญญาณ</h3><p>กราฟ ${esc(view.frame.toUpperCase())} · ตรวจบน ${esc(state.draft.timeframe.toUpperCase())}</p>${bar ? barEvidence(bar) : "<p>ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้</p>"}${bar?.branches?.map((b) => (b.cancel ? "<p>ยกเลิก</p>" + evidenceUI(b.cancel) : "")).join("") ?? ""}<button type="button" data-ask-bar>ถาม Snaap เกี่ยวกับแท่งนี้</button>`;
