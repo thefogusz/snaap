@@ -393,6 +393,27 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
     assert.deepEqual(await page.evaluate(() => ({draft:JSON.stringify(state.draft),frame:window.SnaapChart.frame})),beforePaste);
     await page.screenshot({path:'.local/audit/studio-pasted-image.png'});
     console.log('PASS image paste preserves split workspace, draft and chart timeframe');
+    let imageSendAttempts = 0;
+    await page.route('**/api/v1/conversations/*/turns',async route => {
+      assert.equal(route.request().postDataJSON().imageIds.length,1);
+      imageSendAttempts++;
+      await new Promise(resolve => setTimeout(resolve,1200));
+      await route.fulfill({status:imageSendAttempts === 1 ? 503 : 200,contentType:'application/json',body:JSON.stringify(imageSendAttempts === 1 ? {error:{code:'TEST_RETRY',message:'ทดสอบส่งไม่สำเร็จ'}} : {text:'รับภาพแล้ว'})});
+    });
+    await page.locator('#followup-input').fill('ตรวจภาพที่แนบ');
+    await page.locator('.chat-send-button').click();
+    await page.locator('.message.user .message-images img').waitFor();
+    assert.equal(await page.locator('.attachment-preview').isVisible(),false);
+    await page.locator('.thinking-indicator').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.attachment-preview img').isVisible(),true);
+    assert.equal(await page.locator('#followup-input').inputValue(),'ตรวจภาพที่แนบ');
+    await page.locator('.chat-send-button').click();
+    await page.locator('.thinking-indicator').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.attachment-preview img').count(),0);
+    assert.equal(await page.locator('.message.user .message-images img').count(),2);
+    assert.equal(await page.locator('.workbench').getAttribute('data-tab'),'split');
+    await page.screenshot({path:'.local/audit/studio-sent-image.png'});
+    console.log('PASS sent image appears in user message, clears on success and survives failed-send retry');
     assert.deepEqual(errors, []);
     console.log(
       "PASS studio interaction, MTF separation, stale preview rejection, 1440/1024/390 both themes, agent conflicts, receipts/undo and save/activation separation; no JS errors",

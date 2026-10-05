@@ -465,10 +465,26 @@ window.addEventListener("resize", alignToast);
 function toast(text) {
   window.SnaapToast.show(text, alignToast);
 }
-function message(text, user = false) {
+function message(text, user = false, images = []) {
   const el = document.createElement("div");
   el.className = "message " + (user ? "user" : "assistant");
-  if (user) el.textContent = text;
+  if (user) {
+    if (images.length) {
+      const gallery = document.createElement('div');
+      gallery.className = 'message-images';
+      gallery.setAttribute('aria-label', `แนบ ${images.length} ภาพ`);
+      for (const image of images) {
+        const img = document.createElement('img');
+        img.src = image.url ?? '/api/v1/images/' + image.id;
+        img.alt = image.name ?? 'ภาพที่แนบในข้อความ';
+        gallery.append(img);
+      }
+      el.append(gallery);
+    }
+    const body = document.createElement('div');
+    body.textContent = text;
+    el.append(body);
+  }
   else {
     const body = document.createElement("div");
     body.className = "assistant-body";
@@ -1216,13 +1232,14 @@ async function chat(text) {
   if(workbench.dataset.tab!=="split")setWorkbenchTab("chat");
   showDesigner();
   location.hash = "home";
-  message(text, true);
+  message(text, true, [...state.images, ...(state.useMyData ? state.libraryImages : [])]);
   followingChat=true;
   requestAnimationFrame(scrollChatToLatest);
   $("#chat-input").value = "";
   $("#followup-input").value = "";
   resizeChatInputs();
   state.busy = true;
+  previews.hidden = true;
   const thinking = document.createElement("div");
   thinking.className = "thinking-indicator";
   thinking.setAttribute("role", "status");
@@ -1296,6 +1313,7 @@ async function chat(text) {
   } finally {
     clearTimeout(thinkingWaitTimer);
     state.busy = false;
+    previews.hidden = false;
     thinking.remove();
     $$("#chat-form button[type=submit],.chat-send-button").forEach(
       (b) => (b.disabled = false),
@@ -1688,13 +1706,13 @@ document.addEventListener("change", async (e) => {
 async function loadChatHistory(){
     let chatPage = await api(`/conversations/${state.conversation}/messages`);
     const paintPage = async (rows) => { for (const m of rows) {
-      if(m.ui_card?.type!=='preset')message(m.content, m.role === "user");
+      if(m.ui_card?.type!=='preset')message(m.content, m.role === "user", m.role === 'user' ? (m.sources ?? []).filter(s => s.type === 'image' && s.available) : []);
       if(m.ui_card?.type==='preset')(await presetsReady).renderCard(m);
       if (m.setup_changes?.length) await showSetupChanges(null, null, m.setup_changes);
       if (m.sources?.some((s) => !s.available))
         message("ข้อมูลอ้างอิงบางส่วนถูกลบแล้ว ข้อสรุปเดิมอาจใช้ต่อไม่ได้");
       for (const source of m.sources ?? [])
-        if (source.type === "image" && source.available) {
+        if (m.role !== 'user' && source.type === "image" && source.available) {
           const img = document.createElement("img");
           img.src = "/api/v1/images/" + source.id;
           img.alt = "ภาพในบทสนทนา";
