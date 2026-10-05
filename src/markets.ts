@@ -332,7 +332,9 @@ export async function strategySeries(
   };
   strategyConditions(spec).forEach(walk);
   extra.forEach(collect);
-  for (const frame of neededFrames(spec))
+  const requestedFrames = new Set(neededFrames(spec));
+  for (const o of extra) if (o.kind === "INDICATOR" || o.kind === "PRICE") requestedFrames.add(o.timeframe);
+  for (const frame of requestedFrames)
     series[frame] = await candles(
       exchange,
       spec.market,
@@ -372,26 +374,22 @@ export function registerMarkets(
       .object({
         spec: strategySchema,
         indicators: z.array(operand).max(8).default([]),
+        chartTimeframe: z.enum(["5m", "15m", "1h", "4h", "1d"]).optional(),
       })
       .strict()
       .parse(req.body);
     const spec = input.spec;
+    const chartFrame = input.chartTimeframe ?? spec.timeframe;
     if (spec.exchange.length !== 1 || spec.pairs.length !== 1)
       throw new ApiError(
         400,
         "PREVIEW_TARGET",
         "เลือกหนึ่งกระดานและหนึ่งคู่เทรดสำหรับกราฟนี้",
       );
-    const series = await strategySeries(
-      spec,
-      spec.exchange[0],
-      spec.pairs[0],
-      input.indicators,
-    );
     for (const o of input.indicators) {
       if (
         o.kind !== "INDICATOR" ||
-        o.timeframe !== spec.timeframe ||
+        o.timeframe !== chartFrame ||
         (o.name === "CUSTOM") !== !!o.formula
       )
         throw new ApiError(
@@ -399,13 +397,26 @@ export function registerMarkets(
           "INDICATOR_FRAME",
           "อินดิเคเตอร์เสริมใช้กรอบเวลาของกราฟ",
         );
+      // Chart-only operands obey the same semantic checks as saved conditions.
+      strategySchema.parse({
+        ...spec, market: "Spot", side: "SPOT", short: undefined, mirrorShort: undefined,
+        entry: { kind: "COMPARE", op: ">", left: o, right: { kind: "CONSTANT", value: 0 } },
+        stages: [], exit: undefined, cancel: undefined,
+      });
     }
+    const series = await strategySeries(
+      spec,
+      spec.exchange[0],
+      spec.pairs[0],
+      [...input.indicators, { kind: "INDICATOR", name: "SMA", period: 2, timeframe: chartFrame }],
+    );
     return {
-      ...preview(spec, series, input.indicators),
+      ...preview(spec, series, input.indicators, input.chartTimeframe),
       source: {
         exchange: spec.exchange[0],
         pair: spec.pairs[0],
-        frame: spec.timeframe,
+        frame: chartFrame,
+        evaluationTimeframe: spec.timeframe,
         asOf: new Date().toISOString(),
       },
     };

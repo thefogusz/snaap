@@ -19,6 +19,8 @@ import { extendedIndicators } from "../../dist/indicator-catalog.js";
 import { strategySeries, instruments } from "../markets.js";
 import { pricing, boundCost, outputLimit } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
+import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
+import { editorContextSchema, validEditorContext, inspectSetupBar } from "../domain/studio.js";
 import {
   claimsDraftChange,
   requestsDraftChange,
@@ -55,6 +57,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         text: z.string().trim().min(1).max(4000),
         mode: z.enum(["standard", "deep"]),
         draft: strategySchema.optional(),
+        editorContext: editorContextSchema.optional(),
         selection: selection.optional(),
         imageIds: z.array(z.string().uuid()).max(5, "แนบได้สูงสุด 5 ภาพต่อข้อความ").default([]),
         useMyData: z.boolean().default(false),
@@ -69,6 +72,8 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       })
       .strict()
       .parse(req.body);
+    if (input.editorContext && !validEditorContext(input.draft, input.editorContext))
+      throw new ApiError(400, "EDITOR_CONTEXT", "บริบทกราฟไม่ตรงกับร่างปัจจุบัน กรุณาเลือกเงื่อนไขอีกครั้ง");
     // Keep the deep implementation available for later development, but block entry now.
     if (["deep"].includes(input.mode))
       throw new ApiError(
@@ -360,8 +365,11 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         required: ["spec"],
         additionalProperties: false,
       };
-      let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use exactly one exchange and one or more supported pairs (at most 5000). Preserve all existing pairs unless the user asks to change them. A setup has at most 6 leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than 6; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
+      let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use exactly one exchange and one or more supported pairs (at most 5000). Preserve all existing pairs unless the user asks to change them. A setup has at most ${MAX_SETUP_CONDITIONS} leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than ${MAX_SETUP_CONDITIONS}; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
       const loadedSpecialists = new Set<string>();
+      instructions +=
+        "\nEditor focus (navigation only, not market evidence): " + JSON.stringify(input.editorContext ?? null) +
+        ". Changing the visible chart timeframe does not change the strategy evaluation timeframe. Use inspect_setup_bar for evidence at a selected candle. Do not infer TRUE/FALSE or prices from the editor focus. Preserve all unrequested fields and never activate a setup.";
       instructions +=
         "\nAdditional supported indicators (name, parameter defaults): " +
         JSON.stringify(
@@ -475,6 +483,13 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                   "Calculate indicators and replay the draft on public closed candles of its first selected exchange and pair. No orders or profit inference.",
                 parameters: toolParameters,
                 strict: false,
+              },
+              {
+                type: "function",
+                name: "inspect_setup_bar",
+                description: "Inspect lifecycle-aware evidence at the latest closed evaluation candle not after selectedBarTime, for the current draft and a selected pair. Uses public candles; no orders, profit or monitoring claims.",
+                parameters: { type: "object", properties: { pair: { type: "string" }, selectedBarTime: { type: "integer", minimum: 0 } }, required: ["pair", "selectedBarTime"], additionalProperties: false },
+                strict: true,
               },
             ],
           },
@@ -663,6 +678,17 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                 error:
                   "Cannot validate draft or instrument. Select exactly one exchange and supported pairs; ask for missing details, never invent instruments.",
               };
+            }
+          }
+          if (call.name === "inspect_setup_bar") {
+            try {
+              const args = z.object({ pair: z.string(), selectedBarTime: z.number().int().nonnegative() }).strict().parse(JSON.parse(call.arguments));
+              const spec = strategySchema.parse(draft ?? input.draft);
+              if (spec.exchange.length !== 1 || !spec.pairs.includes(args.pair)) throw new Error("Invalid target");
+              const series = await strategySeries(spec, spec.exchange[0], args.pair);
+              result = { source: { exchange: spec.exchange[0], market: spec.market, pair: args.pair, asOf: new Date().toISOString() }, ...inspectSetupBar(spec, series, args.selectedBarTime) };
+            } catch {
+              result = { error: "Cannot inspect selected bar; current draft, supported pair and closed market history are required. Do not invent evidence." };
             }
           }
           if (call.name === "replay_strategy") {

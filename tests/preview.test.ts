@@ -81,3 +81,20 @@ test('chart-only indicators cannot change alert events', () => {
   assert.deepEqual(decorated.events,plain.events);
   assert.deepEqual(decorated.timeline,plain.timeline);
 });
+
+test('switching chart timeframe preserves evaluation timeline and events', () => {
+  const series = {
+    '15m': Array.from({length:40}, (_,i)=>bar((i+1)*900000,100+i)),
+    '1h': Array.from({length:10}, (_,i)=>bar((i+1)*3600000,100+i)),
+  };
+  const saved = JSON.stringify(spec);
+  const original = preview(spec, series);
+  const viewed = preview(spec, series, [], '1h');
+  assert.equal(viewed.candles.length, 10);
+  assert.equal(viewed.chartTimeframe, '1h');
+  assert.equal(viewed.evaluationTimeframe, '15m');
+  assert.deepEqual(viewed.timeline, original.timeline);
+  assert.deepEqual(viewed.events, original.events);
+  assert.equal(JSON.stringify(spec), saved);
+  assert.ok(viewed.overlays.every(o => o.operand.kind === 'INDICATOR' && o.operand.timeframe === '1h'));
+});

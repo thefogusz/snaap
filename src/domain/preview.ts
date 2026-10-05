@@ -11,12 +11,15 @@ import {
   strategyConditions,
   strategyBranches,
   signalSide,
+  frames,
 } from "./engine.js";
 
 // Rendering and alerts deliberately use the same evaluator, including closed-HTF rules.
-export function preview(spec: Strategy, series: Series, extra: Operand[] = []) {
-  const candles = series[spec.timeframe] ?? [];
+export function preview(spec: Strategy, series: Series, extra: Operand[] = [], chartTimeframe?: Strategy["timeframe"]) {
+  const frame = chartTimeframe ?? spec.timeframe;
+  const candles = series[frame] ?? [];
   const operands = new Map<string, Operand>();
+  const evaluationFrames = new Set<string>([spec.timeframe]);
   extra.forEach((o) => {
     if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
   });
@@ -24,19 +27,21 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = []) {
     if (c.kind === "GROUP") c.children.forEach(walk);
     else if (c.kind === "HOLD") walk(c.condition);
     else
-      for (const o of [c.left, c.right])
+      for (const o of [c.left, c.right]) {
+        if (o.kind === "INDICATOR" || o.kind === "PRICE") evaluationFrames.add(o.timeframe);
         if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
+      }
   };
   strategyConditions(spec).forEach(walk);
-  const overlays = [...operands.values()].map((o) => ({
+  const overlays = [...operands.values()].filter(o => !chartTimeframe || (o.kind === "INDICATOR" && o.timeframe === frame)).map((o) => ({
     operand: o,
     points: candles.map((c) => ({
       time: c.time,
-      value: value(o, series, c.time, undefined, spec.timeframe) ?? null,
+      value: value(o, series, c.time, undefined, frame) ?? null,
     })),
   }));
   let state = emptyLifecycle();
-  const timeline = candles.map((bar) => {
+  const timeline = (series[spec.timeframe] ?? []).map((bar) => {
     const branches = strategyBranches(spec).map((branch) => {
       const prior =
         spec.side === "BOTH"
@@ -65,6 +70,10 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = []) {
     state = advance(spec, series, bar, state).state;
     return {
       time: bar.time,
+      references: Object.entries(series).filter(([timeframe]) => evaluationFrames.has(timeframe)).map(([timeframe, candles]) => {
+        const reference = candles?.findLast(c => c.time <= bar.time);
+        return { timeframe, closedAt: reference?.time ?? null, stale: !reference || bar.time - reference.time >= frames[timeframe as keyof typeof frames] };
+      }),
       entry,
       stages,
       exit,
@@ -86,5 +95,5 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = []) {
       }),
     };
   });
-  return { candles, overlays, timeline, events: replay(spec, series) };
+  return { candles, overlays, timeline, events: replay(spec, series), chartTimeframe: frame, evaluationTimeframe: spec.timeframe };
 }

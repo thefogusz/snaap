@@ -6,12 +6,15 @@ import {registerFiles} from '../src/files.js';
 import {protectHistoryTransport,historyExchanges} from '../src/history.js';
 import {strategySchema} from '../src/domain/engine.js';
 
-test('six leaf conditions are accepted and seven are rejected, including across lifecycle stages',()=>{
+test('24 leaf conditions are accepted and 25 rejected across lifecycle branches',()=>{
  const condition={kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe:'5m'},right:{kind:'CONSTANT',value:100}};
- const spec={schemaVersion:2,name:'Audit limits',exchange:['MEXC'],market:'Spot',pairs:['BTC/USDT'],timeframe:'5m',entry:condition,stages:[],cooldownBars:0,destinations:[]};
- assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(6).fill(condition)}}).success,true);
- assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(7).fill(condition)}}).success,false);
- assert.equal(strategySchema.safeParse({...spec,entry:{kind:'GROUP',op:'AND',children:Array(5).fill(condition)},exit:condition,cancel:condition}).success,false);
+ const group=(n:number)=>({kind:'GROUP',op:'AND',children:Array(n).fill(condition)});
+ const spec={schemaVersion:2,name:'Audit limits',exchange:['MEXC'],market:'Spot',pairs:['BTC/USDT'],timeframe:'5m',entry:group(12),stages:[],cooldownBars:0,destinations:[]};
+ assert.equal(strategySchema.safeParse({...spec,exit:group(12)}).success,true);
+ assert.equal(strategySchema.safeParse({...spec,exit:group(12),cancel:condition}).success,false);
+ assert.equal(strategySchema.safeParse({...spec,market:'Perpetual Futures',side:'BOTH',short:{entry:group(12),stages:[],cooldownBars:0}}).success,true);
+ assert.equal(strategySchema.safeParse({...spec,market:'Perpetual Futures',side:'BOTH',cancel:condition,short:{entry:group(12),stages:[],cooldownBars:0}}).success,false);
+ assert.equal(strategySchema.safeParse({...spec,market:'Perpetual Futures',side:'BOTH',mirrorShort:true,exit:group(12)}).success,true);
 });
 
 test('image deletion honors owner and selected workspace scope',async()=>{

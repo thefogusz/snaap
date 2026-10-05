@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { localDatabase } from "./postgres.js";
 import { database, migrate } from "../src/data/db.js";
+import ccxt from "ccxt";
+import { frames } from "../src/domain/engine.js";
 import { buildApp, hash } from "../src/api.js";
 const requests: any[] = [];
 let reply: (body: any) => Promise<any> = async () => response("complete");
@@ -48,12 +50,20 @@ process.env.AI_API_KEY = "test-fixture";
 process.env.AI_STANDARD_INPUT_USD_PER_MILLION = "0.25";
 process.env.AI_STANDARD_OUTPUT_USD_PER_MILLION = "2";
 process.env.AI_STANDARD_MAX_USD = "0.03";
-const pg = process.env.TEST_DATABASE_URL
-    ? { url: process.env.TEST_DATABASE_URL, stop: async () => {} }
-    : await localDatabase(),
-  db = database(pg.url);
-if (process.env.TEST_DATABASE_URL) await migrate(db);
+const pg = process.env.TEST_DATABASE_URL ? {url:process.env.TEST_DATABASE_URL,stop:async()=>{}} : await localDatabase();
+const admin = database(pg.url), schema = "harness_contract_" + Date.now();
+await admin.query(`CREATE SCHEMA "${schema}"`);
+const fixtureUrl = new URL(pg.url);fixtureUrl.searchParams.set('options','-c search_path='+schema);
+const db = database(fixtureUrl.toString());await migrate(db);
 const { app } = await buildApp(db, { local: true });
+(ccxt as any).binance=class {
+ has={fetchOHLCV:true};markets={'BTC/USDT':{symbol:'BTC/USDT',active:true,spot:true}};
+ async loadMarkets(){return this.markets;}
+ async fetchOHLCV(_symbol:string,frame:keyof typeof frames,since:number,limit:number){
+  const step=frames[frame],end=Math.floor(Date.now()/step)*step;
+  return Array.from({length:600},(_,i)=>[end-(600-i)*step,100,102,98,100+i*.01,10]).filter(r=>r[0]>=since).slice(0,limit);
+ }
+};
 const owner = randomUUID(),
   token = randomUUID(),
   headers = {
@@ -362,9 +372,31 @@ try {
   assert.equal(mixedImages.json().error.code, 'IMAGE_LIMIT');
   assert.equal(requests.length, beforeTooMany);
   console.log('PASS five uploaded images reach provider; six and mixed overflow rejected without silent truncation');
+  const studioSpec={schemaVersion:2,name:'Studio contract',exchange:['Binance'],market:'Spot',pairs:['BTC/USDT'],timeframe:'5m',entry:{kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe:'1h'},right:{kind:'CONSTANT',value:100}},stages:[],cooldownBars:0,destinations:[]};
+  const studioTurn=(editorContext:unknown,draft:unknown=studioSpec)=>app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'Explain selected bar',mode:'standard',draft,editorContext}});
+  const beforeInvalid=requests.length;
+  assert.equal((await studioTurn({pair:'ETH/USDT',chartTimeframe:'4h'})).statusCode,400);
+  assert.equal((await studioTurn({pair:'BTC/USDT',chartTimeframe:'4h',conditionPath:'entry.left'})).statusCode,400);
+  assert.equal(requests.length,beforeInvalid);
+  const selectedTime=Math.floor(Date.now()/frames['5m'])*frames['5m']-1;
+  reply=async body=>{
+    if(body.input.some((m:any)=>m.type==='function_call_output'))return response('Evidence inspected');
+    const r=response('');r.output=[{id:'fc_'+randomUUID(),type:'function_call',call_id:'call_'+randomUUID(),name:'inspect_setup_bar',arguments:JSON.stringify({pair:'BTC/USDT',selectedBarTime:selectedTime})}] as any;return r;
+  };
+  const inspected=await studioTurn({pair:'BTC/USDT',chartTimeframe:'4h',conditionPath:'entry',selectedBarTime:selectedTime});
+  assert.equal(inspected.statusCode,200,inspected.body);
+  const inspectOutput=JSON.parse(requests.at(-1).input.findLast((m:any)=>m.type==='function_call_output').output);
+  assert.ok(inspectOutput.bar.time<=selectedTime);
+  assert.equal(inspectOutput.evaluationTimeframe,'5m');
+  assert.equal(inspectOutput.source.pair,'BTC/USDT');
+  assert.ok(requests.at(-1).instructions.includes('at most 24 leaf COMPARE'));
+  assert.ok(requests.at(-1).instructions.includes('navigation only, not market evidence'));
+  console.log('PASS studio context rejects wrong pair/path before provider; inspect tool returns real closed-bar evidence on evaluation timeframe');
+
 } finally {
   await app.close();
   await db.end();
+  await admin.query(`DROP SCHEMA "${schema}" CASCADE`);await admin.end();
   await pg.stop();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 }

@@ -280,7 +280,7 @@ const chatPromptSamples = [
   'ช่วยออกแบบเซตอัปรอราคาย่อตัวในแนวโน้มขาขึ้น',
   'ตลาดออกข้าง ควรออกแบบเงื่อนไขแบบไหน?',
   'ช่วยออกแบบเซตอัป Long และ Short ให้มีเงื่อนไขชัดเจน',
-  'ช่วยย่อไอเดียเทรดของฉันให้เป็นเซตอัปไม่เกิน 6 เงื่อนไข',
+  'ช่วยย่อไอเดียเทรดของฉันให้เป็นเซตอัปไม่เกิน 24 เงื่อนไข',
   'ฉันดูกราฟได้วันละนิด ควรเลือกกรอบเวลาแบบไหน?',
   'ช่วยเปรียบเทียบการเล่นสั้นกับการถือหลายวัน',
   'จากประวัติที่ซิงก์ไว้ ฉันซื้อขายคู่ไหนและฝั่งไหนบ่อยที่สุด?',
@@ -485,6 +485,10 @@ async function showSetupChanges(before, after, historicalChanges = null) {
   const {setupCardMarkup}=await import('./setup-card.js');
   if (!historicalChanges) card.classList.add('setup-proposal-card');
   card.innerHTML=historicalChanges?`<details><summary>ข้อเสนอเซตอัปในข้อความนี้ · ${changes.length} จุด</summary><ul>${changes.map(c=>`<li><span class="change-action">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div>${esc(valueText(c.after??c.before,c.path))}</div></div></li>`).join('')}</ul><small>ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน</small></details>`:setupCardMarkup({spec:after,title:after.name,status:historicalChanges?'ข้อเสนอในบทสนทนา':'ร่าง · ยังไม่บันทึก',channels:`<details class="setup-card-changes"><summary>ดูสิ่งที่ปรับ ${changes.length} จุด</summary><ul>${changes.map(c => `<li><span class="change-action" data-kind="${esc(c.action)}">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div class="change-values">${c.action !== 'add' ? `<span class="change-before">${esc(valueText(c.before,c.path))}</span>` : ''}${c.action !== 'remove' ? `<span class="change-after">${c.action === 'change' ? '<span aria-hidden="true">→</span> ' : ''}${esc(valueText(c.after,c.path))}</span>` : ''}</div></div></li>`).join('')}</ul></details>`,note:historicalChanges?'ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน':'ตรวจร่างก่อนบันทึกและเปิดแจ้งเตือน',actions:historicalChanges?'':'<button type="button" class="secondary" data-revert-change>ย้อนการปรับ</button><button type="button" class="primary" data-review-setup>ตรวจเซตอัป</button>'},{esc,fullSummary});
+  if (!historicalChanges) card.querySelectorAll('.setup-card-changes li').forEach((el,i)=>{
+    const button=document.createElement('button');button.type='button';button.className='text-button';button.textContent='เปิดจุดที่เปลี่ยน';
+    button.onclick=()=>{setWorkbenchTab('split');showDesigner();window.SnaapStudio?.focus(changes[i].path);};el.append(button);
+  });
   card.querySelector('[data-review-setup]')?.addEventListener('click',()=>{setWorkbenchTab('split');showDesigner();$('#designer')?.scrollIntoView({block:'start',behavior:'smooth'});});
   if (!historicalChanges) {
     const target = JSON.stringify(after), conversation = state.conversation;
@@ -637,6 +641,7 @@ async function ensureConversation(title = state.draft?.name ?? "เซตอั�
     title: title.slice(0, 100),
   })
     .then((c) => {
+      window.SnaapStudio?.adoptConversation(c.id);
       state.conversation = c.id;
       state.conversationRows.unshift({ ...c, workspace_id:state.workspaceId, draft: null, draft_revision: 0 });
       const option = new Option(c.title, c.id, true, true);
@@ -884,7 +889,8 @@ function conditionUI(c, path) {
     return `<label>ต่อเนื่องกี่แท่ง<input type="number" min="1" max="30" data-path="${path}.bars" value="${c.bars}"></label>${conditionUI(c.condition, path + ".condition")}`;
   return `<div class="condition-line">${operandUI(c.left, path + ".left", "ค่าที่ตรวจ")}<label class="comparison-field">การเปรียบเทียบ<select class="operator" data-path="${path}.op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], c.op)}</select></label>${operandUI(c.right, path + ".right", "เทียบกับ")}</div><div class="condition-tools"><button class="text-button" data-group="${path}">จัดกลุ่ม AND / OR</button><button class="text-button" data-hold="${path}">ต่อเนื่องหลายแท่ง</button></div>`;
 }
-const MAX_SETUP_CONDITIONS = 6;
+let MAX_SETUP_CONDITIONS;
+const setupLimitsReady = import("./setup-limits.js").then(m => MAX_SETUP_CONDITIONS = m.MAX_SETUP_CONDITIONS);
 function setupConditionCount(spec) {
   const count = c => !c ? 0 : c.kind === "GROUP" ? c.children.reduce((n, child) => n + count(child), 0) : c.kind === "HOLD" ? count(c.condition) : 1;
   const branch = b => !b ? 0 : count(b.entry) + count(b.exit) + count(b.cancel) + (b.stages ?? []).reduce((n, stage) => n + count(stage.condition), 0);
@@ -892,7 +898,7 @@ function setupConditionCount(spec) {
 }
 function canAddSetupCondition() {
   if (setupConditionCount(state.draft) < MAX_SETUP_CONDITIONS) return true;
-  toast("ครบ 6 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่");
+  toast("ครบ 24 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่");
   return false;
 }
 function renderDesigner() {
@@ -932,7 +938,7 @@ function renderDesigner() {
   panel.querySelector(".design-toolbar").after(limitLabel);
   if (conditionCount >= MAX_SETUP_CONDITIONS) panel.querySelectorAll("[data-add], [data-group], [data-stage], [data-optional]").forEach(button => {
     button.disabled = true;
-    button.title = "ครบ 6 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
+    button.title = "ครบ 24 เงื่อนไขแล้ว ลบข้อเดิมก่อนเพิ่มข้อใหม่";
   });
   if (d.stages.length >= 5) panel.querySelector("[data-stage]").disabled = true;
   const draftLabel = document.createElement("p");
@@ -988,7 +994,7 @@ function showEditorFeedback(text, success = false, focus = true) {
 }
 function validateEditor() {
   if (setupConditionCount(state.draft) > MAX_SETUP_CONDITIONS) {
-    showEditorFeedback("เซตอัปมีได้สูงสุด 6 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
+    showEditorFeedback("เซตอัปมีได้สูงสุด 24 เงื่อนไข กรุณาลบข้อที่เกินก่อนบันทึก");
     return false;
   }
   panel
@@ -1220,6 +1226,7 @@ async function chat(text) {
         mode: $("#ai-mode").value,
         selection,
         draft: state.draft,
+        editorContext: window.SnaapStudio?.context(),
         useMyData:state.useMyData,
         imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))],
 
@@ -1518,6 +1525,7 @@ panel.addEventListener("input", (e) => {
     snapshot();
     t.dataset.editing = "true";
   }
+  if (t.type === "number" && (!t.value || !t.validity.valid)) return;
   if (t.dataset.path)
     set(t.dataset.path, t.type === "number" ? Number(t.value) : t.value);
   else
@@ -1540,6 +1548,7 @@ panel.addEventListener("change", (e) => {
     !t.hasAttribute("data-pairs")
   )
     return;
+  if (t.type === "number" && (!t.value || !t.validity.valid)) return;
   if (!t.dataset.editing) snapshot();
   if(t.dataset.direction){
     const selected=[...panel.querySelectorAll('[data-direction]:checked')].map(x=>x.dataset.direction);
@@ -1548,7 +1557,7 @@ panel.addEventListener("change", (e) => {
   } else if(t.hasAttribute('data-mirror-short')){
     const nextDraft=directionTools.setShortMirroring(state.draft,t.checked);
     if (setupConditionCount(nextDraft) > MAX_SETUP_CONDITIONS) {
-      toast("ตั้ง Long และ Short แยกกันได้รวมสูงสุด 6 เงื่อนไข ลดเงื่อนไขก่อนแยกฝั่ง");
+      toast("ตั้ง Long และ Short แยกกันได้รวมสูงสุด 24 เงื่อนไข ลดเงื่อนไขก่อนแยกฝั่ง");
       renderDesigner();
       return;
     }
@@ -2060,7 +2069,7 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 // Also checkpoint programmatic updates such as cleared text after sending a message.
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
-  await Promise.all([directionToolsReady, indicatorCatalogReady]);
+  await Promise.all([directionToolsReady, indicatorCatalogReady, setupLimitsReady]);
   $("#nav-count").textContent = "";
   navigate(location.hash.slice(1) || "home", false);
   try {
