@@ -103,8 +103,14 @@ function signalCard(row) {
 }
 async function renderNotifications(force = true) {
   const workspace = state.workspaceId;
+  if (!notificationData || notificationWorkspace !== workspace) {
+    notificationData = { signals: [], channels: { items: state.destinations, available: state.destinationAvailability ?? {} }, deliveries: [], monitor: [], loaded: false };
+    notificationWorkspace = workspace;
+    notificationLoadedAt = 0;
+    paintNotifications();
+  }
   if (notificationFlight?.workspace === workspace) return notificationFlight.promise;
-  if (!force && notificationData && notificationWorkspace === workspace && Date.now() - notificationLoadedAt < 30000) return;
+  if (!force && notificationData.loaded && Date.now() - notificationLoadedAt < 30000) return;
   const promise = loadNotifications(workspace);
   notificationFlight = { workspace, promise };
   try { await promise; } finally { if (notificationFlight?.promise === promise) notificationFlight = null; }
@@ -112,11 +118,6 @@ async function renderNotifications(force = true) {
 async function loadNotifications(workspace) {
   const request = ++notificationRequest;
   const view = $("#view-notifications");
-  if (!notificationData || notificationWorkspace !== workspace) {
-    parkNotificationRules();
-    view.innerHTML =
-      '<div class="page-heading"><h1>การแจ้งเตือน</h1></div><p class="notification-loading" role="status">กำลังโหลดการแจ้งเตือน…</p>';
-  }
   try {
     const [signals, channels, deliveries, monitor] = await Promise.all([
       api("/signals?view=signals"),
@@ -126,14 +127,21 @@ async function loadNotifications(workspace) {
     ]);
     if (request !== notificationRequest || workspace !== state.workspaceId) return;
     state.destinations = channels.items;
-    notificationData = { signals, channels, deliveries, monitor, more: signals.length === 100 };
+    notificationData = { signals, channels, deliveries, monitor, more: signals.length === 100, loaded: true };
     notificationWorkspace = workspace;
     notificationLoadedAt = Date.now();
-    paintNotifications();
+    view.querySelector('.notification-error')?.remove();
+    if (notificationSection !== 'rules') paintNotifications();
+    else {
+      const tab = view.querySelector('[data-notification-tab="inbox"]');
+      const count = signals.filter(canDisplaySignal).length;
+      tab?.querySelector('.notification-count')?.remove();
+      if (count) tab?.insertAdjacentHTML('beforeend', `<span class="notification-count">${count}</span>`);
+    }
   } catch (error) {
     if (request !== notificationRequest || workspace !== state.workspaceId) return;
-    parkNotificationRules();
-    view.innerHTML = `<div class="page-heading"><h1>การแจ้งเตือน</h1></div><div class="notification-error" role="alert"><p>${esc(error.message)}</p><button class="secondary" data-notification-refresh>ลองอีกครั้ง</button></div>`;
+    view.querySelector('.notification-error')?.remove();
+    view.insertAdjacentHTML('beforeend', `<div class="notification-error" role="alert"><p>${esc(error.message)}</p><button class="secondary" data-notification-refresh>ลองอีกครั้ง</button></div>`);
   }
 }
 function paintNotifications() {
@@ -169,6 +177,7 @@ function paintNotifications() {
     content = `<section class="activity-section"><div class="notification-section-heading"><h2>${uiIcon("chart")}สถานะข้อมูลตลาด</h2></div>${monitor.length ? monitor.map((x) => `<div class="activity-row"><div><strong>${esc(x.exchange)} · ${esc(x.pair)}</strong><p>${x.status === "PAUSED" ? "พักการติดตาม" : x.status === "QUOTA_BLOCKED" ? "หยุดตรวจ · เลือกเซตอัปให้เหลือภายในสิทธิ์แพ็กเกจ" : x.status === "DIRECTION_REQUIRED" ? "เลือกฝั่ง Long / Short ในเซตอัป" : x.status === "READY" ? "ข้อมูลพร้อม" : "ข้อมูลขาด / เชื่อมต่อไม่ได้"}</p></div><time>${new Date(x.checked_at).toLocaleString("th-TH")}</time></div>`).join("") : '<p class="activity-empty">ยังไม่มีเซตอัพที่เริ่มตรวจ — เปิดเซตอัพจากแท็บเซตอัพที่ตั้งไว้</p>'}</section><section class="activity-section"><div class="notification-section-heading"><h2>${uiIcon("send")}ประวัติการส่งข้อความ</h2></div>${deliveries.length ? deliveries.map((x) => `<div class="activity-row"><div><strong>${esc(x.name)}</strong><p>${deliveryLabels[x.status] ?? esc(x.status)}</p>${x.detail ? `<small>${esc(x.detail)}</small>` : ""}</div></div>`).join("") : '<p class="activity-empty">ยังไม่มีการส่งไปยังช่องทางภายนอก</p>'}</section>`;
   }
   if(notificationSection === "inbox" && notificationData.more) content += '<button class="secondary" data-more-signals>โหลดสัญญาณก่อนหน้า</button>';
+  if (notificationSection !== 'rules' && notificationData.loaded === false) content = '<p role="status">กำลังอัปเดตข้อมูลส่วนนี้…</p>';
   if (notificationSection === "channels") content = `<div data-browser-alert-slot>${window.SnaapBrowserAlerts?.settingsMarkup() ?? ''}</div>` + content;
   parkNotificationRules();
   $("#view-notifications").innerHTML =
