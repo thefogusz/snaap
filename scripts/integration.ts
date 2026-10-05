@@ -220,8 +220,8 @@ try {
     exchange: "Binance" as const,
     pair: "BTC/USDT",
   };
-  await evaluateTarget(db, target, fixture);
-  await evaluateTarget(db, target, fixture);
+  await evaluateTarget(db, target, fixture, 1800000);
+  await evaluateTarget(db, target, fixture, 1800000);
   assert.equal(
     (
       await db.query(

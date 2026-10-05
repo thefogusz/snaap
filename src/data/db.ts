@@ -82,6 +82,27 @@ export async function migrate(db: pg.Pool) {
     UPDATE conversations c SET saved_rule_id=(SELECT min(r.id::text)::uuid FROM rules r WHERE r.owner_id=c.owner_id AND r.workspace_id IS NOT DISTINCT FROM c.workspace_id AND r.deleted_at IS NULL AND r.spec=c.draft HAVING count(*)=1) WHERE c.saved_rule_id IS NULL AND c.setup_saved_at IS NOT NULL;
     CREATE TABLE IF NOT EXISTS data_scopes(owner_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,kind text NOT NULL CHECK(kind IN ('image','import','connection')),resource_id uuid NOT NULL,workspace_ids uuid[],PRIMARY KEY(owner_id,kind,resource_id));
   `);
+  await db.query(`
+    ALTER TABLE rules ADD COLUMN IF NOT EXISTS risk_plan jsonb;
+    ALTER TABLE rule_revisions ADD COLUMN IF NOT EXISTS risk_plan jsonb;
+    CREATE OR REPLACE FUNCTION snapshot_rule_risk() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      SELECT risk_plan INTO NEW.risk_plan FROM rules WHERE id=NEW.rule_id;
+      RETURN NEW;
+    END $$;
+    CREATE OR REPLACE TRIGGER rule_risk_snapshot BEFORE INSERT ON rule_revisions FOR EACH ROW EXECUTE FUNCTION snapshot_rule_risk();
+    CREATE TABLE IF NOT EXISTS monitor_insights (
+      rule_id uuid REFERENCES rules ON DELETE CASCADE, revision integer NOT NULL, exchange text, pair text,
+      freshness jsonb NOT NULL, progress jsonb, PRIMARY KEY(rule_id,exchange,pair)
+    );
+    CREATE TABLE IF NOT EXISTS signal_outcomes (
+      signal_id uuid PRIMARY KEY REFERENCES signals ON DELETE CASCADE,
+      frame text NOT NULL, horizon integer NOT NULL DEFAULT 20,
+      risk_snapshot jsonb, candles jsonb NOT NULL DEFAULT '[]', result jsonb NOT NULL,
+      finalized boolean NOT NULL DEFAULT false, checked_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS signal_outcomes_pending ON signal_outcomes(checked_at) WHERE NOT finalized;
+  `);
   await migrateAdmin(db);
 }
 export async function transaction<T>(

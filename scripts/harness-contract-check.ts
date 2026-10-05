@@ -150,8 +150,13 @@ try {
     ],
   );
   reply = async () => response("safe");
+  await db.query(
+    "INSERT INTO messages(id,conversation_id,role,content,ui_card) VALUES($1,$2,'assistant','UI_ONLY_CARD',$3)",
+    [randomUUID(), id, { type: "setup" }],
+  );
   assert.equal((await turn("fresh request")).statusCode, 200);
   assert.ok(!JSON.stringify(requests.at(-1).input).includes("DELETED_SOURCE_"));
+  assert.ok(!JSON.stringify(requests.at(-1).input).includes("UI_ONLY_CARD"));
   console.log(
     "PASS deleted-source history filtered for both user and assistant",
   );
@@ -423,7 +428,7 @@ try {
     reply = async () => ({...response(''), output:[{type:'function_call',name:'propose_strategy',call_id:'invalid-fixture',arguments:JSON.stringify({spec:{...spec,pairs:['UNSUPPORTED/USDT']}})}], usage:{input_tokens:100000,output_tokens:100}});
     const invalid = await turn('สร้างร่างคู่ที่ไม่รองรับ');
     assert.equal(invalid.statusCode, 502);
-    assert.equal(invalid.json().error.code, 'AI_UNAVAILABLE');
+    assert.equal(invalid.json().error.code, 'AI_TOOL_LIMIT');
     assert.equal(invalid.json().draft, undefined);
     proposalRequests = 0;
     reply = async body => {

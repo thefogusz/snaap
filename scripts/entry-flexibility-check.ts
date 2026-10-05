@@ -136,7 +136,7 @@ try {
   const first =
     Math.floor(new Date(saved.activated_at).getTime() / 300000) * 300000;
   const series: Series = {
-    "5m": [0, 30, 30].map((close, i) => ({
+    "5m": [1, 30, 30].map((close, i) => ({
       time: first + i * 300000,
       open: close,
       high: close,
@@ -175,7 +175,7 @@ try {
     assert.equal(stored.length, 1);
     assert.equal(stored[0].revision, 2);
     assert.equal(stored[0].event.time, first + 300000);
-    assert.deepEqual(stored[0].event, preview(saved.spec, series).events[0]);
+    assert.deepEqual(stored[0].event, { ...preview(saved.spec, series).events[0], recovered: true });
     await evaluateTarget(
       db,
       { ruleId: rule.id, revision: 2, exchange: "MEXC", pair: "BTC/USDT" },

@@ -8,7 +8,8 @@ body:has(#admin-impersonation-banner):has(#view-home:not([hidden]) .workbench:no
 .workbench[data-tab="chat"] .setup-pane { display:none; }
 .mobile-design-tabs .split-view-button { display:inline-flex; }
 @media(max-width:1099px) {
- .workbench[data-tab="split"] #conversation { display:flex; flex-direction:column; grid-row:1; }
+ .workbench[data-tab="split"] #conversation { display:flex; flex-direction:column; grid-row:1; min-width:0; }
+ .workbench[data-tab="split"] #messages,.workbench[data-tab="split"] .chat-composer { min-width:0; max-width:100%; }
  .workbench[data-tab="split"] .setup-pane { grid-row:2; }
 }
 .workbench[data-tab="design"] #conversation { display:none; }
@@ -78,6 +79,7 @@ body:has(#admin-impersonation-banner):has(#view-home:not([hidden]) .workbench:no
  .setup-pane-nav button { padding:8px 10px; white-space:nowrap; }
 }
 @media(prefers-reduced-motion:reduce) { .setup-change-card { animation:none; } }
+.setup-change-card [data-revert-change] { margin-top:12px; min-height:44px; }
 
 /* Keep the greeting and first composer together until a conversation starts. */
 #main.workspace-switching{position:relative}

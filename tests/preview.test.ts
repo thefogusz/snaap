@@ -166,3 +166,12 @@ test("chart evidence never uses a future or stale base evaluation", () => {
   const result = preview(spec, series, [], "1h");
   assert.deepEqual(result.chartTimeline, [null, null]);
 });
+test('progress and frame summary describe the next waiting condition on each independent side',()=>{
+  const condition={kind:'COMPARE',op:'>',left:{kind:'PRICE',field:'close',timeframe:'15m'},right:{kind:'CONSTANT',value:0}};
+  const both=strategySchema.parse({...spec,market:'Perpetual Futures',side:'BOTH',entry:condition,stages:[{condition:{...condition,right:{kind:'CONSTANT',value:500}},withinBars:10}],short:{entry:condition,stages:[{condition,withinBars:5},{condition,withinBars:5}],cooldownBars:0}});
+  const data=preview(both,{'15m':[bar(900000,100)]});
+  const [long,short]=data.timeline[0].branches;
+  assert.equal(long.progress.totalStages,1);assert.equal(short.progress.totalStages,2);
+  assert.match(long.timeframes[0].conditions[0].text,/500/);
+  assert.equal(long.timeframes[0].conditions[0].result,'FALSE');
+});

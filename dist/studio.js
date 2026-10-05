@@ -3,7 +3,7 @@
   const studio = document.createElement("section");
   studio.className = "setup-studio";
   studio.setAttribute("aria-label", "กราฟจำลองเซตอัพ");
-  studio.innerHTML = `<header><div class="studio-header-info"><strong data-chart-title>กราฟเซตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class="studio-header-actions"><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></div></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><details class="chart-evidence"><summary>เหตุผลของสัญญาณ · คลิกแท่งบนกราฟเพื่อดู</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
+  studio.innerHTML = `<header><div class="studio-header-info"><strong data-chart-title>กราฟเซตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class="studio-header-actions"><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></div></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class="setup-insights" data-setup-insights></div><details class="chart-evidence"><summary>เหตุผลของสัญญาณ · คลิกแท่งบนกราฟเพื่อดู</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
   setupPane.insertBefore(studio, panel);
   const status = studio.querySelector("[data-chart-status]");
   const canvas = studio.querySelector(".studio-canvas");
@@ -74,6 +74,7 @@
     canvas.replaceChildren();
     studio.querySelector(".chart-legend").replaceChildren();
     studio.querySelector("[data-chart-evidence]").replaceChildren();
+    studio.querySelector("[data-setup-insights]").replaceChildren();
     studio
       .querySelectorAll(".replay-controls button,.replay-controls input")
       .forEach((e) => (e.disabled = true));
@@ -131,6 +132,9 @@
         })),
     );
     const bar = result.chartTimeline[at];
+    const historical=at<result.candles.length-1;
+    const ready=result.freshness?.every(f=>f.status==='CURRENT')??true;
+    studio.querySelector('[data-setup-insights]').innerHTML = freshnessUI(result.freshness) + (historical?'<p>กำลังดูสถานะย้อนหลังตามแท่งที่เลือก</p>':'') + (ready||historical?(bar?.branches??[]).map(b=>`<strong>${esc(b.side)}</strong>${progressUI(b.progress)}${timeframeUI(b.timeframes)}`).join(''):'<p role="status">รอข้อมูลแท่งปิดให้ครบก่อนแสดงสถานะปัจจุบัน · ยังดูหลักฐานของแท่งย้อนหลังได้</p>');
     studio.querySelector("[data-chart-evidence]").innerHTML =
       (barEvidence(bar) || '<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>') +
       (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
@@ -215,7 +219,7 @@
         (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
       studio.querySelector(".chart-evidence").open = true;
     });
-    status.textContent = `${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · ตรวจทุก ${data.source.evaluationFrame} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
+    status.textContent = `${data.freshness?.some(f=>f.status!=="CURRENT")?"ข้อมูลยังไม่พร้อมสำหรับสัญญาณล่าสุด · ":""}${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · ตรวจทุก ${data.source.evaluationFrame} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
   }
   async function update(force = false) {
     if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;

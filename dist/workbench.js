@@ -472,39 +472,49 @@ function message(text, user = false) {
   $("#messages").append(el);
 }
 async function showSetupChanges(before, after, historicalChanges = null) {
-  const { diffSetup, describeSetupValue } = await setupChangesReady;
-  const changes = historicalChanges ?? diffSetup(before, after);
-  if (!changes.length) return;
-  const card = document.createElement('section');
-  card.className = 'setup-change-card';
-  card.setAttribute('aria-label', 'สิ่งที่ snaap เปลี่ยนในเซตอัป');
-  const valueText = (value, path) => path === 'destinations' && Array.isArray(value)
-    ? (value.map(id => state.destinations.find(d => d.id === id)?.name ?? 'ช่องทางที่บันทึกไว้').join(', ') || 'กล่องแจ้งเตือนในเว็บ')
-    : describeSetupValue(value);
-  const {setupCardMarkup}=await import('./setup-card.js');
-  if (!historicalChanges) card.classList.add('setup-proposal-card');
-  card.innerHTML=historicalChanges?`<details><summary>ข้อเสนอเซตอัปในข้อความนี้ · ${changes.length} จุด</summary><ul>${changes.map(c=>`<li><span class="change-action">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div>${esc(valueText(c.after??c.before,c.path))}</div></div></li>`).join('')}</ul><small>ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน</small></details>`:setupCardMarkup({spec:after,title:after.name,status:historicalChanges?'ข้อเสนอในบทสนทนา':'ร่าง · ยังไม่บันทึก',channels:`<details class="setup-card-changes"><summary>ดูสิ่งที่ปรับ ${changes.length} จุด</summary><ul>${changes.map(c => `<li><span class="change-action" data-kind="${esc(c.action)}">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div class="change-values">${c.action !== 'add' ? `<span class="change-before">${esc(valueText(c.before,c.path))}</span>` : ''}${c.action !== 'remove' ? `<span class="change-after">${c.action === 'change' ? '<span aria-hidden="true">→</span> ' : ''}${esc(valueText(c.after,c.path))}</span>` : ''}</div></div></li>`).join('')}</ul></details>`,note:historicalChanges?'ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน':'ตรวจร่างก่อนบันทึกและเปิดแจ้งเตือน',actions:historicalChanges?'':'<button type="button" class="secondary" data-revert-change>ย้อนการปรับ</button><button type="button" class="primary" data-review-setup>ตรวจเซตอัป</button>'},{esc,fullSummary});
-  card.querySelector('[data-review-setup]')?.addEventListener('click',()=>{setWorkbenchTab('split');showDesigner();$('#designer')?.scrollIntoView({block:'start',behavior:'smooth'});});
-  if (!historicalChanges) {
-    const target = JSON.stringify(after), conversation = state.conversation;
-    card.querySelector('[data-revert-change]').onclick = () => {
-      if (state.conversation !== conversation || JSON.stringify(state.draft) !== target) {
-        toast('มีการปรับเซตอัปต่อแล้ว ใช้ย้อนกลับในพื้นที่ออกแบบเพื่อไล่ทีละขั้น');
-        return;
-      }
-      state.draft = structuredClone(before);
-      state.undo.pop();
-      state.replay = null;
-      renderDesigner();
-      queueDraftSave();
-      card.querySelector('header h3').textContent = 'ย้อนการปรับครั้งนี้แล้ว';
-      card.querySelector('.setup-card-footnote').textContent = 'ร่างกลับไปก่อนการปรับครั้งนี้';
-      card.querySelector('.setup-card-conditions').innerHTML = '';
-      card.querySelector('[data-review-setup]').disabled = true;
-      card.querySelector('[data-revert-change]').disabled = true;
-    };
-  }
+  const {diffSetup,describeSetupValue}=await setupChangesReady;
+  const changes=historicalChanges??diffSetup(before,after);
+  if(!changes.length)return;
+  const conversation=state.conversation,workspace=state.workspaceId,target=JSON.stringify(after);
+  const card=document.createElement('section');
+  card.className='setup-change-card';
+  card.setAttribute('aria-label','สิ่งที่ snaap เปลี่ยนในเซตอัป');
+  const valueText=(value,path)=>path==='destinations'&&Array.isArray(value)
+    ?(value.map(id=>state.destinations.find(d=>d.id===id)?.name??'ช่องทางที่บันทึกไว้').join(', ')||'กล่องแจ้งเตือนในเว็บ')
+    :describeSetupValue(value);
+  card.innerHTML=`<details><summary>${historicalChanges?'ข้อเสนอเซตอัปในข้อความนี้':'ดูสิ่งที่ปรับในร่าง'} · ${changes.length} จุด</summary><ul>${changes.map(c=>`<li><span class="change-action">${{add:'เพิ่ม',remove:'นำออก',change:'เปลี่ยน'}[c.action]}</span><div><strong>${esc(c.label)}</strong><div>${c.action!=='add'?`<span class="change-before">${esc(valueText(c.before,c.path))}</span>`:''}${c.action==='change'?'<span aria-hidden="true"> → </span>':''}${c.action!=='remove'?`<span class="change-after">${esc(valueText(c.after,c.path))}</span>`:''}</div></div></li>`).join('')}</ul><small>${historicalChanges?'ข้อเสนอขณะสนทนา · ไม่ใช่สถานะปัจจุบัน':'ปรับเฉพาะร่าง · ยังไม่เปลี่ยนเซตอัปที่กำลังแจ้งเตือน'}</small>${!historicalChanges&&before?'<button class="secondary" type="button" data-revert-change>ย้อนการปรับครั้งนี้</button>':''}</details>`;
+  card.querySelector('[data-revert-change]')?.addEventListener('click',()=>{
+    if(state.busy)return toast('รอขั้นตอนปัจจุบันเสร็จก่อน');
+    if(state.conversation!==conversation||state.workspaceId!==workspace||JSON.stringify(state.draft)!==target)
+      return toast('มีการปรับเซตอัปต่อแล้ว ใช้ย้อนกลับในพื้นที่ออกแบบเพื่อไล่ทีละขั้น');
+    state.draft=structuredClone(before);state.undo.pop();state.replay=null;
+    renderDesigner();queueDraftSave();
+    card.querySelector('small').textContent='ย้อนการปรับครั้งนี้แล้ว';
+    card.querySelector('[data-revert-change]').disabled=true;
+  });
   $('#messages').append(card);
+}
+async function showChatSetupCard() {
+  const conversation=state.conversation,workspace=state.workspaceId;
+  const current=()=>state.conversation===conversation&&state.workspaceId===workspace;
+  try {
+    await saveDraft();
+    if(!current())return;
+    const result=await api(`/conversations/${conversation}/setup-card`,'POST',{
+      expectedRevision:state.draftRevision,...(state.saved?{ruleId:state.saved.id}:{}),
+    });
+    if(!current())return;
+    (await presetsReady).renderCard(result.message);
+    scrollChatToLatest();
+  } catch(error) {
+    if(!current())return;
+    const retry=document.createElement('button');
+    retry.type='button';retry.className='secondary';
+    retry.textContent='แสดงปุ่มบันทึกเซตอัปอีกครั้ง';
+    retry.onclick=async()=>{if(!current())return;retry.remove();await showChatSetupCard();};
+    message('ยังเตรียมปุ่มบันทึกไม่สำเร็จ: '+error.message);
+    $('#messages').append(retry);
+  }
 }
 function navigate(view, load = true) {
   if (view === "watch") {
@@ -897,7 +907,7 @@ function renderDesigner() {
     )
     .join(
       "",
-    )}</fieldset><div class="design-actions"><button class="primary" data-save>ตรวจและบันทึก</button><button class="secondary" data-replay>ดูผลบนกราฟ</button></div><p class="field-note">บันทึกก่อน แล้วเปิดใช้งานในแท็บเซตอัพที่ตั้งไว้</p><div id="replay-result"></div></div>`;
+    )}</fieldset><div class="design-actions"><button class="primary" data-save>ตรวจและบันทึก</button><button class="secondary" data-replay>ดูผลบนกราฟ</button></div><p class="field-note">บันทึกก่อน แล้วเปิดแจ้งเตือนจากการ์ดในแชทหรือหน้าเซตอัปที่ตั้งไว้</p><div id="replay-result"></div></div>`;
   const conditionCount = setupConditionCount(d);
   const limitLabel = document.createElement("p");
   limitLabel.className = "field-note setup-condition-limit";
@@ -1043,7 +1053,7 @@ function watchSetupRow(r) {
       <p class="watch-all-pairs"><strong>คู่เทรด</strong> ${esc(pairs.join(", "))}</p>
       <div class="watch-flexibility" data-flex-rule="${esc(r.id)}"><div class="flex-summary"><strong>ความยืดหยุ่น</strong><span>${esc(entryFlexUI.flexibilitySummary(r.spec))}</span><button type="button" data-flex-toggle aria-label="ปรับความยืดหยุ่น" aria-expanded="false" aria-controls="flex-${esc(r.id)}">ปรับ</button></div><div class="flex-panel" id="flex-${esc(r.id)}" data-flex-panel hidden></div></div>
       <p class="watch-rule-summary"><strong>เงื่อนไขเข้า</strong> ${esc(setupEntrySummary(r.spec))}</p>
-      <div class="watch-details-actions"><button class="secondary" data-export-setup-code="${esc(r.id)}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="text-button watch-delete" data-delete-rule="${esc(r.id)}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">${uiIcon("trash")}ลบเซตอัป</button></div>
+      <div class="watch-details-actions"><button class="secondary" data-risk-plan="${esc(r.id)}">แผน ATR${r.risk_plan?.enabled?' · เปิด':''}</button><button class="secondary" data-export-setup-code="${esc(r.id)}">${uiIcon("file")}ส่งออกเซตอัป</button><button class="text-button watch-delete" data-delete-rule="${esc(r.id)}" aria-label="ลบเซตอัป ${esc(r.spec.name)}">${uiIcon("trash")}ลบเซตอัป</button></div>
     </div></details>
   </article>`;
 }
@@ -1102,15 +1112,16 @@ function renderWatch() {
     footnote.textContent =
       "ประเมินแท่งปิดทุกนาที · ดูสถานะข้อมูลและผลการส่งในหน้าการแจ้งเตือน";
 }
+let refreshGeneration=0;
 async function refresh({ reuseMe = false } = {}) {
-  const workspace = state.workspaceId;
+  const generation=++refreshGeneration,workspace=state.workspaceId;
   const [rules, me, rows, destinations] = await Promise.all([
     api("/rules"),
     reuseMe && state.me ? Promise.resolve(state.me) : api("/me"),
     api("/conversations"),
     api("/destinations"),
   ]);
-  if (workspace !== state.workspaceId) return;
+  if (generation!==refreshGeneration || workspace !== state.workspaceId) return;
   state.rules = rules;
   state.destinationAvailability = destinations.available;
   if(state.saved)state.saved=rules.find(rule=>rule.id===state.saved.id)??null;
@@ -1255,7 +1266,7 @@ async function chat(text) {
         text,
         mode: $("#ai-mode").value,
         selection,
-        draft: state.draft,
+        ...(state.draft?{draft:state.draft}:{}),
         useMyData:state.useMyData,
         imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))],
 
@@ -1275,9 +1286,8 @@ async function chat(text) {
         state.draft = result.draft;
         state.replay = null;
         renderDesigner();
-        queueDraftSave();
-        await showSetupChanges(previousDraft, state.draft);
-        if(matchMedia('(min-width: 1100px)').matches)setWorkbenchTab('split');
+        await showSetupChanges(previousDraft,state.draft);
+        await showChatSetupCard();
       }
     }
     state.crop = null;
@@ -1719,18 +1729,26 @@ document.addEventListener("change", async (e) => {
     toast(error.message);
   }
 });
+let historyGeneration=0;
 async function loadChatHistory(){
-    let chatPage = await api(`/conversations/${state.conversation}/messages`);
+    const generation=++historyGeneration,conversation=state.conversation,workspace=state.workspaceId;
+    const current=()=>generation===historyGeneration&&state.conversation===conversation&&state.workspaceId===workspace;
+    let chatPage = await api(`/conversations/${conversation}/messages`);
+    if(!current())return;
     const paintPage = async (rows) => { for (const m of rows) {
-      if(m.ui_card?.type!=='preset')message(m.content, m.role === "user");
-      if(m.ui_card?.type==='preset')(await presetsReady).renderCard(m);
+      if(!current())return;
+      if(!['preset','setup'].includes(m.ui_card?.type))message(m.content, m.role === "user");
+      if(['preset','setup'].includes(m.ui_card?.type))(await presetsReady).renderCard(m);
       if (m.setup_changes?.length) await showSetupChanges(null, null, m.setup_changes);
       if (m.sources?.some((s) => !s.available))
         message("ข้อมูลอ้างอิงบางส่วนถูกลบแล้ว ข้อสรุปเดิมอาจใช้ต่อไม่ได้");
       if(m.role === 'user')appendChatImages((m.sources ?? []).filter(source => source.type === 'image' && source.available));
     }};
     await paintPage(chatPage);
-    requestAnimationFrame(scrollChatToLatest);
+    if(!current())return;
+    const stored=state.conversationRows.find(row=>row.id===conversation);
+    if(stored?.draft&&!chatPage.some(m=>['preset','setup'].includes(m.ui_card?.type))&&chatPage.some(m=>m.setup_changes?.length))await showChatSetupCard();
+    requestAnimationFrame(()=>{if(current())scrollChatToLatest();});
     if (chatPage.length === 200) {
       const older = document.createElement("button");
       older.className="text-button"; older.textContent="โหลดข้อความก่อนหน้า";
@@ -1742,24 +1760,31 @@ async function loadChatHistory(){
         followingChat=false;
         try {
           const page=await api(`/conversations/${conversationId}/messages?before=${chatPage[0].id}`);
-          if(state.conversation!==conversationId)return;
+          if(!current())return;
           const existing=[...$("#messages").childNodes].filter(n=>n!==older);
           $("#messages").replaceChildren();await paintPage(page);existing.forEach(n=>$("#messages").append(n));
+          document.dispatchEvent(new Event('setup-changed'));
           messagePane.scrollTop=priorTop+messagePane.scrollHeight-priorHeight;
           chatPage=page;if(page.length===200)$("#messages").prepend(older);
         }catch(error){toast(error.message);}finally{older.disabled=false;}
       };
     }
 }
+let conversationSelection=0;
 conversations.addEventListener("change", async () => {
   if (!conversations.value) return;
   const selected = conversations.value;
+  const selection=++conversationSelection,workspace=state.workspaceId;
   if (!(await leaveDraft())) {
+    if(selection!==conversationSelection||state.workspaceId!==workspace)return;
     conversations.value = state.conversation ?? "";
     return;
   }
   try {
-    state.conversationRows = await api("/conversations");
+    if(selection!==conversationSelection||state.workspaceId!==workspace)return;
+    const rows = await api("/conversations");
+    if(selection!==conversationSelection||state.workspaceId!==workspace)return;
+    state.conversationRows=rows;
     state.conversation = selected;
     const stored = state.conversationRows.find(
       (x) => x.id === state.conversation,
@@ -2052,7 +2077,11 @@ document.addEventListener("click", async (e) => {
     }
     if (t.hasAttribute("data-save")) {
       if (t.disabled || state.saving) return;
+      if (state.busy) return toast("รอขั้นตอนปัจจุบันเสร็จก่อน");
       if (!validateEditor()) return;
+      state.busy=true;
+      setupPane.inert=true;
+      try {
       t.disabled = true;
       state.saving = true;
       panel.inert = true;
@@ -2070,6 +2099,7 @@ document.addEventListener("click", async (e) => {
       state.saved = saved;
       const index = state.rules.findIndex(rule => rule.id === saved.id);
       if (index < 0) state.rules.push(saved); else state.rules[index] = saved;
+      if(state.conversation)await showChatSetupCard();
       state.images=[];state.crop=null;renderImages();
       renderWatch();
       renderDesigner();
@@ -2077,10 +2107,14 @@ document.addEventListener("click", async (e) => {
       showEditorFeedback(
         saved.active
           ? "บันทึกเวอร์ชันใหม่แล้ว เซตอัพยังเปิดใช้งานอยู่"
-          : "บันทึกเซตอัพแล้ว ยังไม่เปิดแจ้งเตือน เปิดใช้งานได้ในหน้าเซตอัพที่ตั้งไว้",
+          : "บันทึกเซตอัปแล้ว เปิดแจ้งเตือนได้จากการ์ดในแชทหรือหน้าเซตอัปที่ตั้งไว้",
         true,
       );
       } finally { state.saving = false; panel.inert = false; t.disabled = false; t.textContent = saveLabel; }
+      } finally {
+        state.busy=false;setupPane.inert=false;
+        if(t.isConnected)t.disabled=false;
+      }
       return;
     }
     if (t.hasAttribute("data-replay")) {
@@ -2243,6 +2277,10 @@ function evidenceUI(e) {
   return `<div class="evidence-row"><strong>${label[e.result] ?? "รอ"}</strong>${e.left !== undefined ? " · " + Number(e.left).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.right !== undefined ? " เทียบกับ " + Number(e.right).toLocaleString("th-TH", { maximumFractionDigits: 6 }) : ""}${e.reason ? " · " + esc(e.reason) : ""}${e.children ? e.children.map(evidenceUI).join("") : ""}</div>`;
 }
 function barEvidence(bar) {
+  if(bar?.explanations){
+    const e=bar.explanations;
+    return `<p>${esc(insightTime(bar.time))}</p>${progressUI(bar.progress)}<p>เงื่อนไขเริ่มต้น</p>${explanationsUI(e.entry)}${e.stages.map((lines,i)=>`<p>รอยืนยันขั้น ${i+1}</p>${explanationsUI(lines)}`).join('')}${e.exit.length?'<p>เงื่อนไขออก</p>'+explanationsUI(e.exit):''}${e.cancel.length?'<p>เงื่อนไขยกเลิก</p>'+explanationsUI(e.cancel):''}${timeframeUI(bar.timeframes)}`;
+  }
   if(bar?.branches)return bar.branches.map(b=>`<h4>${esc(directionLabel(b.side,b.side==='SPOT'?'Spot':'Perpetual Futures'))}</h4>`+barEvidence({...b,time:bar.time})).join('');
   return bar
     ? `<p>${new Date(bar.time).toLocaleString("th-TH")}${bar.waitingStage >= 0 ? " · รอขั้นตอน " + (bar.waitingStage + 2) : ""}${bar.activeSignal ? " · วงจรสัญญาณเข้าเปิดอยู่" : ""}</p><p>เงื่อนไขเริ่มต้น</p>${evidenceUI(bar.entry)}${bar.stages.map((s, i) => "<p>ขั้นตอน " + (i + 2) + "</p>" + evidenceUI(s)).join("")}${bar.exit ? "<p>สัญญาณออก</p>" + evidenceUI(bar.exit) : ""}`
@@ -2288,20 +2326,26 @@ function branchSummary(d) {
   );
 }
 function reviewProposal(draft) {
+  const conversation=state.conversation,workspace=state.workspaceId;
   const dialog = document.createElement("dialog");
   dialog.className = "runtime-dialog";
   dialog.innerHTML = `<h2>ตรวจร่างที่ snaap เสนอ</h2><h3>ร่างปัจจุบัน</h3><p><strong>${esc(state.draft.name)}</strong> · ${esc(state.draft.exchange.join(', '))} · ${esc(state.draft.pairs.join(', '))}</p><p class="draft-diff">${esc(fullSummary(state.draft))}</p><h3>ข้อเสนอ</h3><p><strong>${esc(draft.name)}</strong> · ${esc(draft.exchange.join(", "))} · ${esc(draft.pairs.join(", "))}</p><p class="draft-diff">${esc(fullSummary(draft))}</p><p class="field-note">ใช้ร่างนี้จะแทนที่ร่างปัจจุบัน รวมชื่อและเงื่อนไขที่คุณแก้ระหว่างรอ</p><div class="design-actions"><button class="primary" data-apply>ใช้ร่างนี้</button><button class="secondary" data-keep>ใช้ร่างเดิม</button></div>`;
   document.body.append(dialog);
   dialog.showModal();
-  dialog.querySelector("[data-apply]").onclick = () => {
+  dialog.querySelector("[data-apply]").onclick = async () => {
+    if(state.conversation!==conversation||state.workspaceId!==workspace){dialog.close();return toast('บทสนทนาเปลี่ยนแล้ว กรุณาขอร่างในบทสนทนาปัจจุบัน');}
+    if(state.busy)return toast('รอขั้นตอนปัจจุบันเสร็จก่อน');
+    state.busy=true;
+    try {
     const previousDraft = structuredClone(state.draft);
     snapshot();
     state.draft = draft;
     state.replay = null;
     renderDesigner();
-    queueDraftSave();
-    showSetupChanges(previousDraft, state.draft);
     dialog.close();
+    await showSetupChanges(previousDraft,state.draft);
+    await showChatSetupCard();
+    } finally {state.busy=false;}
   };
   dialog.querySelector("[data-keep]").onclick = () => dialog.close();
   dialog.onclose = () => dialog.remove();

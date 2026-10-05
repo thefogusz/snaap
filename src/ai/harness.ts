@@ -40,7 +40,17 @@ const selection = z
     to: z.string().datetime().optional(),
   })
   .strict();
-export function registerHarness(app: FastifyInstance, db: pg.Pool) {
+export type HarnessDependencies = {
+  instruments?: typeof instruments;
+  strategySeries?: typeof strategySeries;
+};
+export function registerHarness(
+  app: FastifyInstance,
+  db: pg.Pool,
+  dependencies: HarnessDependencies = {},
+) {
+  const readInstruments = dependencies.instruments ?? instruments;
+  const readSeries = dependencies.strategySeries ?? strategySeries;
   app.post("/api/v1/context", async (req) =>
     contextBundle(
       db,
@@ -55,7 +65,9 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
       .object({
         text: z.string().trim().min(1).max(4000),
         mode: z.enum(["standard", "deep"]),
-        draft: strategySchema.optional(),
+        draft: strategySchema
+          .nullish()
+          .transform((draft) => draft ?? undefined),
         selection: selection.optional(),
         imageIds: z.array(z.string().uuid()).max(5, "แนบได้สูงสุด 5 ภาพต่อข้อความ").default([]),
         useMyData: z.boolean().default(false),
@@ -273,7 +285,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
           );
       const history = (
         await db.query(
-          "SELECT role,content,sources FROM messages WHERE conversation_id=$1 AND id<>$2 ORDER BY created_at DESC,id DESC LIMIT 10",
+          "SELECT role,content,sources FROM messages WHERE conversation_id=$1 AND id<>$2 AND COALESCE(ui_card->>'type','')<>'setup' ORDER BY created_at DESC,id DESC LIMIT 10",
           [id, userMessageId],
         )
       ).rows
@@ -512,7 +524,12 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
         }
         requireProposal = false;
         for (const call of calls) {
-          if (++toolCount > 6) throw new Error("TOOL_BUDGET");
+          if (++toolCount > 6)
+            throw new ApiError(
+              502,
+              "AI_TOOL_LIMIT",
+              "AI ใช้ขั้นตอนเกินขอบเขต กรุณาลดขอบเขตคำขอ คืนโควตาแล้ว",
+            );
           let result: unknown = { error: "Unknown tool" };
           if (call.name === "read_skill") {
             let skillArguments: unknown;
@@ -568,7 +585,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                   query: z.string().max(60),
                 })
                 .parse(JSON.parse(call.arguments));
-              const catalog = await instruments(q.exchange, q.market);
+              const catalog = await readInstruments(q.exchange, q.market);
               result = {
                 exchange: q.exchange,
                 market: q.market,
@@ -629,7 +646,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
                   throw new Error(
                     "Select one exchange and supported pairs for this setup",
                   );
-                const catalog = await instruments(
+                const catalog = await readInstruments(
                   checked.data.exchange[0],
                   checked.data.market,
                 );
@@ -660,7 +677,7 @@ export function registerHarness(app: FastifyInstance, db: pg.Pool) {
               const spec = strategySchema.parse(
                 draft ?? input.draft ?? toolSpec(call.arguments),
               );
-              const series = await strategySeries(
+              const series = await readSeries(
                 spec,
                 spec.exchange[0],
                 spec.pairs[0],

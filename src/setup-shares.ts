@@ -6,6 +6,13 @@ import { ApiError } from "./errors.js";
 import { transaction } from "./data/db.js";
 import { setupFile } from "./domain/setup-files.js";
 import { makeSetupCode, setupCodeHash } from "./domain/setup-codes.js";
+import { riskPlanSchema } from "./domain/outcomes.js";
+function sharedSetup(input: any) {
+  return {
+    setup: setupFile(input.spec ?? input).setups[0],
+    riskPlan: input.riskPlan ? riskPlanSchema.parse(input.riskPlan) : null,
+  };
+}
 function codeHash(params: unknown) {
   const { code } = z.object({ code: z.string().max(100) }).parse(params);
   try {
@@ -22,7 +29,7 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
       .parse(req.body);
     const row = (
       await db.query(
-        "SELECT spec FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND ($3::uuid IS NULL OR workspace_id=$3)",
+        "SELECT spec,risk_plan FROM rules WHERE deleted_at IS NULL AND id=$1 AND owner_id=$2 AND ($3::uuid IS NULL OR workspace_id=$3)",
         [ruleId, req.userId, req.workspaceId ?? null],
       )
     ).rows[0];
@@ -32,7 +39,11 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
       const code = makeSetupCode();
       const result = await db.query(
         "INSERT INTO setup_shares(code_hash,owner_id,setup) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
-        [setupCodeHash(code), req.userId, setup],
+        [
+          setupCodeHash(code),
+          req.userId,
+          { spec: setup, riskPlan: row.risk_plan },
+        ],
       );
       if (result.rowCount) return reply.code(201).send({ code });
     }
@@ -50,7 +61,7 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
         "NOT_FOUND",
         "ไม่พบโค้ดนี้ หรือเจ้าของปิดการแชร์แล้ว",
       );
-    return { setup: setupFile(row.setup).setups[0] };
+    return sharedSetup(row.setup);
   });
   app.post("/api/v1/setup-shares/:code/import", async (req, reply) => {
     z.object({})
@@ -69,17 +80,19 @@ export function registerSetupShares(app: FastifyInstance, db: pg.Pool) {
           "NOT_FOUND",
           "ไม่พบโค้ดนี้ หรือเจ้าของปิดการแชร์แล้ว",
         );
-      const spec = setupFile(row.setup).setups[0],
+      const { setup: spec, riskPlan } = sharedSetup(row.setup),
         id = randomUUID();
       await c.query(
-        "INSERT INTO rules(id,owner_id,spec,workspace_id,active) VALUES($1,$2,$3,$4,false)",
-        [id, req.userId, spec, req.workspaceId ?? null],
+        "INSERT INTO rules(id,owner_id,spec,workspace_id,active,risk_plan) VALUES($1,$2,$3,$4,false,$5)",
+        [id, req.userId, spec, req.workspaceId ?? null, riskPlan],
       );
       await c.query(
         "INSERT INTO rule_revisions(rule_id,revision,spec) VALUES($1,1,$2)",
         [id, spec],
       );
-      return reply.code(201).send({ id, spec, revision: 1, active: false });
+      return reply
+        .code(201)
+        .send({ id, spec, revision: 1, active: false, risk_plan: riskPlan });
     });
   });
   app.delete("/api/v1/setup-shares/:code", async (req) => {
