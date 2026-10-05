@@ -62,6 +62,7 @@
       chart = null;
     }
     lines = [];
+    canvas.style.removeProperty("--studio-pane-space");
     canvas.replaceChildren();
     studio.querySelector(".chart-legend").replaceChildren();
     studio.querySelector("[data-chart-evidence]").replaceChildren();
@@ -79,8 +80,8 @@
   function fitStudyPanes() {
     if (!chart) return;
     const studies = chart.panes().slice(1);
-    const height = Math.max(32, Math.min(110, canvas.clientHeight * .35 / Math.max(1,studies.length)));
-    studies.forEach(p => p.setHeight(height));
+    canvas.style.setProperty("--studio-pane-space", `${studies.length * 120}px`);
+    chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
   }
   new ResizeObserver(() => {
     const visible = canvas.clientWidth > 0 && canvas.clientHeight > 0;
@@ -182,7 +183,6 @@
       const overlay = window.SnaapIndicatorCatalog?.indicatorByName[o.operand.name]?.overlay ?? ["EMA", "SMA", "BB_UPPER", "BB_LOWER","WMA","RMA","VWMA","HIGHEST","LOWEST","DONCHIAN_UPPER","DONCHIAN_LOWER","DONCHIAN_MID","BB_MIDDLE"].includes(
         o.operand.name,
       );
-      const title = operandText(o.operand);
       const histogram = ['VOLUME', 'MACD_HIST', 'AO'].includes(o.operand.name);
       const macd = ['MACD','MACD_SIGNAL','MACD_HIST'].includes(o.operand.name);
       const macdKey = macd ? JSON.stringify([o.operand.timeframe,o.operand.period,o.operand.slow??26,o.operand.signal??9,o.operand.source??'close']) : null;
@@ -198,7 +198,6 @@
           color: macd ? (o.operand.name==='MACD_SIGNAL' ? '#e8ab42' : '#32a9df') : colors[i % colors.length],
           lineWidth: 2,
           ...(o.operand.name === 'PSAR' ? {lineVisible:false,pointMarkersVisible:true,pointMarkersRadius:2} : {}),
-          title,
           priceFormat: o.operand.name === 'VOLUME' ? {type:'volume'} : {type:'price',precision:overlay?precision:2,minMove:overlay?10**-precision:.01},
           priceLineVisible: false,
           lastValueVisible: false,
@@ -206,7 +205,6 @@
         },
         studyPane,
       );
-      if (!overlay) chart.panes()[studyPane].setHeight(Math.max(32, Math.min(110, canvas.clientHeight * .25)));
       const candleByTime = new Map(data.candles.map(c => [c.time,c]));
       const points = histogram ? o.points.map(p => {
         const candle = candleByTime.get(p.time);

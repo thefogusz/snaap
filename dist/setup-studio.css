@@ -948,3 +948,31 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   .workbench[data-tab="split"] .studio-reason-pane { grid-column: 3; }
   .workbench[data-tab="split"] [data-resize-panel="conditions"] { display: block; grid-column: 2; grid-row: 1; }
 }
+
+/* The chart and signal summaries share one scroll area; neither may shrink. */
+.workbench[data-tab="split"] .setup-pane .setup-studio {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.workbench[data-tab="split"] .setup-studio > * {
+  flex-shrink: 0;
+}
+.workbench[data-tab="split"] .setup-studio .studio-canvas {
+  flex: none;
+  height: calc(clamp(360px,52dvh,560px) + var(--studio-pane-space,0px));
+  min-height: calc(360px + var(--studio-pane-space,0px));
+}
+.setup-studio .setup-insights,
+.setup-studio .chart-evidence {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.setup-studio .setup-insights {
+  padding-bottom: 12px;
+}
+.setup-studio .setup-insights > strong {
+  display: block;
+  margin-top: 12px;
+}

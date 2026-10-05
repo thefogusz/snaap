@@ -121,7 +121,11 @@ body:has(#admin-impersonation-banner):has(#view-home:not([hidden]) .workbench:no
 ::view-transition-old(root), ::view-transition-new(root) { animation:none; }
 ::view-transition-new(snaap-setup) { animation:snaap-studio-enter 360ms cubic-bezier(.22,1,.36,1) both; }
 @keyframes snaap-studio-enter { from { opacity:0; transform:translateX(18px); } to { opacity:1; transform:translateX(0); } }
-.workbench .studio-canvas { height:clamp(320px,52dvh,560px); min-width:0; }
+.workbench .studio-canvas {
+ height:calc(clamp(360px,52dvh,560px) + var(--studio-pane-space,0px));
+ min-height:calc(360px + var(--studio-pane-space,0px));
+ min-width:0;
+}
 @media(prefers-reduced-motion:reduce) {
  ::view-transition-group(snaap-conversation), ::view-transition-group(snaap-setup), ::view-transition-new(snaap-setup) { animation:none; }
 }
