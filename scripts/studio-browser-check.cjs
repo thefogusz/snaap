@@ -19,6 +19,27 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       console.log("HTTP", r.status(), r.url());
   });
   try {
+    async function checkDialogField(selector, screenshotName) {
+      const field = page.locator(selector);
+      for (const theme of ['dark', 'light']) {
+        await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+        for (const width of [1440, 390]) {
+          await page.setViewportSize({width, height: 1000});
+          const style = await field.evaluate(el => {
+            const css = getComputedStyle(el);
+            const reference = getComputedStyle(document.querySelector('.studio-name-field input'));
+            const rect = el.getBoundingClientRect();
+            return {radius: parseFloat(css.borderRadius), background: css.backgroundColor, referenceBackground: reference.backgroundColor, height: rect.height, left: rect.left, right: rect.right, viewport: innerWidth};
+          });
+          assert.ok(style.radius >= 8, 'Dialog fields must use rounded site controls');
+          assert.equal(style.background, style.referenceBackground);
+          assert.ok(style.height >= 44 && style.left >= 0 && style.right <= style.viewport);
+          if (width === 1440 && theme === 'dark') await page.screenshot({path: `.local/audit/${screenshotName}.png`});
+        }
+      }
+      await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+      await page.setViewportSize({width: 1440, height: 1000});
+    }
     await page.goto("http://127.0.0.1:4189");
     await page
       .getByRole("button", { name: "ใช้บัญชีทดสอบ", exact: true })
@@ -96,6 +117,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       ),
     );
     await page.locator("[data-add-chart-indicator]").click();
+    await checkDialogField('dialog[open] input[type=search]', 'studio-indicator-search');
     await page.locator("dialog[open] input[type=search]").fill("RSI");
     await page.locator('[data-pick-indicator="RSI"]').click();
     await page
@@ -117,6 +139,7 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       .filter({ hasText: "RSI 21" })
       .waitFor();
     await page.locator("[data-indicator-condition]").click();
+    await checkDialogField('dialog[open] input[name=value]', 'studio-condition-value');
     await page.locator("dialog[open] input[name=value]").fill("50");
     await page.locator("dialog[open] button[type=submit]").click();
     await page

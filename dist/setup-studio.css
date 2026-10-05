@@ -564,9 +564,42 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   min-height: 44px;
 }
 .studio-dialog input,
-.studio-dialog select {
+.studio-dialog select,
+.studio-dialog textarea {
   width: 100%;
+  min-width: 0;
+  min-height: 44px;
   box-sizing: border-box;
+  padding: 9px 10px;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.studio-dialog label {
+  color: var(--muted);
+  line-height: 1.6;
+}
+:root:not([data-theme="dark"]) .studio-dialog :is(input, select, textarea) {
+  border-color: var(--control-line);
+}
+.studio-dialog label > :is(input, select, textarea, .snaap-select) {
+  margin-top: 5px;
+}
+.studio-dialog :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent-ink, var(--lime));
+  outline-offset: 2px;
+}
+.studio-dialog input::placeholder,
+.studio-dialog textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.studio-dialog [data-create-error]:empty {
+  display: none;
 }
 .studio-dialog p,
 .studio-dialog li {
