@@ -1044,7 +1044,7 @@ function watchChannelMark(channel) {
 }
 function watchChannelPicker(r) {
   const channels = state.destinations.filter(d => d.verified);
-  return `<details class="watch-channel-picker"><summary aria-label="เลือกช่องทางแจ้งเตือน ${esc(r.spec.name)}" title="เลือกช่องทางแจ้งเตือน">${uiIcon("bell")}<span>แจ้งเตือน</span><span aria-hidden="true">⌄</span></summary><div class="watch-channel-menu"><strong>ส่งสัญญาณไปที่</strong><p>รับในเว็บเสมอ · เลือกเพิ่มได้ 5 ช่องทาง</p>${channels.length ? channels.map(d => `<label>${watchChannelMark(d)}<span>${esc(d.name)}</span><input type="checkbox" value="${esc(d.id)}" ${r.spec.destinations.includes(d.id) ? "checked" : ""}></label>`).join("") : '<p class="watch-channel-empty">ยังไม่มีช่องทางที่เชื่อมไว้</p>'}<div class="watch-channel-actions"><a href="#notifications" data-watch-connect-channel>เชื่อมช่องทาง</a><button type="button" class="primary" data-save-rule-channels="${esc(r.id)}">บันทึก</button></div></div></details>`;
+  return `<details class="watch-channel-picker"><summary aria-label="เลือกช่องทางแจ้งเตือน ${esc(r.spec.name)}" title="เลือกช่องทางแจ้งเตือน">${uiIcon("bell")}แจ้งเตือน<svg class="ui-icon watch-channel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="watch-channel-menu"><strong>ส่งสัญญาณไปที่</strong><p>รับในเว็บเสมอ · เลือกเพิ่มได้ 5 ช่องทาง</p>${channels.length ? channels.map(d => `<label>${watchChannelMark(d)}<span>${esc(d.name)}</span><input type="checkbox" value="${esc(d.id)}" ${r.spec.destinations.includes(d.id) ? "checked" : ""}></label>`).join("") : '<p class="watch-channel-empty">ยังไม่มีช่องทางที่เชื่อมไว้</p>'}<div class="watch-channel-actions"><a href="#notifications" data-watch-connect-channel>เชื่อมช่องทาง</a><button type="button" class="primary" data-save-rule-channels="${esc(r.id)}">บันทึก</button></div></div></details>`;
 }
 function watchSetupRow(r) {
   const pairs = r.spec.pairs;
@@ -1058,11 +1058,11 @@ function watchSetupRow(r) {
   const destinations = r.spec.destinations.map(id => state.destinations.find(d => d.id === id)).filter(Boolean);
   const channelTags = destinations.map(d => `<span class="watch-tag watch-channel-tag ${r.active && !r.quota_blocked && d.verified ? "is-routing" : ""}" title="${d.verified ? r.quota_blocked ? 'พักส่ง · เกินสิทธิ์แพ็กเกจ' : r.active ? 'เปิดส่งแจ้งเตือน' : 'ส่งเมื่อเปิดใช้งานเซตอัป' : 'ช่องทางตัดการเชื่อมต่อแล้ว'}">${watchChannelMark(d)}<span>${esc(d.name)}</span>${!d.verified ? '<span>· ตัดแล้ว</span>' : ''}</span>`).join("");
   return `<article class="watch-row">
-    <div class="watch-row-heading"><h2>${esc(r.spec.name)}</h2>
+    <div class="watch-row-heading"><div class="watch-title-line"><h2>${esc(r.spec.name)}</h2><span class="status ${r.active && !r.quota_blocked ? "is-active" : "paused"}">${status}</span></div>
       <div class="watch-setup-meta"><span class="watch-pairs">${esc(pairPreview)}${remaining > 0 ? ` <span class="watch-pair-count">+${remaining} คู่</span>` : ""}</span><span class="watch-tags"><span class="watch-tag">${esc(r.spec.exchange.join(" · "))}</span><span class="watch-tag">${esc(r.spec.market)}</span><span class="watch-tag watch-direction">${esc(direction)}</span>${channelTags}</span></div>
 
     </div>
-    <div class="watch-row-footer"><span class="status ${r.active && !r.quota_blocked ? "is-active" : "paused"}">${status}</span>
+    <div class="watch-row-footer">
       ${watchChannelPicker(r)}
       <button class="secondary" data-activate-rule="${esc(r.id)}">${uiIcon(r.active ? "pause" : "play")}${r.active ? "หยุดชั่วคราว" : "เปิดใช้งาน"}</button>
       <button class="secondary watch-edit" data-open-rule="${esc(r.id)}" aria-label="แก้ไข ${esc(r.spec.name)}" title="แก้ไขเซตอัป">${uiIcon("sliders")}<span class="sr-only">แก้ไข</span></button>
@@ -1784,6 +1784,19 @@ conversations.addEventListener("change", async () => {
     toast(error.message);
   }
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const menu = e.target.closest(".watch-channel-picker[open]");
+  if (!menu) return;
+  menu.open = false;
+  menu.querySelector("summary").focus();
+});
+document.addEventListener("toggle", (e) => {
+  if (!e.target.matches(".watch-channel-picker[open]")) return;
+  document.querySelectorAll(".watch-channel-picker[open]").forEach(menu => {
+    if (menu !== e.target) menu.open = false;
+  });
+}, true);
 document.addEventListener("click", async (e) => {
   document.querySelectorAll(".watch-channel-picker[open]").forEach(menu => {
     if (!menu.contains(e.target)) menu.open = false;
