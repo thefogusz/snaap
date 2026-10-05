@@ -254,6 +254,28 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
 .studio-setup-settings .exchange-fieldset {
   margin-top: 0;
 }
+.studio-setup-settings .exchange-fieldset .exchange-choices {
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 4px;
+  margin: 4px -4px 8px;
+}
+.studio-setup-settings .exchange-fieldset .exchange-choices label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.studio-setup-settings .exchange-check {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+  border-radius: 5px;
+}
 .studio-setup-settings > label {
   display: block;
   margin-block: 12px;

@@ -148,6 +148,9 @@ require("node:fs").mkdirSync(".local/audit", { recursive: true });
       if (width < 1280)
         await page.locator('[data-studio-tab="conditions"]').click();
       await page.waitForTimeout(350);
+      const exchanges = await page.locator('.studio-setup-settings .exchange-choices label').evaluateAll(labels => labels.map(el => el.getBoundingClientRect().toJSON()));
+      assert.equal(exchanges.length, 5);
+      assert.ok(exchanges.every(rect => Math.abs(rect.y - exchanges[0].y) < 1 && rect.height >= 44), 'exchange choices stay on one row at ' + width);
       await page.getByRole('button', {name: 'บัญชี / แพ็กเกจ', exact: true}).click();
       await page.locator('#toast').waitFor({state: 'visible'});
       const notice = await page.locator('#toast').boundingBox();
