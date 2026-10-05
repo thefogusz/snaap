@@ -6,7 +6,7 @@
   function fail(message) {
     clearTimeout(fallback);
     const status = document.querySelector('[data-startup-message]');
-    if (status) status.textContent = message;
+    if (status) { status.textContent = message; status.classList.remove('sr-only'); }
     const retry = document.querySelector('[data-startup-retry]');
     if (retry) retry.hidden = false;
   }
