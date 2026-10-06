@@ -43,7 +43,8 @@ test("expired cards escape reasons, retain legacy names and stay out of the sign
     new URL("../dist/notifications.js", import.meta.url),
     "utf8",
   );
-  runInNewContext(source + `\nhtml=signalCard(row);`, context);
+  const overview = await readFile(new URL("../dist/notification-overview.js", import.meta.url), "utf8");
+  runInNewContext(overview + '\n' + source + `\nhtml=signalCard(row);`, context);
   assert.ok(context.html.includes("&lt;img"));
   assert.ok(!context.html.includes("<img"));
   assert.ok(context.html.includes('title="Original setup · &lt;img'));
@@ -61,5 +62,5 @@ test("expired cards escape reasons, retain legacy names and stay out of the sign
   );
   assert.ok(!view.innerHTML.includes('data-signal-kind="EXPIRED"'));
   assert.ok(view.innerHTML.includes("การติดตามตลาด"));
-  assert.ok(view.innerHTML.includes("การส่งข้อความ"));
+  assert.ok(view.innerHTML.includes("การส่งแจ้งเตือน"));
 });

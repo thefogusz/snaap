@@ -11,6 +11,7 @@ let notificationWorkspace;
 let notificationLoadedAt = 0;
 let notificationFlight;
 let notificationRequest = 0;
+let notificationOverviewFilter = 'all';
 const channelInfo = {
   TELEGRAM: {
     name: "Telegram",
@@ -39,8 +40,170 @@ const deliveryLabels = {
   CANCELLED: "ยกเลิก · เซ็ตอัพถูกลบ",
   UNKNOWN: "ยังยืนยันผลไม่ได้",
   QUOTA_OR_RATE_LIMIT: "ถึงขีดจำกัดการส่ง",
-  DISCONNECTED: "ตัดการเชื่อมต่อแล้ว",
+  DISCONNECTED: "ช่องทางถูกตัดการเชื่อมต่อ",
 };
+function notificationTime(value) {
+  if (value == null || value === "") return "ยังไม่ได้ตรวจ";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "ยังไม่มีเวลาตรวจ"
+    : date.toLocaleString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+}
+function limitedActivity(rows, render) {
+  return `<div class="overview-list">${rows.map((row, i) => `<div data-overview-item ${i >= 5 ? "hidden" : ""}>${render(row)}</div>`).join("")}${rows.length > 5 ? `<button type="button" class="text-button overview-more" data-overview-more>ดูเพิ่มอีก ${Math.min(5, rows.length - 5)} รายการ (${rows.length - 5} รายการที่เหลือ)</button>` : ""}</div>`;
+}
+function overviewTag(label, tone = "neutral", icon = "") {
+  return `<span class="overview-tag overview-tag-${tone}">${icon ? uiIcon(icon) : ""}<span>${esc(label)}</span></span>`;
+}
+function overviewLifecycle(state, side = "") {
+  const tone = state.active
+    ? "success"
+    : state.stage >= 0
+      ? "pending"
+      : "neutral";
+  const direction = {
+    Long: ["long", "trendUp"],
+    Short: ["short", "trendDown"],
+    Spot: ["spot", "spotBuy"],
+  }[side];
+  return `<span class="overview-lifecycle">${direction ? `<span class="overview-direction overview-direction-${direction[0]}">${uiIcon(direction[1])}${esc(side)}</span>` : ""}${overviewTag(notificationOverview.lifecycleLabel(state), tone, state.active ? "check" : "clock")}</span>`;
+}
+function marketActivity(row) {
+  const summary = notificationOverview.marketSummary(row);
+  const problem = summary.attention;
+  const state = row.state;
+  const status = problem
+    ? overviewTag(summary.label, "warning", "alert")
+    : !["READY", "CURRENT"].includes(row.status)
+      ? overviewTag(summary.label, row.status === "PAUSED" ? "neutral" : "pending", row.status === "PAUSED" ? "pause" : "clock")
+      : state?.sides
+        ? `<div class="overview-branches">${overviewLifecycle(state.sides.long, "Long")}${overviewLifecycle(state.sides.short, "Short")}</div>`
+        : state
+          ? overviewLifecycle(
+              state,
+              row.setup_market === "Spot"
+                ? "Spot"
+                : { LONG: "Long", SHORT: "Short" }[row.setup_side],
+            )
+          : overviewTag("ข้อมูลพร้อม", "success", "check");
+  return `<article class="overview-market-row ${problem ? "overview-row-attention" : ""}">
+    <div class="overview-row-body"><div class="overview-market-header"><div class="overview-row-heading"><span class="overview-row-symbol ${problem ? "overview-symbol-warning" : ""}">${uiIcon(problem ? "alert" : "chart")}</span><h3>${esc(row.pair)}</h3>${overviewTag(row.exchange)}</div><time class="overview-check-time">${uiIcon("clock")}${esc(notificationTime(row.checked_at))}</time></div>
+      <p class="overview-setup-name" title="${esc(row.setup_name || "เซตอัป")}">${esc(row.setup_name || "เซตอัป")}</p>
+      <div class="overview-row-tags">${status}</div>
+      ${problem ? `<p class="overview-action-hint">${esc(summary.detail)}</p>` : ""}
+      ${problem && ["QUOTA_BLOCKED", "DIRECTION_REQUIRED"].includes(row.status) ? '<div class="overview-row-footer"><button type="button" class="text-button" data-notification-tab="rules">แก้ไขเซ็ตอัพ' + uiIcon("arrow") + "</button></div>" : ""}
+      ${marketInsightDetails(row)}
+    </div></article>`;
+}
+function marketInsightDetails(row) {
+  const frames = row.freshness ?? [];
+  const progress = row.progress ?? [];
+  if (!frames.length && !progress.length) return "";
+  return `<details class="overview-market-details"><summary>ดูข้อมูลตลาดและเงื่อนไข ${uiIcon("chevronDown")}</summary>
+    ${frames.length ? `<div class="overview-frame-tags" aria-label="ความพร้อมแต่ละกรอบเวลา">${frames.map(frame => overviewTag(`${frame.frame} · ${freshnessLabels[frame.status] ?? frame.status}`, ["CURRENT", "READY"].includes(frame.status) ? "success" : "pending")).join("")}</div>` : ""}
+    ${progress.map(item => `<section class="overview-progress-detail"><h4>${overviewTag(item.side, {LONG:"long", SHORT:"short", SPOT:"spot"}[item.side] ?? "neutral")}</h4>${progressUI(item)}${item.explanations?.length ? `<details class="overview-technical"><summary>ดูเงื่อนไข ${item.explanations.length} ข้อ</summary>${explanationsUI(item.explanations)}</details>` : ""}</section>`).join("")}
+  </details>`;
+}
+function deliveryActivity(row) {
+  const event = row.event ?? {};
+  const kind =
+    { ENTRY: "เข้า", EXIT: "ออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลารอ" }[
+      event.kind
+    ] ?? "สัญญาณ";
+  const appearance = signalAppearance({ ...row, event });
+  const side = signalDirection(event, row.setup_market, row.setup_side);
+  const tone =
+    row.status === "SENT"
+      ? "success"
+      : ["PENDING", "RETRY"].includes(row.status)
+        ? "pending"
+        : row.status === "FAILED"
+          ? "danger"
+          : "warning";
+  const action = {
+    UNKNOWN: "ตรวจข้อความที่ปลายทางเพื่อยืนยัน",
+    FAILED: "ตรวจการเชื่อมต่อของช่องทาง",
+    DISCONNECTED: "เชื่อมช่องทางใหม่เพื่อรับสัญญาณถัดไป",
+    QUOTA_OR_RATE_LIMIT: "ตรวจโควตาของช่องทาง",
+    RETRY: "ระบบจะลองส่งใหม่",
+    PENDING: "กำลังรอส่งจากคิว",
+  }[row.status];
+  return `<article class="overview-delivery-row ${["danger", "warning"].includes(tone) ? "overview-row-attention" : ""}">
+    <span class="overview-row-symbol signal-tone-${appearance.tone}">${uiIcon(appearance.icon)}</span>
+    <div class="overview-row-body"><div class="overview-row-heading"><h3>${esc(row.pair || "สัญญาณ")}</h3>${overviewTag(row.exchange || "ตลาด")}</div>
+      <div class="overview-row-tags">${overviewTag(side, appearance.direction)}${overviewTag(kind)}</div>
+      <p class="overview-setup-name">${esc(row.setup_name || "ไม่พบชื่อเซตอัป")}</p>
+      <time class="overview-event-time" title="เวลาที่เกิดสัญญาณ">${uiIcon("clock")}${esc(notificationTime(event.time || row.signal_created_at))}</time>
+      ${action ? `<p class="overview-action-hint">${esc(action)}</p>` : ""}
+      ${row.detail && row.status !== "SENT" ? `<details class="overview-technical"><summary>ข้อมูลสำหรับตรวจสอบ</summary><p>${esc(row.detail)}</p></details>` : ""}
+    </div><div class="overview-delivery-status">${overviewTag(deliveryLabels[row.status] ?? row.status, tone, tone === "success" ? "check" : tone === "pending" ? "clock" : "alert")}</div></article>`;
+}
+function overviewChannel(group) {
+  const info = channelInfo[group.kind];
+  const rows =
+    notificationOverviewFilter === "attention"
+      ? group.rows.filter(
+          (row) => !["SENT", "PENDING", "RETRY"].includes(row.status),
+        )
+      : group.rows;
+  return `<details class="overview-channel" ${group.attention ? "open" : ""}>
+    <summary><span class="overview-channel-logo" aria-hidden="true">${info?.logo ? `<img src="${info.logo}" alt="" width="24" height="24">` : uiIcon("send")}</span>
+      <span class="overview-channel-name"><strong>${esc(group.name)}</strong><small>${esc(info?.name || group.kind || "ช่องทางรับข้อความ")}</small></span>
+      <span class="overview-channel-counts">${group.attention ? overviewTag(`ตรวจสอบ ${group.attention}`, "warning", "alert") : ""}${group.pending ? overviewTag(`รอส่ง ${group.pending}`, "pending", "clock") : ""}${overviewTag(`ส่งแล้ว ${group.sent}`, "success", "check")}</span>
+      <span class="overview-chevron">${uiIcon("chevronDown")}</span></summary>
+    ${limitedActivity(rows, deliveryActivity)}</details>`;
+}
+function notificationActivity(monitor, deliveries) {
+  const attention = monitor.filter(
+    (row) => notificationOverview.marketSummary(row).attention,
+  );
+  const ready = monitor.filter((row) => ["READY", "CURRENT"].includes(row.status)).length;
+  const paused = monitor.filter((row) => row.status === "PAUSED").length;
+  const groups = notificationOverview.deliveryGroups(deliveries);
+  const problems =
+    attention.length + groups.reduce((sum, group) => sum + group.attention, 0);
+  const sent = groups.reduce((sum, group) => sum + group.sent, 0);
+  const pending = groups.reduce((sum, group) => sum + group.pending, 0);
+  const onlyAttention = notificationOverviewFilter === "attention";
+  const marketRows = onlyAttention
+    ? attention
+    : [
+        ...attention,
+        ...monitor.filter(
+          (row) => !notificationOverview.marketSummary(row).attention,
+        ),
+      ];
+  const channelGroups = onlyAttention
+    ? groups.filter((group) => group.attention)
+    : groups;
+  const hasActivity = monitor.length || deliveries.length;
+  const healthTag = problems
+    ? overviewTag("ต้องตรวจสอบ", "warning", "alert")
+    : hasActivity
+      ? overviewTag("ปกติ", "success", "check")
+      : overviewTag("ยังไม่เริ่ม", "neutral", "clock");
+  return `<div class="overview-toolbar">
+      <div class="overview-filters" aria-label="กรองรายการในภาพรวม"><button type="button" data-overview-filter="all" aria-pressed="${!onlyAttention}">ทั้งหมด</button><button type="button" data-overview-filter="attention" aria-pressed="${onlyAttention}">${uiIcon("alert")}ต้องตรวจสอบ<span class="overview-filter-count">${problems}</span></button></div>
+      <div class="overview-summary" aria-label="สรุปสถานะ">${healthTag}
+        <span class="overview-inline-stat" title="ข้อมูลพร้อมจากรายการติดตามทั้งหมด">${uiIcon("chart")}ตลาดพร้อม <strong>${ready}<small> / ${monitor.length}</small></strong></span>
+        <span class="overview-inline-stat">${uiIcon("send")}ส่งแล้ว <strong>${sent}<small> / ${deliveries.length}</small></strong></span>
+        ${pending ? overviewTag("รอส่ง " + pending, "pending", "clock") : ""}
+      </div>
+    </div>
+    <div class="overview-columns"><section class="overview-panel" aria-label="การติดตามตลาด"><div class="notification-section-heading"><h2>${uiIcon("chart")}การติดตามตลาด</h2><span class="overview-heading-counts">${overviewTag(`${marketRows.length} รายการ`)}${paused && !onlyAttention ? overviewTag(`พัก ${paused}`, "neutral", "pause") : ""}</span></div>
+      <div class="overview-surface">${marketRows.length ? limitedActivity(marketRows, marketActivity) : `<div class="overview-empty">${uiIcon(onlyAttention ? "check" : "chart")}<h3>${onlyAttention ? "ไม่มีรายการที่ต้องแก้ไข" : "ยังไม่ได้ติดตามตลาด"}</h3>${onlyAttention ? "" : '<button class="secondary" data-notification-tab="rules">เปิดเซตอัป</button>'}</div>`}</div>
+      ${marketRows.length && !onlyAttention ? '<p class="overview-footnote">ข้อมูลพร้อม = ตรวจตลาดได้ · ดูสัญญาณเข้า/ออกในแท็บสัญญาณ</p>' : ""}
+    </section><section class="overview-panel" aria-label="การส่งแจ้งเตือน"><div class="notification-section-heading"><h2>${uiIcon("send")}การส่งแจ้งเตือน</h2>${overviewTag(`${channelGroups.length} ช่องทาง`)}</div><p class="overview-history-scope">${deliveries.length === 100 ? "ประวัติส่ง 100 รายการล่าสุด" : `ประวัติส่ง ${deliveries.length} รายการ`}</p>
+      ${channelGroups.length ? channelGroups.map(overviewChannel).join("") : `<div class="overview-surface overview-empty">${uiIcon(onlyAttention ? "check" : "send")}<h3>${onlyAttention ? "ไม่มีข้อความที่ต้องตรวจสอบ" : "ยังไม่มีการส่งข้อความ"}</h3><p>${onlyAttention ? "" : "สัญญาณยังดูในเว็บได้เสมอ"}</p></div>`}
+      ${problems && channelGroups.length ? '<button class="text-button overview-channel-action" data-notification-tab="channels">จัดการช่องทาง' + uiIcon("arrow") + "</button>" : ""}
+    </section></div>`;
+}
 function signalAppearance(row) {
   const side=row.event.side ?? ((row.event.market ?? row.setup_market)==='Spot'?'SPOT':row.setup_side);
   const direction={LONG:'long',SHORT:'short',SPOT:'spot'}[side] ?? 'unknown';
@@ -144,31 +307,6 @@ async function loadNotifications(workspace) {
     view.insertAdjacentHTML('beforeend', `<div class="notification-error" role="alert"><p>${esc(error.message)}</p><button class="secondary" data-notification-refresh>ลองอีกครั้ง</button></div>`);
   }
 }
-function monitorTone(status) {
-  return ['CURRENT', 'READY', 'SENT'].includes(status) ? 'ready'
-    : ['PAUSED', 'CANCELLED', 'DISCONNECTED'].includes(status) ? 'quiet' : 'attention';
-}
-function statusOverview(monitor, deliveries) {
-  const ready = monitor.filter(row => monitorTone(row.status) === 'ready').length;
-  const attention = monitor.filter(row => monitorTone(row.status) === 'attention').length;
-  const sent = deliveries.filter(row => row.status === 'SENT').length;
-  return `<div class="status-overview" aria-label="ภาพรวมสถานะ"><div><span>รายการติดตาม</span><strong>${monitor.length}</strong></div><div data-tone="ready"><span>ข้อมูลพร้อม</span><strong>${ready}</strong></div><div data-tone="${attention ? 'attention' : 'quiet'}"><span>ต้องตรวจสอบ</span><strong>${attention}</strong></div><div><span>ส่งสำเร็จในประวัติ</span><strong>${sent}<small> / ${deliveries.length}</small></strong></div></div>`;
-}
-function deliveryStatusRow(row) {
-  const kind = row.kind ?? '';
-  const icon = channelInfo[kind]?.icon ?? 'send';
-  return `<article class="delivery-status-row"><span class="delivery-status-icon" aria-hidden="true">${uiIcon(icon)}</span><div class="delivery-status-content"><h3>${esc(row.name)}</h3>${row.status !== 'SENT' && row.detail ? `<p>${esc(row.detail.replace(/\s*·\s*ไม่ใช่การยืนยันว่าอ่านแล้ว/g, ''))}</p>` : ''}</div><span class="monitor-status-label" data-tone="${monitorTone(row.status)}">${esc(deliveryLabels[row.status] ?? row.status)}</span></article>`;
-}
-function monitorStatusCard(row) {
-  const label = { PAUSED: 'พักการติดตาม', QUOTA_BLOCKED: 'หยุดตรวจ · เกินสิทธิ์แพ็กเกจ', DIRECTION_REQUIRED: 'เลือกฝั่ง Long / Short ในเซ็ตอัพ' }[row.status]
-    ?? freshnessLabels[row.status] ?? 'ข้อมูลขาด / เชื่อมต่อไม่ได้';
-  const checked = new Date(row.checked_at);
-  const validTime = row.checked_at != null && Number.isFinite(checked.getTime());
-  const progress = row.progress ?? [];
-  const freshness = row.freshness ?? [];
-  const setupName = state.rules?.find(rule => rule.id === row.rule_id)?.spec?.name;
-  return `<article class="monitor-status-card"><header class="monitor-status-heading"><div><h3>${esc(row.pair)} <span>${esc(row.exchange)}</span></h3>${setupName ? `<p class="monitor-setup-name">${esc(setupName)}</p>` : ''}</div><span class="monitor-status-label" data-tone="${monitorTone(row.status)}">${esc(label)}</span></header>${freshness.length ? `<div class="monitor-frames" aria-label="สถานะแต่ละกรอบเวลา">${freshness.map(f => `<span data-tone="${monitorTone(f.status)}">${esc(f.frame)}<span>${esc(freshnessLabels[f.status] ?? f.status)}</span></span>`).join('')}</div>` : ''}${progress.length ? `<div class="monitor-progress-list">${progress.map(p => `<section class="monitor-direction"><h4 data-side="${esc(p.side)}">${esc(p.side)}</h4><div>${progressUI(p)}${p.explanations?.length ? `<p class="monitor-condition-summary">${esc(p.explanations[0].text)}</p>` : ''}</div></section>`).join('')}</div>` : ''}<footer class="monitor-status-footer">${validTime ? `<time datetime="${checked.toISOString()}">ตรวจล่าสุด ${esc(checked.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</time>` : '<span>ยังไม่ได้ตรวจ</span>'}</footer>${freshness.length || progress.some(p => p.explanations?.length) ? `<details class="monitor-details"><summary>ดูรายละเอียดข้อมูลและเงื่อนไข</summary><div class="monitor-details-content">${freshness.length ? `<section><h4>ความพร้อมของข้อมูล</h4>${freshnessUI(freshness)}</section>` : ''}${progress.filter(p => p.explanations?.length).map(p => `<section><h4>เงื่อนไข ${esc(p.side)}</h4>${explanationsUI(p.explanations)}</section>`).join('')}</div></details>` : ''}</article>`;
-}
 function paintNotifications() {
   const { signals: allSignals, channels, deliveries, monitor } = notificationData;
   const signals = allSignals.filter(canDisplaySignal);
@@ -176,7 +314,7 @@ function paintNotifications() {
     ["rules", "sliders", "เซ็ตอัพที่ตั้งไว้"],
     ["inbox", "inbox", "สัญญาณ"],
     ["channels", "link", "ช่องทาง"],
-    ["activity", "clock", "สถานะ"],
+    ["activity", "clock", "ภาพรวม"],
   ];
   let content;
   if (notificationSection === "rules") {
@@ -199,7 +337,7 @@ function paintNotifications() {
         "",
       )}</div><div id="channel-setup"></div>${channels.items.length ? `<section class="connected-channels"><h2>ช่องทางของคุณ</h2>${channels.items.map((x) => `<div class="connected-channel"><div><strong>${esc(x.name)}</strong><p>${channelInfo[x.kind]?.name ?? esc(x.kind)} · ${x.verified ? "เชื่อมแล้ว" : "รอยืนยันการเชื่อมต่อ"}</p></div><div class="channel-row-actions"><button class="secondary" data-channel-design="${x.id}">ปรับหน้าตา</button>${x.verified?`<button class="secondary" data-channel-test="${x.id}">ส่งทดสอบ</button>`:''}<button class="text-button" data-disconnect="${x.id}">ตัดการเชื่อมต่อ</button></div></div>`).join("")}</section>` : ""}<p class="notification-note">${Object.values(channels.available).some(Boolean) ? "เชื่อมแล้ว เลือกช่องทางในเซ็ตอัพที่ต้องการรับแจ้งเตือน · สัญญาณยังเก็บในเว็บเสมอ" : "ผู้ดูแลยังไม่ได้ตั้งค่าช่องทางภายนอก คุณยังเปิดเซ็ตอัพและรับสัญญาณในเว็บได้"}</p>`;
   } else {
-    content = `${statusOverview(monitor, deliveries)}<div class="status-workspace"><section class="status-market-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("chart")}การติดตามตลาด</h2><span>${monitor.length} รายการ</span></div><div class="monitor-status-list">${monitor.length ? monitor.map(monitorStatusCard).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('chart')+'</span><h3>ยังไม่มีการติดตาม</h3><p>เปิดเซ็ตอัพเพื่อเริ่มตรวจข้อมูลตลาด</p><a class="secondary" href="#watch">ดูเซ็ตอัพที่ตั้งไว้</a></div>'}</div></section><section class="status-delivery-section"><div class="notification-section-heading status-section-heading"><h2>${uiIcon("send")}การส่งข้อความ</h2><span>${deliveries.length} รายการ</span></div><div class="delivery-status-list">${deliveries.length ? deliveries.map(deliveryStatusRow).join("") : '<div class="status-empty"><span aria-hidden="true">'+uiIcon('send')+'</span><h3>ยังไม่มีประวัติส่ง</h3><p>ข้อความที่ส่งไปยังช่องทางของคุณจะแสดงที่นี่</p></div>'}</div></section></div>`;
+    content = notificationActivity(monitor, deliveries);
   }
   if(notificationSection === "inbox" && notificationData.more) content += '<button class="secondary" data-more-signals>โหลดสัญญาณก่อนหน้า</button>';
   if (notificationSection !== 'rules' && notificationData.loaded === false) content = '<p role="status">กำลังอัปเดตข้อมูลส่วนนี้…</p>';
@@ -225,6 +363,20 @@ function paintNotifications() {
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (button.dataset.overviewFilter) {
+    notificationOverviewFilter = button.dataset.overviewFilter;
+    paintNotifications();
+    document.querySelector('.overview-filters [data-overview-filter="' + notificationOverviewFilter + '"]').focus({preventScroll: true});
+    return;
+  }
+  if (button.hasAttribute('data-overview-more')) {
+    const remaining = [...button.parentElement.querySelectorAll('[data-overview-item][hidden]')];
+    remaining.slice(0, 5).forEach(row => { row.hidden = false; });
+    const left = Math.max(0, remaining.length - 5);
+    button.hidden = !left;
+    button.textContent = `ดูเพิ่มอีก ${Math.min(5, left)} รายการ (${left} รายการที่เหลือ)`;
+    return;
+  }
   if(button.hasAttribute("data-more-signals")){
     button.disabled=true;
     try{const page=await api("/signals?view=signals&before="+notificationData.signals.at(-1).id);notificationData.signals.push(...page);notificationData.more=page.length===100;paintNotifications();}

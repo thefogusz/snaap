@@ -222,6 +222,39 @@ try {
   };
   await evaluateTarget(db, target, fixture, 1800000);
   await evaluateTarget(db, target, fixture, 1800000);
+  // Overview endpoints must expose human-readable context without leaking destinations.
+  const monitored = await app.inject({ url: '/api/v1/monitor', headers: auth });
+  assert.equal(monitored.statusCode, 200, monitored.body);
+  const monitoredRule = monitored.json().find((row: any) => row.rule_id === rule.id);
+  assert.ok(monitoredRule.setup_name);
+  assert.equal(monitoredRule.setup_market, 'Spot');
+  assert.equal(monitoredRule.state.lastTime, 1800000);
+  assert.equal(monitoredRule.state.latched, true);
+  assert.equal((await app.inject({ url: '/api/v1/monitor', headers: outsider })).json().length, 0);
+  const destinationId = randomUUID();
+  await db.query('INSERT INTO destinations(id,owner_id,kind,name,config) VALUES($1,$2,$3,$4,$5)',
+    [destinationId, owner, 'DISCORD', 'SignalGus', {}]);
+  await db.query("INSERT INTO deliveries(id,signal_id,destination_id,status) SELECT $1,id,$2,'SENT' FROM signals WHERE rule_id=$3 LIMIT 1",
+    ['0' + randomUUID().slice(1), destinationId, rule.id]);
+  const olderSignalId = randomUUID();
+  await db.query("INSERT INTO signals(id,owner_id,rule_id,revision,exchange,pair,event,dedup,created_at) SELECT $1::uuid,owner_id,rule_id,revision,exchange,'ETH/USDT',event,$1::uuid::text,now()-interval '1 day' FROM signals WHERE rule_id=$2 LIMIT 1",
+    [olderSignalId, rule.id]);
+  await db.query("INSERT INTO deliveries(id,signal_id,destination_id,status) VALUES($1,$2,$3,'SENT')",
+    ['f' + randomUUID().slice(1), olderSignalId, destinationId]);
+  const delivered = await app.inject({ url: '/api/v1/deliveries', headers: auth });
+  assert.equal(delivered.statusCode, 200, delivered.body);
+  const message = delivered.json()[0];
+  assert.equal(message.destination_id, destinationId);
+  assert.equal(message.pair, 'BTC/USDT');
+  assert.equal(message.kind, 'DISCORD');
+  assert.equal(message.event.kind, 'ENTRY');
+  assert.ok(message.setup_name);
+  assert.ok(message.signal_created_at);
+  assert.equal(message.config, undefined);
+  assert.equal((await app.inject({ url: '/api/v1/deliveries', headers: outsider })).json().length, 0);
+  await db.query('DELETE FROM deliveries WHERE destination_id=$1', [destinationId]);
+  await db.query('DELETE FROM signals WHERE id=$1', [olderSignalId]);
+  await db.query('DELETE FROM destinations WHERE id=$1', [destinationId]);
   assert.equal(
     (
       await db.query(
@@ -619,6 +652,8 @@ try {
   );
 } finally {
   await app.close();
+  await db.query('DELETE FROM deliveries WHERE destination_id IN (SELECT id FROM destinations WHERE owner_id=$1)', [owner]);
+  await db.query('DELETE FROM destinations WHERE owner_id=$1', [owner]);
   for (const table of [
     "monitor_checkpoints",
     "monitor_status",
