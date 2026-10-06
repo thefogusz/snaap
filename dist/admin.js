@@ -590,8 +590,8 @@
           </td>
           <td>${planBadge}</td>
           <td>
-            <strong>${u.active_rules_count}</strong>
-            <span style="color:var(--tertiary);"> / ${u.rules_count}</span><div class="user-row-meta"><span>สัญญาณ ${Number(u.signals_count ?? 0)}</span><span>แจ้งเตือน ${Number(u.notifications_sent ?? 0)}</span></div>
+            <div class="user-setup-summary"><span>ทั้งหมด <strong>${u.rules_count}</strong></span><span>เปิดอยู่ <strong>${u.active_rules_count}</strong></span></div>
+            <div class="user-row-meta"><span>สัญญาณ ${Number(u.signals_count ?? 0)}</span><span>แจ้งเตือน ${Number(u.notifications_sent ?? 0)}</span></div>
           </td>
           <td>
             <div class="user-ai-summary">AI <strong>${u.ai_standard_used}</strong> ครั้ง · ${"เพดาน " + (state.usagePolicy?.[state.usagePolicy?.mode === "plans" ? (u.is_pro ? "pro" : "free") : "unified"]?.standard ?? "ไม่จำกัด")}</div>
