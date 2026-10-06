@@ -1386,7 +1386,7 @@ async function refresh({ reuseMe = false } = {}) {
     const name = state.me.email.split("@")[0];
     $(".profile .avatar").textContent = name.slice(0, 1).toUpperCase();
     $(".profile>span:not(.avatar)").innerHTML =
-      esc(name) + "<small>" + esc(state.me.trial ? "ทดลองใช้งาน" : state.me.plan) + "</small>";
+      esc(name) + "<small>" + (state.me.plan === "PRO" ? "Pro" : "Free") + "</small>";
   }
   if(!$('#auth-signout')){
     const signout=document.createElement('button');signout.id='auth-signout';signout.className='auth-signout';signout.innerHTML=uiIcon('exit', 'icon')+'<span>ออกจากระบบ</span>';
@@ -1703,7 +1703,7 @@ billing.className = "view secondary-view";
 billing.hidden = true;
 $("#main").append(billing);
 function renderBilling() {
-  billing.innerHTML = `<div class="page-heading"><h1>บัญชีและการใช้งาน</h1></div><div class="runtime-card"><h2>${state.me?.trial ? "ช่วงทดลองใช้งาน" : esc(state.me?.plan ?? "ยังไม่ได้เข้าสู่ระบบ")}</h2><p>${esc(state.me?.email ?? "")} ${state.me?.local ? "· บัญชีพัฒนาบนเครื่อง" : ""}</p><p>เซ็ตอัพที่เปิดพร้อมกัน ${state.me?.limits.activeRules ?? "ไม่จำกัด"} · AI ปกติ ${state.me?.limits.standard ?? "ไม่จำกัด"} ครั้ง/เดือน · เวิร์กสเปซ ${state.me?.limits.workspaces ?? "ไม่จำกัด"} พื้นที่</p><p>โหมดละเอียดอยู่ระหว่างพัฒนา</p><button class="secondary" data-export>ส่งออกข้อมูล</button></div>`;
+  billing.innerHTML = `<div class="page-heading"><h1>บัญชีและการใช้งาน</h1></div><div class="runtime-card"><h2>${state.me ? (state.me.plan === "PRO" ? "Pro" : "Free") : "ยังไม่ได้เข้าสู่ระบบ"}</h2><p>${esc(state.me?.email ?? "")} ${state.me?.local ? "· บัญชีพัฒนาบนเครื่อง" : ""}</p><p>เซ็ตอัพที่เปิดพร้อมกัน ${state.me?.limits.activeRules ?? "ไม่จำกัด"} · AI ปกติ ${state.me?.limits.standard ?? "ไม่จำกัด"} ครั้ง/เดือน · เวิร์กสเปซ ${state.me?.limits.workspaces ?? "ไม่จำกัด"} พื้นที่</p><p>โหมดละเอียดอยู่ระหว่างพัฒนา</p><button class="secondary" data-export>ส่งออกข้อมูล</button></div>`;
   const first = billing.querySelector(".runtime-card");
   const limitText = first?.querySelectorAll("p")[1];
   if (limitText) {

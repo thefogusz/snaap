@@ -352,14 +352,12 @@ export async function buildApp(
     );
     const isAdmin = isAdminIdentity(user);
     const limits = await userLimits(db, req.userId);
-    const policy = await usagePolicy(db);
     return {
       ...user,
       plan: pro ? "PRO" : "FREE",
       proUntil: pro?.pro_until ?? null,
       isAdmin,
       impersonating,
-      trial: policy.mode === "unified",
       requiresRuleSelection: limits.activeRules !== null && active > limits.activeRules,
       limits: {
         ...limits,
