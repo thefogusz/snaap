@@ -645,6 +645,16 @@
   background: #0008;
   backdrop-filter: blur(5px);
 }
+.conversation-dialog:has(.conversation-results) {
+  overflow: hidden;
+}
+.conversation-dialog:has(.conversation-results)[open] {
+  display: flex;
+  flex-direction: column;
+}
+.conversation-dialog:has(.conversation-results) > :not(.conversation-results) {
+  flex-shrink: 0;
+}
 .conversation-dialog header {
   display: flex;
   align-items: center;
@@ -675,10 +685,23 @@
   display: grid;
   gap: 4px;
   margin-top: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
 }
-.conversation-results > button {
+.conversation-result {
   display: flex;
-  width: 100%;
+  align-items: center;
+  min-width: 0;
+  border-radius: 14px;
+}
+.conversation-results .conversation-open {
+  display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 12px;
   padding: 14px 10px;
@@ -688,14 +711,45 @@
     background 180ms,
     transform 180ms;
 }
-.conversation-results > button:hover {
+.conversation-result:hover, .conversation-result:focus-within {
   background: var(--pale);
-  transform: translateX(3px);
 }
-.conversation-results > button > span {
+.conversation-open > span {
   flex: 1;
   min-width: 0;
 }
+.conversation-delete {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--muted);
+}
+.conversation-delete:hover, .conversation-delete:focus-visible {
+  color: #f18088;
+  background: #e8758014;
+}
+.conversation-delete-dialog {
+  width: min(360px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: 0 20px 60px #0005;
+}
+.conversation-delete-dialog::backdrop { background: #0006; }
+.conversation-delete-dialog h2 { margin: 0; font-size: 18px; }
+.conversation-delete-title { margin: 12px 0 8px; font-weight: 600; overflow-wrap: anywhere; }
+#delete-conversation-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.conversation-delete-dialog .row-actions { margin-top: 20px; justify-content: flex-end; gap: 8px; }
+.conversation-delete-dialog .row-actions button { min-height: 40px; padding: 8px 14px; border-radius: 12px; font-size: 13px; }
+.conversation-delete-confirm { background: #bf3945; color: #fff; }
+.conversation-delete-confirm:hover { background: #a82e3a; }
+.conversation-delete-confirm:disabled { opacity: .55; cursor: wait; }
 .conversation-results strong {
   display: block;
   font-size: 14px;
@@ -732,7 +786,7 @@
 @media (prefers-reduced-motion: reduce) {
   .chat-composer,
   .conversation-picker,
-  .conversation-results > button,
+  .conversation-results .conversation-open,
   .mobile-design-tabs button {
     transition: none;
   }

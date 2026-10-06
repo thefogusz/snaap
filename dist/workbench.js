@@ -272,6 +272,77 @@ function applyConversationRows(rows) {
 }
 let conversationDialog = null;
 let conversationDialogScope = null;
+function confirmConversationDeletion(row, onDeleted) {
+  if (state.busy || state.saving || state.uploading) { toast('รอรายการปัจจุบันเสร็จก่อนลบ'); return; }
+  const scope = conversationScope();
+  const trigger = document.activeElement;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'conversation-delete-dialog';
+  dialog.setAttribute('aria-labelledby', 'delete-conversation-heading');
+  dialog.setAttribute('aria-describedby', 'delete-conversation-note');
+  dialog.innerHTML = '<form><h2 id="delete-conversation-heading">ลบบทสนทนานี้?</h2><p class="conversation-delete-title"></p><p id="delete-conversation-note">เมื่อลบบทสนทนานี้ เทรดเซ็ตอัพที่เชื่อมโยงจะถูกลบและหยุดแจ้งเตือนด้วย การลบนี้ไม่สามารถกู้คืนได้</p><p class="field-note" data-delete-error role="alert" hidden></p><div class="row-actions"><button type="button" class="secondary" data-cancel autofocus>ยกเลิก</button><button type="submit" class="conversation-delete-confirm">ลบบทสนทนา</button></div></form>';
+  dialog.querySelector('.conversation-delete-title').textContent = row.title;
+  const submit = dialog.querySelector('[type="submit"]');
+  const cancel = dialog.querySelector('[data-cancel]');
+  cancel.onclick = () => dialog.close();
+  dialog.onclick = event => {
+    if (event.target !== dialog) return;
+    const bounds = dialog.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+  };
+  const scopeChanged = () => { if (scope !== conversationScope()) dialog.close(); };
+  window.addEventListener('snaap-account-ready', scopeChanged);
+  dialog.onclose = () => {
+    window.removeEventListener('snaap-account-ready', scopeChanged); dialog.remove();
+    if (trigger?.isConnected) trigger.focus();
+    else if (conversationDialog?.open) conversationDialog.querySelector('input').focus();
+  };
+  dialog.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    if (scope !== conversationScope()) { dialog.close(); return; }
+    if (state.busy || state.saving || state.uploading) { toast('รอรายการปัจจุบันเสร็จก่อนลบ'); return; }
+    const errorNote = dialog.querySelector('[data-delete-error]');
+    submit.disabled = true; errorNote.hidden = true;
+    let locked = false;
+    try {
+      // Finish an in-flight draft write before deleting its conversation.
+      if (state.conversation === row.id) { clearTimeout(draftTimer); if (draftFlight) await draftFlight; }
+      if (scope !== conversationScope()) { dialog.close(); return; }
+      state.busy = true; locked = true;
+      const result = await api(`/conversations/${row.id}`, 'DELETE');
+      if (scope !== conversationScope()) { dialog.close(); return; }
+      conversationCache.remove(row.id);
+      for (const related of conversationCache.read().rows) {
+        if (result.ruleIds.includes(related.saved_rule_id))
+          conversationCache.upsert({...related, saved_rule_id: null, setup_saved_at: null, setup_status_known: true});
+      }
+      conversationSelection++;
+      conversationDetailController?.abort();
+      state.rules = state.rules.filter(rule => !result.ruleIds.includes(rule.id));
+      if (state.saved && result.ruleIds.includes(state.saved.id)) state.saved = null;
+      if (state.conversation === row.id) {
+        state.conversation = null; conversations.value = '';
+        state.draftRevision = 0; state.persistedDraft = null; state.saved = null;
+        state.draft = blankSetup(); state.images = []; state.crop = null;
+        state.replay = null; state.undo = []; state.editorNotice = null;
+        $('#chat-input').value = ''; $('#followup-input').value = '';
+        $('#messages').replaceChildren(); showDraftStatus(''); renderImages();
+        window.SnaapStudio?.reset(); window.SnaapChart?.reset();
+        setWorkbenchTab('chat'); renderDesigner(); requestAnimationFrame(resizeChatInputs);
+      }
+      applyConversationRows(conversationCache.read().rows);
+      renderWatch(); persistRecovery(); onDeleted(); dialog.close();
+      toast('ลบบทสนทนาและเทรดเซ็ตอัพที่เชื่อมโยงแล้ว');
+    } catch (error) { errorNote.textContent = error.message; errorNote.hidden = false; }
+    finally {
+      if (locked) state.busy = false;
+      submit.disabled = false;
+      if (scope === conversationScope()) { renderDesigner(); if (state.draft && draftDirty()) queueDraftSave(); }
+    }
+  };
+  document.body.append(dialog); dialog.showModal();
+}
 conversationPicker.onclick = () => {
   if (conversationDialog?.open) { conversationDialog.querySelector('input').focus(); return; }
   const started = performance.now(), scope = conversationScope();
@@ -301,7 +372,7 @@ conversationPicker.onclick = () => {
       ? rows
           .map(
             (row) =>
-              `<button type="button" data-conversation-id="${row.id}">${uiIcon(row.setup_saved_at ? "sliders" : "chat")}<span><strong>${esc(row.title)}</strong><small>${row.created_at ? new Date(row.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) + ' · ' : ''}${esc(state.workspaces.find(w=>w.id===row.workspace_id)?.name??state.workspaces.find(w=>w.id===state.workspaceId)?.name??"พื้นที่หลัก")}${row.id === state.conversation ? " · กำลังเปิด" : ""}</small><span class="conversation-kind${row.setup_saved_at ? ' is-saved' : ''}">${row.setup_saved_at ? 'บันทึกเซ็ตอัพแล้ว' : row.setup_status_known ? 'พูดคุย / วิเคราะห์' : 'บทสนทนา'}</span></span>${uiIcon("arrow")}</button>`,
+              `<div class="conversation-result"><button type="button" class="conversation-open" data-conversation-id="${row.id}">${uiIcon(row.setup_saved_at ? "sliders" : "chat")}<span><strong>${esc(row.title)}</strong><small>${row.created_at ? new Date(row.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) + ' · ' : ''}${esc(state.workspaces.find(w=>w.id===row.workspace_id)?.name??state.workspaces.find(w=>w.id===state.workspaceId)?.name??"พื้นที่หลัก")}${row.id === state.conversation ? " · กำลังเปิด" : ""}</small><span class="conversation-kind${row.setup_saved_at ? ' is-saved' : ''}">${row.setup_saved_at ? 'บันทึกเซ็ตอัพแล้ว' : row.setup_status_known ? 'พูดคุย / วิเคราะห์' : 'บทสนทนา'}</span></span>${uiIcon("arrow")}</button><button type="button" class="conversation-delete" data-delete-conversation="${row.id}" aria-label="ลบบทสนทนา ${esc(row.title)}" title="ลบบทสนทนา">${uiIcon("trash")}</button></div>`,
           )
           .join("")
       : ready ? "<p>ไม่พบบทสนทนา</p>" : '';
@@ -342,6 +413,12 @@ conversationPicker.onclick = () => {
   };
   list.onclick = (event) => {
     if (!current()) { dialog.close(); return; }
+    const remove = event.target.closest('[data-delete-conversation]');
+    if (remove) {
+      const row = state.conversationRows.find(row => row.id === remove.dataset.deleteConversation);
+      if (row) confirmConversationDeletion(row, paint);
+      return;
+    }
     const button = event.target.closest("[data-conversation-id]");
     if (!button) return;
     conversations.value = button.dataset.conversationId;
