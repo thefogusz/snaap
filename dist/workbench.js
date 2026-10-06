@@ -182,15 +182,59 @@ const conversationActions=document.createElement('div');
 conversationActions.className='conversation-actions';
 const conversationTitle = document.createElement('div');
 conversationTitle.className = 'conversation-title';
-conversationTitle.setAttribute('role', 'status');
-conversationTitle.setAttribute('aria-live', 'polite');
-conversationTitle.setAttribute('aria-atomic', 'true');
+const conversationTitleButton = document.createElement('button');
+conversationTitleButton.type = 'button';
+conversationTitleButton.className = 'conversation-title-button';
+conversationTitleButton.setAttribute('aria-label', 'เปลี่ยนชื่อแชท');
+conversationTitleButton.setAttribute('aria-haspopup', 'dialog');
+conversationTitleButton.innerHTML = '<span role="status" aria-live="polite" aria-atomic="true"></span>' + uiIcon('pencil');
+conversationTitle.append(conversationTitleButton);
 function renderConversationTitle() {
   const row = state.conversationRows.find(row => row.id === state.conversation);
-  const title = row?.title?.trim() || 'แชทใหม่';
-  if (conversationTitle.textContent !== title) conversationTitle.textContent = title;
-  conversationTitle.title = title;
+  const title = row?.title?.trim() || '';
+  conversationTitle.hidden = !title || !(row.has_messages || $('#messages .message'));
+  const label = conversationTitleButton.querySelector('span');
+  if (label.textContent !== title) label.textContent = title;
+  conversationTitleButton.title = title;
 }
+conversationTitleButton.onclick = () => {
+  const id = state.conversation, workspace = state.workspaceId;
+  const row = state.conversationRows.find(row => row.id === id);
+  if (!row) return;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'workspace-dialog';
+  dialog.setAttribute('aria-labelledby', 'rename-chat-heading');
+  dialog.innerHTML = '<form><h2 id="rename-chat-heading">เปลี่ยนชื่อแชท</h2><label>ชื่อแชท<input name="title" maxlength="100" required></label><p class="field-note" data-rename-error role="alert" hidden></p><div class="row-actions"><button type="button" class="secondary" data-cancel>ยกเลิก</button><button type="submit" class="primary">บันทึก</button></div></form>';
+  const input = dialog.querySelector('input');
+  input.value = row.title;
+  dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
+  dialog.onclose = () => { dialog.remove(); if (!conversationTitle.hidden) conversationTitleButton.focus(); };
+  dialog.querySelector('form').onsubmit = async event => {
+    event.preventDefault();
+    const title = input.value.trim();
+    input.setCustomValidity(title ? '' : 'กรุณาใส่ชื่อแชท');
+    if (!input.reportValidity()) return;
+    const button = dialog.querySelector('[type="submit"]');
+    if (button.disabled) return;
+    const errorNote = dialog.querySelector('[data-rename-error]');
+    button.disabled = true; errorNote.hidden = true;
+    try {
+      if (state.conversation !== id || state.workspaceId !== workspace) { dialog.close(); return; }
+      const saved = await api(`/conversations/${id}/title`, 'PUT', {title});
+      if (state.workspaceId === workspace) {
+        const current = state.conversationRows.find(row => row.id === id);
+        if (current) current.title = saved.title;
+        const option = [...conversations.options].find(option => option.value === id);
+        if (option) option.textContent = saved.title;
+        renderConversationTitle();
+      }
+      dialog.close();
+    } catch (error) { errorNote.textContent = error.message; errorNote.hidden = false; }
+    finally { button.disabled = false; }
+  };
+  input.oninput = () => input.setCustomValidity('');
+  document.body.append(dialog); dialog.showModal(); input.focus(); input.select();
+};
 renderConversationTitle();
 workbenchToolbar.append(tabs,conversationTitle,conversationActions);
 conversationActions.append(setupPaneNav,conversationPicker);

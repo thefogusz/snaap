@@ -650,7 +650,7 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT c.*,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่','เซ็ตอัพใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY created_at DESC LIMIT 100",
+          "SELECT c.*,EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id=c.id) AS has_messages,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่','เซ็ตอัพใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY created_at DESC LIMIT 100",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,
@@ -668,6 +668,16 @@ export async function buildApp(
     return reply
       .code(201)
       .send({ id, title, workspace_id: req.workspaceId ?? null });
+  });
+  app.put("/api/v1/conversations/:id/title", async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { title } = z.object({ title: z.string().trim().min(1).max(100) }).strict().parse(req.body);
+    const row = (await db.query(
+      "UPDATE conversations SET title=$1 WHERE id=$2 AND owner_id=$3 AND ($4::uuid IS NULL OR workspace_id=$4) RETURNING id,title",
+      [title, id, req.userId, req.workspaceId ?? null],
+    )).rows[0];
+    if (!row) throw new ApiError(404, "NOT_FOUND", "ไม่พบบทสนทนา");
+    return row;
   });
   app.get("/api/v1/conversations/:id/messages", async (req) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
