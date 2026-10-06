@@ -90,7 +90,7 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding-block: 6px;
+  padding-block: 6px 20px;
 }
 .workbench[data-tab="split"]:not([hidden]) {
   flex: 1;
