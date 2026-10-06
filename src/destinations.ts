@@ -361,7 +361,7 @@ export async function registerDestinations(
     async (req) =>
       (
         await db.query(
-          "SELECT d.id,d.status,d.attempts,d.detail,d.signal_id,t.name FROM deliveries d JOIN destinations t ON t.id=d.destination_id JOIN signals s ON s.id=d.signal_id JOIN rules r ON r.id=s.rule_id WHERE t.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY d.id DESC LIMIT 100",
+          "SELECT d.id,d.status,d.attempts,d.detail,d.signal_id,d.destination_id,t.name,t.kind,s.pair,s.exchange,s.event,s.created_at AS signal_created_at,rv.spec->>'name' AS setup_name,rv.spec->>'market' AS setup_market,rv.spec->>'side' AS setup_side FROM deliveries d JOIN destinations t ON t.id=d.destination_id JOIN signals s ON s.id=d.signal_id JOIN rules r ON r.id=s.rule_id LEFT JOIN rule_revisions rv ON rv.rule_id=s.rule_id AND rv.revision=s.revision WHERE t.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY s.created_at DESC,s.id DESC,d.id DESC LIMIT 100",
           [req.userId, req.workspaceId ?? null],
         )
       ).rows,
