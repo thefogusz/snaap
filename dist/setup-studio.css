@@ -23,19 +23,30 @@
   display: none;
 }
 .studio-draft-status {
-  display: inline;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
   font-size: 11px;
   line-height: 14px;
   color: var(--muted);
   white-space: nowrap;
 }
 .studio-draft-status[hidden] { display: none; }
-.workbench-toolbar .conversation-title:has(.studio-draft-status:not([hidden])) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
+.studio-name-field { position: relative; }
+.workbench-toolbar .conversation-title-button {
+  position: relative;
+  padding-inline: 28px;
+}
+.workbench-toolbar .conversation-title-button .ui-icon {
+  position: absolute;
+  right: 8px;
+}
+@media (min-width: 651px) {
+  .home-view .workbench-toolbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .workbench-toolbar .mobile-design-tabs { justify-self: start; }
+  .workbench-toolbar .conversation-actions { justify-self: end; width: max-content; }
 }
 @media (max-width: 1279px) {
   .conversation-actions .studio-workspace-header { display: none; }
