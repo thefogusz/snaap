@@ -251,6 +251,18 @@ function refreshSignalValidity() {
 }
 document.addEventListener('visibilitychange', refreshSignalValidity);
 window.addEventListener('pageshow', refreshSignalValidity);
+function signalPrice(value) {
+  if (!['number', 'string'].includes(typeof value) || String(value).trim() === '')
+    return '<strong>—</strong>';
+  const price = Number(value);
+  if (!Number.isFinite(price) || price < 0) return '<strong>—</strong>';
+  const full = price.toLocaleString('en-US', { useGrouping: false, maximumSignificantDigits: 21 });
+  const match = full.match(/^0\.(0{4,})([1-9]\d*)$/);
+  const label = match
+    ? '0.0' + String(match[1].length).replace(/\d/g, digit => '₀₁₂₃₄₅₆₇₈₉'[Number(digit)]) + match[2]
+    : price.toLocaleString('th-TH', { maximumSignificantDigits: 21 });
+  return `<button type="button" class="signal-price-copy" data-signal-price-copy="${esc(full)}" title="ราคาเต็ม ${esc(full)} · คลิกเพื่อคัดลอก" aria-label="คัดลอกราคาเต็ม ${esc(full)}"><strong>${esc(label)}</strong></button>`;
+}
 function signalCard(row) {
   if (!canDisplaySignal(row)) return '';
   const appearance=signalAppearance(row),directionLabel=signalDirection(row.event,row.setup_market,row.setup_side);
@@ -262,7 +274,7 @@ function signalCard(row) {
   const metaTitle=expired ? `${setupName} · ${meta}` : meta;
   const stamp=new Date(row.event.time);
   const formattedTime=stamp.toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  return `<article class="signal-item signal-${appearance.direction}" data-signal-kind="${esc(row.event.kind)}"><span class="signal-symbol signal-tone-${appearance.tone}" aria-hidden="true">${uiIcon(appearance.icon)}</span><div class="signal-details"><div class="signal-heading"><h2>${esc(row.pair)} <span>${esc(row.exchange)}</span></h2><span class="signal-side signal-tone-${appearance.direction}">${esc(label)}</span>${signalValidityTag(row)}</div><p class="signal-meta"><span>${esc(kindLabel)}</span><span class="signal-meta-dot" aria-hidden="true">·</span><span class="signal-setup-name" title="${esc(metaTitle)}">${esc(meta)}</span></p></div><div class="signal-price"><strong>${Number(row.event.referencePrice).toLocaleString('th-TH')}</strong><small>ราคาอ้างอิง</small></div><time datetime="${stamp.toISOString()}" title="${esc(stamp.toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}">${esc(formattedTime)}</time>${row.event.recovered?'<small class="signal-recovery">สัญญาณย้อนหลังจากการกู้คืนข้อมูล · ไม่ส่งแจ้งเตือน</small>':''}</article>`;
+  return `<article class="signal-item signal-${appearance.direction}" data-signal-kind="${esc(row.event.kind)}"><span class="signal-symbol signal-tone-${appearance.tone}" aria-hidden="true">${uiIcon(appearance.icon)}</span><div class="signal-details"><div class="signal-heading"><h2>${esc(row.pair)} <span>${esc(row.exchange)}</span></h2><span class="signal-side signal-tone-${appearance.direction}">${esc(label)}</span>${signalValidityTag(row)}</div><p class="signal-meta"><span>${esc(kindLabel)}</span><span class="signal-meta-dot" aria-hidden="true">·</span><span class="signal-setup-name" title="${esc(metaTitle)}">${esc(meta)}</span></p></div><div class="signal-price">${signalPrice(row.event.referencePrice)}<small>ราคาอ้างอิง</small></div><time datetime="${stamp.toISOString()}" title="${esc(stamp.toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}">${esc(formattedTime)}</time>${row.event.recovered?'<small class="signal-recovery">สัญญาณย้อนหลังจากการกู้คืนข้อมูล · ไม่ส่งแจ้งเตือน</small>':''}</article>`;
 }
 async function renderNotifications(force = true) {
   const workspace = state.workspaceId;
@@ -372,6 +384,15 @@ function paintNotifications() {
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (button.hasAttribute('data-signal-price-copy')) {
+    try {
+      await navigator.clipboard.writeText(button.dataset.signalPriceCopy);
+      toast('คัดลอกราคาเต็มแล้ว');
+    } catch {
+      toast('คัดลอกไม่สำเร็จ · ราคาเต็ม ' + button.dataset.signalPriceCopy);
+    }
+    return;
+  }
   if (button.dataset.overviewFilter) {
     notificationOverviewFilter = button.dataset.overviewFilter;
     paintNotifications();

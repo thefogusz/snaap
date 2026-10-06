@@ -212,6 +212,8 @@
 #view-notifications [data-signal-kind="EXPIRED"] .signal-setup-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #view-notifications .signal-price{text-align:right;font-variant-numeric:tabular-nums;min-width:90px}
 #view-notifications .signal-price strong{font-size:14px;line-height:1.5;font-weight:550}
+#view-notifications .signal-price-copy{padding:0;background:none;border:0;color:inherit;font:inherit;cursor:copy}
+#view-notifications .signal-price-copy:focus-visible{outline:2px solid var(--muted);outline-offset:4px;border-radius:2px}
 #view-notifications .signal-price small{display:block;font-size:10px;line-height:1.5;color:var(--muted);margin-top:2px}
 #view-notifications .signal-item time{font-size:11px;line-height:1.6;color:var(--muted);white-space:nowrap;margin:0 0 0 8px;font-variant-numeric:tabular-nums}
 @media(max-width:1000px){.notification-rules .watch-row{grid-template-columns:minmax(0,1fr);gap:6px}.notification-rules .watch-row-footer{grid-column:1;grid-row:auto;justify-content:flex-start}.notification-rules .watch-row-footer .status{margin-right:auto}#view-notifications .signal-item{grid-template-columns:28px minmax(0,1fr) auto;gap:10px 12px}#view-notifications .signal-item time{grid-column:2/-1;margin:0;font-size:11px}}
