@@ -521,7 +521,7 @@ accountButton.before(accountMenu);
 const accountContact = document.createElement("a");
 accountContact.className = "account-contact";
 accountContact.href = "mailto:contract@snaap.me";
-accountContact.innerHTML = '<span>ติดต่อเรา</span><small>contract@snaap.me</small>';
+accountContact.textContent = "ติดต่อเรา · contract@snaap.me";
 accountContact.setAttribute("aria-label", "ติดต่อเรา: contract@snaap.me");
 accountButton.before(accountContact);
 function closeAccountMenu(restoreFocus = false) {
