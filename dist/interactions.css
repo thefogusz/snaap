@@ -731,6 +731,8 @@ summary:focus-visible {
   font-size: 11px;
   line-height: 1.5;
   white-space: nowrap;
+  -webkit-user-select: text;
+  user-select: text;
 }
 .account-contact:hover { color: var(--ink); }
 @keyframes account-menu-in {
