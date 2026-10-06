@@ -10,7 +10,7 @@ function fixture() {
   const painted: unknown[] = [], errors: string[] = [];
   const view = {querySelector: () => null, insertAdjacentHTML: (_: string, html: string) => errors.push(html)};
   const state = {workspaceId: 'a', destinations: [{id: 'channel-a'}], destinationAvailability: {TELEGRAM: true}};
-  const context = vm.createContext({state, Date, $: () => view, esc: (s: string) => s, canDisplaySignal: () => true,
+  const context = vm.createContext({state, Date, window: {}, $: () => view, esc: (s: string) => s, canDisplaySignal: () => true,
     api: () => new Promise((resolve, reject) => pending.push({resolve, reject})),
     paintNotifications: () => painted.push(vm.runInContext('notificationData', context)),
   });
@@ -30,6 +30,7 @@ test('setup page paints immediately and coalesces background reads without rebui
   assert.equal(f.painted.length, 1);
   await f.render(false);
   assert.equal(f.pending.length, 4);
+  assert.deepEqual(f.errors, []);
 });
 test('failed auxiliary reads preserve the setup page and offer retry', async () => {
   const f = fixture();

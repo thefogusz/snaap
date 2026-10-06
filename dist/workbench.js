@@ -605,7 +605,10 @@ function navigate(view, load = true) {
   if (!load || !state.workspaceId) return;
   if (view === "watch") renderWatch();
   if (view === "history" && historyWorkspace !== state.workspaceId && historyLoadingWorkspace !== state.workspaceId) renderHistory();
-  if (view === "notifications") renderNotifications(false);
+  if (view === "notifications") {
+    void window.SnaapSignalUnread?.enter();
+    renderNotifications(false);
+  }
   if (view === "billing") renderBilling();
 }
 function showDesigner() {
@@ -1181,7 +1184,7 @@ function renderWatch() {
       state.filter === "all" ||
       (state.filter === "active" ? r.active : !r.active),
   );
-  $("#nav-count").textContent = state.rules.length;
+  window.SnaapSignalUnread?.paint();
   $$("[data-filter]").forEach((el) => {
     const active = el.dataset.filter === state.filter;
     el.classList.toggle("active", active);

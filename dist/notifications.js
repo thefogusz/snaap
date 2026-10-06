@@ -297,10 +297,10 @@ async function loadNotifications(workspace) {
     if (notificationSection !== 'rules') paintNotifications();
     else {
       const tab = view.querySelector('[data-notification-tab="inbox"]');
-      const count = signals.filter(canDisplaySignal).length;
       tab?.querySelector('.notification-count')?.remove();
-      if (count) tab?.insertAdjacentHTML('beforeend', `<span class="notification-count">${count}</span>`);
+      window.SnaapSignalUnread?.paint();
     }
+    window.SnaapSignalUnread?.markVisible();
   } catch (error) {
     if (request !== notificationRequest || workspace !== state.workspaceId) return;
     view.querySelector('.notification-error')?.remove();
@@ -344,8 +344,10 @@ function paintNotifications() {
   if (notificationSection === "channels") content = `<div data-browser-alert-slot>${window.SnaapBrowserAlerts?.settingsMarkup() ?? ''}</div>` + content;
   parkNotificationRules();
   $("#view-notifications").innerHTML =
-    `<div class="page-heading notification-heading"><div><h1>การแจ้งเตือน</h1><p>ดูเซ็ตอัพ สัญญาณ และช่องทางแจ้งเตือน</p></div><button class="text-button with-icon" data-notification-refresh>${uiIcon("clock")}รีเฟรช</button></div><nav class="notification-tabs" aria-label="มุมมองการแจ้งเตือน">${tabs.map(([id, icon, label]) => `<button type="button" data-notification-tab="${id}" aria-pressed="${notificationSection === id}">${uiIcon(icon)}<span>${label}</span>${id === "inbox" && signals.length ? `<span class="notification-count">${signals.length}</span>` : ""}</button>`).join("")}</nav><div class="notification-content">${content}</div>`;
+    `<div class="page-heading notification-heading"><div><h1>การแจ้งเตือน</h1><p>ดูเซ็ตอัพ สัญญาณ และช่องทางแจ้งเตือน</p></div><button class="text-button with-icon" data-notification-refresh>${uiIcon("clock")}รีเฟรช</button></div><nav class="notification-tabs" aria-label="มุมมองการแจ้งเตือน">${tabs.map(([id, icon, label]) => `<button type="button" data-notification-tab="${id}" aria-pressed="${notificationSection === id}">${uiIcon(icon)}<span>${label}</span></button>`).join("")}</nav><div class="notification-content">${content}</div>`;
   refreshSignalValidity();
+  window.SnaapSignalUnread?.paint();
+  window.SnaapSignalUnread?.markVisible();
   if (notificationSection === "rules") {
     $("#notification-rules-slot").append(notificationRules);
     notificationRules.hidden = false;

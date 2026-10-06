@@ -27,6 +27,8 @@ export async function migrate(db: pg.Pool) {
     CREATE TABLE IF NOT EXISTS channel_cursors(key text PRIMARY KEY,offset_id bigint NOT NULL);
     CREATE TABLE IF NOT EXISTS signals (id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users, rule_id uuid NOT NULL REFERENCES rules, revision integer NOT NULL, exchange text NOT NULL, pair text NOT NULL, event jsonb NOT NULL, dedup text UNIQUE NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
     ALTER TABLE signals ADD COLUMN IF NOT EXISTS chart_snapshot jsonb;
+    ALTER TABLE signals ADD COLUMN IF NOT EXISTS read_at timestamptz;
+    CREATE INDEX IF NOT EXISTS signals_unread_owner ON signals(owner_id,created_at DESC,id DESC) WHERE read_at IS NULL;
     CREATE TABLE IF NOT EXISTS deliveries (id uuid PRIMARY KEY, signal_id uuid NOT NULL REFERENCES signals, destination_id uuid NOT NULL REFERENCES destinations, status text NOT NULL, attempts integer NOT NULL DEFAULT 0, detail text, UNIQUE(signal_id,destination_id));
     CREATE TABLE IF NOT EXISTS billing_events (id text PRIMARY KEY, processed_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE IF NOT EXISTS billing_grants (payment_id text PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users, amount integer NOT NULL, kind text NOT NULL, refunded boolean NOT NULL DEFAULT false);

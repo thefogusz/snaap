@@ -31,6 +31,11 @@
 [data-theme="dark"] .avatar,
 [data-theme="dark"] .avatar.small,
 [data-theme="dark"] .nav-count { background: #303036; color: #dedee4; }
+.nav-count,
+[data-theme="dark"] .nav-count,
+.notification-count,
+[data-theme="dark"] .notification-count { background: var(--brand-lime); color: #101010; font-variant-numeric: tabular-nums; }
+.nav-count[hidden] { display: none; }
 [data-theme="dark"] .nav-item { color: #aaaab4; }
 [data-theme="dark"] .nav-item:hover,
 [data-theme="dark"] .icon-button:hover { background: #26262b; }

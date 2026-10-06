@@ -102,12 +102,15 @@
           const last = fresh.at(-1);
           const kind = { ENTRY: "สัญญาณเข้า", EXIT: "สัญญาณออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลารอ" }[last.event.kind] || "สัญญาณใหม่";
           const text = fresh.length > 1 ? `มี ${fresh.length} สัญญาณใหม่ · ${last.pair}` : `${kind} · ${last.pair} · ${last.setup_name || "เซ็ตอัพ"}`;
-          toast(text);
-          if (preferences.sound) chime();
-          if (preferences.desktop && supported() && Notification.permission === "granted") {
+          // Alerts watch every workspace; suppress only signals in the inbox being viewed.
+          const viewingInbox = window.SnaapSignalUnread?.isViewing() &&
+            fresh.every(row => state.rules.some(rule => rule.id === row.rule_id));
+          if (!viewingInbox) toast(text);
+          if (!viewingInbox && preferences.sound) chime();
+          if (!viewingInbox && preferences.desktop && supported() && Notification.permission === "granted") {
             try {
               const notice = new Notification("Snaap · สัญญาณใหม่", { body: text, tag: "snaap-signals", silent: true });
-              notice.onclick = () => { window.focus(); location.hash = "notifications"; notice.close(); };
+              notice.onclick = () => { window.focus(); notificationSection = 'inbox'; location.hash = "notifications"; navigate('notifications'); notice.close(); };
               setTimeout(() => notice.close(), 8000);
             } catch { /* Some mobile browsers require a service worker. Inbox still works. */ }
           }
@@ -116,7 +119,7 @@
       }
       failed = false;
     } catch { failed = true; }
-    finally { busy = false; repaint(); }
+    finally { busy = false; repaint(); void window.SnaapSignalUnread?.refresh(); }
   }
   document.addEventListener("click", async event => {
     const button = event.target.closest("[data-browser-alert]");

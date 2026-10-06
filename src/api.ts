@@ -7,7 +7,7 @@ import path from "node:path";
 import { z } from "zod";
 import type pg from "pg";
 import { transaction } from "./data/db.js";
-import { strategySchema } from "./domain/engine.js";
+import { strategySchema, frames } from "./domain/engine.js";
 import { signalValidUntil } from "./signal-validity.js";
 import { registerGoogle } from "./auth.js";
 import { registerFiles, cleanupChatImages } from "./files.js";
@@ -689,6 +689,35 @@ export async function buildApp(
           available: valid.has(s.id),
         })),
       }));
+  });
+  // Match inbox visibility, including the recorded revision's validity deadline.
+  const inboxScope = `s.owner_id=$1 AND ($2::uuid IS NULL OR s.rule_id IN
+    (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$2))
+    AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED'`;
+  const deadlineSql = `CASE WHEN jsonb_typeof(s.event->'time')='number'
+    THEN (s.event->>'time')::numeric + ($3::jsonb->>(rv.spec->>'timeframe'))::numeric END`;
+  app.get('/api/v1/signals/unread', async req => {
+    const result = await db.query(`WITH unread AS (
+      SELECT s.id,s.created_at FROM signals s LEFT JOIN rule_revisions rv
+      ON rv.rule_id=s.rule_id AND rv.revision=s.revision
+      WHERE ${inboxScope} AND s.read_at IS NULL AND
+      (s.event->>'kind' NOT IN ('ENTRY','EXIT') OR
+        (${deadlineSql}>0 AND ${deadlineSql}<=9007199254740991 AND
+         ${deadlineSql}=trunc(${deadlineSql})))
+    ) SELECT count(*)::int AS count,
+      (SELECT id FROM unread ORDER BY created_at DESC,id DESC LIMIT 1) AS "latestId" FROM unread`,
+      [req.userId, req.workspaceId ?? null, JSON.stringify(frames)]);
+    return result.rows[0];
+  });
+  app.post('/api/v1/signals/read', async req => {
+    const {through} = z.object({through: z.string().uuid()}).strict().parse(req.body);
+    // A snapshot cursor protects signals that arrive while the read request is in flight.
+    await db.query(`UPDATE signals s SET read_at=now() WHERE ${inboxScope}
+      AND s.read_at IS NULL AND (s.created_at,s.id)<=(SELECT created_at,id
+        FROM signals WHERE id=$3 AND owner_id=$1 AND
+        ($2::uuid IS NULL OR rule_id IN (SELECT id FROM rules WHERE owner_id=$1 AND workspace_id=$2)))`,
+      [req.userId, req.workspaceId ?? null, through]);
+    return {ok: true};
   });
   app.get("/api/v1/signals", async (req) => {
     const { before, after, view } = z
