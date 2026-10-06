@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source=await readFile(new URL('../dist/workbench.js',import.meta.url),'utf8');
+const loadingUI=await readFile(new URL('../dist/loading-ui.js',import.meta.url),'utf8');
 const start=source.indexOf('let historyRenderVersion=0;');
 const end=source.indexOf('document.addEventListener("submit",',start);
 assert.ok(start >= 0 && end > start);
@@ -23,7 +24,7 @@ function fixture(api: (url:string,method?:string,body?:unknown,options?:{signal:
     renderConnections:async()=>{rendered.push('connections');},
     renderTradingLab:async()=>{rendered.push('images');},
   });
-  vm.runInContext(source.slice(start,end)+';globalThis.render=renderHistory;',context);
+  vm.runInContext(loadingUI+'\n'+source.slice(start,end)+';globalThis.render=renderHistory;',context);
   return {view,created,render:context.render as ()=>Promise<void>,rendered};
 }
 
@@ -32,6 +33,7 @@ test('history shows a stable loading heading and starts independent reads togeth
   const page=fixture(async url=>{calls.push(url);return new Promise(()=>{});});
   void page.render();
   assert.match(page.view.innerHTML,/ข้อมูลของฉัน/);
+  assert.match(page.view.innerHTML,/skeleton-history/);
   assert.deepEqual(calls.sort(),['/connections','/images','/imports']);
 });
 

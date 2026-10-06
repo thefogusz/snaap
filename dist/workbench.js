@@ -164,6 +164,8 @@ async function setMyData(enabled) {
   if (state.busy) return;
   const button=chatTools.querySelector('[data-context]');
   button.disabled=true;
+  const label=button.querySelector('span'), previousLabel=label?.textContent;
+  if(label)label.textContent=enabled?'กำลังเตรียมข้อมูล…':'ใช้ข้อมูลของฉัน';
   try {
     if(enabled)await Promise.all([refreshContext(), renderLabImageChoices(true)]);
     state.useMyData=enabled;
@@ -171,7 +173,7 @@ async function setMyData(enabled) {
     sources.hidden=!enabled;
     if(!enabled)sources.open=false;
     persistRecovery();
-  }finally{button.disabled=false;}
+  }finally{button.disabled=false;if(label)label.textContent=previousLabel;}
 }
 const conversations = document.createElement("select");
 conversations.className = "conversation-select";
@@ -309,6 +311,7 @@ conversationPicker.onclick = () => {
     retry.hidden = true;
     if (!force && conversationCache.read().fresh) return;
     note(ready ? 'กำลังอัปเดตรายการ…' : 'กำลังโหลดบทสนทนา…');
+    if (!ready) list.innerHTML = skeletonUI('rows', 'กำลังโหลดบทสนทนา…');
     list.setAttribute('aria-busy', 'true');
     try {
       const rows = await conversationCache.list({force});
@@ -323,6 +326,7 @@ conversationPicker.onclick = () => {
       recordConversationTiming('up-to-date', started);
     } catch (error) {
       if (!current()) return;
+      if (!ready) list.innerHTML = '';
       note(ready ? 'อัปเดตรายการไม่สำเร็จ ยังใช้รายการเดิมได้' : 'โหลดบทสนทนาไม่สำเร็จ');
       retry.hidden = false;
     } finally { if (dialog.isConnected) list.setAttribute('aria-busy', 'false'); }
@@ -1735,7 +1739,7 @@ async function renderHistory() {
   historyLoadingWorkspace = workspace;
   const visibleView = $("#view-history");
   const view = document.createElement('section');
-  if (historyWorkspace !== workspace) visibleView.innerHTML='<div class="page-heading"><h1>ข้อมูลของฉัน</h1></div><p role="status">กำลังโหลดข้อมูลของฉัน…</p>';
+  if (historyWorkspace !== workspace) visibleView.innerHTML='<div class="page-heading"><div><h1>ข้อมูลของฉัน</h1><p>ภาพอ้างอิงและประวัติเทรดที่คุณเลือกให้ Snaap ใช้</p></div></div>'+skeletonUI('history', 'กำลังโหลดข้อมูลของฉัน…');
   visibleView.setAttribute('aria-busy', 'true');
   try {
     const loaded = await Promise.allSettled([
@@ -1959,7 +1963,11 @@ document.addEventListener("change", async (e) => {
       if (!file) return;
       const form = new FormData();
       form.append("file", file);
-      const p = await api("/imports/preview", "POST", form);
+      const previewHost = $('#import-preview');
+      previewHost.innerHTML = skeletonUI('rows', 'กำลังตรวจไฟล์ประวัติ…');
+      let p;
+      try { p = await api("/imports/preview", "POST", form); }
+      catch (error) { previewHost.innerHTML = '<p role="alert">'+esc(error.message)+'</p>';throw error; }
       state.importPreview = p;
       $("#import-preview").innerHTML =
         `<p>${p.rows.length} แถวพร้อมนำเข้า / ${p.total} แถว · ขาดค่าธรรมเนียม ${p.feeMissing} แถว</p>${p.errors.map((x) => `<p>แถว ${x.row}: ตรวจ ${esc(x.fields.join(", "))}</p>`).join("")}<div class="data-table"><table><thead><tr><th>เวลา</th><th>ตลาด</th><th>คู่</th><th>ซื้อ/ขาย</th><th>ราคา</th><th>จำนวน</th><th>ค่าธรรมเนียม</th></tr></thead><tbody>${p.rows
@@ -2043,10 +2051,8 @@ conversations.addEventListener("change", async () => {
     if(selection!==conversationSelection||state.workspaceId!==workspace)return;
     const controller = new AbortController();
     conversationDetailController = controller;
-    loading = document.createElement('p');
-    loading.className = 'field-note';
-    loading.setAttribute('role', 'status');
-    loading.textContent = 'กำลังเปิดบทสนทนา…';
+    loading = document.createElement('div');
+    loading.innerHTML = skeletonUI('chat', 'กำลังเปิดบทสนทนา…');
     $('#messages').prepend(loading);
     showDraftStatus('กำลังเปิดบทสนทนา…');
     const stored = await api(`/conversations/${selected}`, 'GET', undefined, {signal: controller.signal});

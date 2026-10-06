@@ -95,7 +95,8 @@ test('removing an open select schedules menu cleanup without a global scan', () 
 
 test('enabling My Data loads context and images concurrently and updates the switch only on success', async () => {
   const calls: string[] = [], resolvers: Array<() => void> = [];
-  const button = {disabled: false, setAttribute: () => {calls.push('checked');}};
+  const label={textContent:'ใช้ข้อมูลของฉัน'};
+  const button = {disabled: false, querySelector:()=>label, setAttribute: () => {calls.push('checked');}};
   const state = {busy: false, useMyData: false};
   const context = vm.createContext({
     state, chatTools: {querySelector: () => button}, sources: {hidden: true}, persistRecovery: () => {},
@@ -109,9 +110,11 @@ test('enabling My Data loads context and images concurrently and updates the swi
   assert.deepEqual(calls, ['context', 'images']);
   assert.equal(state.useMyData, false);
   assert.equal(button.disabled, true);
+  assert.equal(label.textContent, 'กำลังเตรียมข้อมูล…');
   resolvers.forEach(resolve => resolve());
   await pending;
   assert.equal(state.useMyData, true);
   assert.equal(button.disabled, false);
+  assert.equal(label.textContent, 'ใช้ข้อมูลของฉัน');
   assert.deepEqual(calls, ['context', 'images', 'checked']);
 });
