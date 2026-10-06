@@ -79,6 +79,14 @@
         >
           <svg class="hero-chart" viewBox="0 0 1000 330" aria-hidden="true">
             <defs>
+              <linearGradient id="hero-candle-light">
+                <stop stop-color="#f4ffe4" stop-opacity="0" />
+                <stop offset=".5" stop-color="#f4ffe4" stop-opacity=".06" />
+                <stop offset="1" stop-color="#f4ffe4" stop-opacity="0" />
+              </linearGradient>
+              <mask id="hero-candle-light-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="330" style="mask-type: alpha">
+                <use href="#hero-candles" />
+              </mask>
               <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop stop-color="#d0f64c" stop-opacity=".12" />
                 <stop offset="1" stop-color="#d0f64c" stop-opacity="0" />
@@ -123,8 +131,8 @@
               class="hero-average"
               d="M100 286C250 290 330 208 480 219S760 193 940 152"
             />
-            <g mask="url(#hero-area-mask)">
-              <path class="hero-sweep-light" d="M100 286C250 290 330 208 480 219S760 193 940 152" pathLength="100" />
+            <g mask="url(#hero-candle-light-mask)">
+              <rect class="hero-sweep-light" width="90" height="330" fill="url(#hero-candle-light)" />
             </g>
             <g id="hero-agent" transform="translate(352 181)">
               <path class="agent-tether" d="M0 -8V-27" />

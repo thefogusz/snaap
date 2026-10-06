@@ -177,21 +177,16 @@ h1 {
 }
 .hero-sweep-light {
   pointer-events: none;
-  fill: none;
-  stroke: #eff5db;
-  stroke-width: 0.85;
-  stroke-linecap: round;
-  stroke-dasharray: 3 97;
   opacity: 0;
   animation: chart-light-sweep 13s ease-in-out infinite;
   animation-play-state: paused;
 }
 .hero-visual.sweep-active .hero-sweep-light { animation-play-state: running; }
 @keyframes chart-light-sweep {
-  0%, 12% { stroke-dashoffset: 3; opacity: 0; }
-  22% { opacity: 0.06; }
-  72% { stroke-dashoffset: -97; opacity: 0.06; }
-  80%, 100% { stroke-dashoffset: -97; opacity: 0; }
+  0%, 12% { transform: translateX(10px); opacity: 0; }
+  22% { opacity: 1; }
+  72% { transform: translateX(940px); opacity: 1; }
+  80%, 100% { transform: translateX(940px); opacity: 0; }
 }
 .product-details { width: min(600px, 100%); margin: 44px auto 0; text-align: left; }
 .product-details summary { display: flex; justify-content: center; align-items: center; gap: 12px; list-style: none; cursor: pointer; color: var(--muted); font-size: 12px; }
