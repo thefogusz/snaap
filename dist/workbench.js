@@ -330,6 +330,12 @@ conversationPicker.onclick = () => {
   retry.onclick = () => void update(true);
   dialog.querySelector("input").oninput = paint;
   dialog.querySelector("header button").onclick = () => dialog.close();
+  dialog.onclick = event => {
+    if (event.target !== dialog) return;
+    const bounds = dialog.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right ||
+        event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+  };
   list.onclick = (event) => {
     if (!current()) { dialog.close(); return; }
     const button = event.target.closest("[data-conversation-id]");
