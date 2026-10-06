@@ -15,7 +15,7 @@ function fixture(fail = false, pending?: Promise<void>) {
     renderImages() { visible = state.images.filter((image: any) => !image.sent).length; }, persistRecovery() {}, appendChatImages: (images: any[]) => painted.push(images),
     refresh: async () => {}, api: async (_: string, __: string, body: any) => { submitted.push(body); if (pending) await pending; if (fail) throw new Error('provider failed'); return { text: 'done' }; },
   });
-  vm.runInContext(source.slice(source.indexOf('async function chat(text)'), source.indexOf('function renderImages()')) + ';globalThis.runChat=chat;', context);
+  vm.runInContext(source.slice(0, source.indexOf('// Register before dynamic imports')) + '\n' + source.slice(source.indexOf('async function chat(text)'), source.indexOf('function renderImages()')) + ';globalThis.runChat=chat;', context);
   return { state, submitted, painted, elements, get visible() { return visible; }, chat: context.runChat as (text: string) => Promise<void> };
 }
 
