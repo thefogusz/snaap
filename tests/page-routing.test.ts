@@ -6,6 +6,22 @@ import type pg from "pg";
 import { buildApp } from "../src/api.js";
 
 const source = await readFile(new URL("../dist/router.js", import.meta.url), "utf8");
+test("public homepage preserves legacy app and setup import bookmarks", async () => {
+  const landingSource = await readFile(new URL("../dist/landing.js", import.meta.url), "utf8");
+  for (const [address, expected] of [
+    ["https://snaap.me/?import=code#notifications", "/notifications?import=code"],
+    ["https://snaap.me/?import=code", "/home?import=code"],
+    ["https://snaap.me/#watch", "/watch"],
+  ]) {
+    const url = new URL(address);
+    let destination = "";
+    vm.runInNewContext(landingSource, {
+      URLSearchParams,
+      location: { pathname: url.pathname, search: url.search, hash: url.hash, replace: (value: string) => { destination = value; } },
+    });
+    assert.equal(destination, expected);
+  }
+});
 function fixture(url: string) {
   const listeners = new Map<string, Function>();
   const entries = [new URL(url)];
@@ -73,6 +89,12 @@ test("direct app page requests serve the shell; unknown APIs and files remain 40
   const db = { query: async () => ({ rows: [], rowCount: 0 }) } as unknown as pg.Pool;
   const { app } = await buildApp(db);
   try {
+    const landing = await app.inject({ url: "/", headers: { host: "127.0.0.1:4173" } });
+    assert.equal(landing.statusCode, 200);
+    assert.match(landing.body, /landing\.js/);
+    assert.equal((landing.body.match(/href="\/home"/g) ?? []).length, 2);
+    const loggedOut = await app.inject({ url: "/api/v1/me", headers: { host: "127.0.0.1:4173" } });
+    assert.equal(loggedOut.statusCode, 401);
     for (const view of ["home", "notifications", "history", "watch", "billing"]) {
       const response = await app.inject({ url: `/${view}`, headers: { host: "127.0.0.1:4173" } });
       assert.equal(response.statusCode, 200, view);

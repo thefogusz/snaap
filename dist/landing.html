@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#0b0d0b" />
+    <title>Snaap — AI สร้างเทรดเซ็ตอัพ เฝ้ากราฟ และแจ้งเตือนสัญญาณ</title>
+    <meta
+      name="description"
+      content="เปลี่ยนไอเดียการเทรดเป็นเซ็ตอัพด้วย AI ให้ Snaap เฝ้ากราฟและแจ้งเตือนเมื่อเข้าเงื่อนไขของคุณ"
+    />
+    <link rel="icon" href="/assets/snaap-favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/landing.css" />
+    <script src="/landing.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">ข้ามไปเนื้อหา</a>
+    <header class="navigation">
+      <a class="wordmark" href="#top" aria-label="Snaap หน้าแรก"
+        ><img src="/assets/snaap-card-wordmark.png" alt="Snaap" width="260" height="84" /><small>BETA</small></a
+      >
+      <a class="nav-cta" href="/home">เปิด Snaap <span>↗</span></a>
+    </header>
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">SNAAP · YOUR AI TRADING SETUP AGENT</p>
+          <h1 id="hero-title">Your idea.<br /><em>A trading setup.</em></h1>
+          <p class="hero-description">
+            คุยกับ AI เพื่อสร้างเทรดเซ็ตอัพ<br />ให้ Snaap เฝ้ากราฟ
+            แล้วแจ้งเตือนเมื่อเข้าเงื่อนไข
+          </p>
+        </div>
+        <button
+          class="hero-visual"
+          type="button"
+          aria-pressed="false"
+          aria-label="ให้ Snaap เฝ้ากราฟและจับสัญญาณจำลอง"
+        >
+          <svg class="hero-chart" viewBox="0 0 1000 330" aria-hidden="true">
+            <defs>
+              <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop stop-color="#d0f64c" stop-opacity=".12" />
+                <stop offset="1" stop-color="#d0f64c" stop-opacity="0" />
+              </linearGradient>
+              <linearGradient
+                id="hero-edge-fade"
+                gradientUnits="userSpaceOnUse"
+                x1="100"
+                y1="0"
+                x2="940"
+                y2="0"
+              >
+                <stop stop-color="white" stop-opacity="0" />
+                <stop offset=".12" stop-color="white" />
+                <stop offset=".72" stop-color="white" />
+                <stop offset=".88" stop-color="white" stop-opacity=".4" />
+                <stop offset="1" stop-color="white" stop-opacity="0" />
+              </linearGradient>
+              <mask
+                id="hero-area-mask"
+                maskUnits="userSpaceOnUse"
+                x="0"
+                y="0"
+                width="1000"
+                height="400"
+              >
+                <rect width="1000" height="400" fill="url(#hero-edge-fade)" />
+              </mask>
+            </defs>
+            <path
+              class="hero-grid"
+              d="M40 100H960M40 200H960M40 300H960M230 50V320M410 50V320M590 50V320M770 50V320"
+            />
+            <path
+              class="hero-area"
+              fill="url(#hero-fill)"
+              mask="url(#hero-area-mask)"
+              d="M100 250L142 226L184 235L226 190L268 202L310 167L352 181L394 144L436 160L478 151L520 192L562 205L604 170L646 183L688 135L730 145L772 103L814 117L856 73L898 90L940 51V330H100Z"
+            />
+            <g id="hero-candles"></g>
+            <path
+              class="hero-average"
+              d="M100 286C250 290 330 208 480 219S760 193 940 152"
+            />
+            <g id="hero-agent" transform="translate(352 181)">
+              <path class="agent-tether" d="M0 -8V-27" />
+              <circle class="agent-price" r="3" />
+              <svg
+                x="-20"
+                y="-76"
+                width="40"
+                height="49"
+                viewBox="34 20 128 155"
+              >
+                <path fill="#D0F64C" d="M120.2 24.1C125.9 21.3 129 24.7 124.9 29.1L83.1 74.7C79.4 78.7 77.8 81.8 81.3 85.9L105.9 112.4C109 115.8 106.3 118.7 102.1 116.8L47.7 92.2C36.7 87.2 34.9 82.2 41.6 74.8C53.5 61.8 89.2 39.5 120.2 24.1Z"/>
+<path fill="currentColor" d="M101.6 80.2C97.6 78.3 95.9 80.6 98.7 83.9L119.4 109.2C122.8 113.5 122.3 117.6 117.9 121.7L71.7 164.7C67.3 168.9 70.2 173.3 76.2 170.6C105 157.8 138.8 140.2 151.6 128C161.3 118.8 160.6 111.2 149.5 104.6C139.1 98.5 118.1 87.6 101.6 80.2Z"/>
+              </svg>
+            </g>
+            <g class="hero-signal" transform="translate(688 135)">
+              <circle class="pulse-ring" r="22" />
+              <circle r="5" fill="#d0f64c" />
+              <text x="30" y="-12">SIGNAL</text>
+            </g>
+            <text class="hero-pair" x="100" y="50">BTC / USDT · <tspan id="hero-exchange">BINANCE</tspan></text>
+          </svg>
+          <span class="visual-hint"
+            ><span id="hero-hint">ให้ Snaap จับสัญญาณ</span
+            ><span class="hint-icon">＋</span></span
+          >
+        </button>
+      </section>
+      <section
+        class="story"
+        id="how-it-works"
+        aria-label="ลองโฟลว์ไอเดียสู่สัญญาณ"
+      >
+        <div class="story-stage" data-phase="0">
+          <div class="story-heading">
+            <p class="eyebrow" id="scene-kicker">01 · THE IDEA</p>
+            <h2 id="scene-title">เริ่มจากสิ่งที่คุณมองหา.</h2>
+            <p id="scene-description">
+              บอกไอเดียด้วยภาษาของคุณ ที่เหลือให้ AI ออกแบบ.
+            </p>
+          </div>
+          <div class="story-canvas">
+            <div class="idea-scene">
+              <p class="idea-quote" id="idea-quote">
+                “แจ้งเมื่อ BTC ทะลุแนวต้าน”
+              </p>
+              <div class="ideas" role="group" aria-label="เลือกไอเดียจำลอง">
+                <button data-idea="breakout" aria-pressed="true">
+                  ทะลุแนวต้าน</button
+                ><button data-idea="pullback" aria-pressed="false">
+                  ย่อในขาขึ้น
+                </button>
+              </div>
+            </div>
+            <div class="agent-object" aria-hidden="true">
+              <span class="agent-halo"></span>
+              <svg viewBox="34 20 128 155">
+                <g transform="rotate(-10 98 97.5)">
+                  <path fill="#D0F64C" d="M120.2 24.1C125.9 21.3 129 24.7 124.9 29.1L83.1 74.7C79.4 78.7 77.8 81.8 81.3 85.9L105.9 112.4C109 115.8 106.3 118.7 102.1 116.8L47.7 92.2C36.7 87.2 34.9 82.2 41.6 74.8C53.5 61.8 89.2 39.5 120.2 24.1Z"/>
+<path fill="currentColor" d="M101.6 80.2C97.6 78.3 95.9 80.6 98.7 83.9L119.4 109.2C122.8 113.5 122.3 117.6 117.9 121.7L71.7 164.7C67.3 168.9 70.2 173.3 76.2 170.6C105 157.8 138.8 140.2 151.6 128C161.3 118.8 160.6 111.2 149.5 104.6C139.1 98.5 118.1 87.6 101.6 80.2Z"/>
+                </g>
+              </svg>
+              <span class="agent-caption">SNAAP AGENT</span>
+            </div>
+            <div class="setup-scene">
+              <div class="chart-caption">
+                <span>BTC / USDT <small>1H</small></span
+                ><span id="setup-rule">ปิดเหนือแนวต้าน → จับสัญญาณ</span>
+              </div>
+              <svg
+                class="story-chart"
+                viewBox="0 0 1000 400"
+                role="img"
+                aria-label="กราฟจำลอง AI สร้างเงื่อนไข แล้วจับสัญญาณเมื่อราคาเข้าเซ็ตอัพ"
+              >
+                <defs>
+                  <clipPath id="market-reveal">
+                    <rect id="reveal-rect" x="0" y="0" width="0" height="400" />
+                  </clipPath>
+                  <linearGradient id="market-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop stop-color="#d0f64c" stop-opacity=".08" />
+                    <stop offset="1" stop-color="#d0f64c" stop-opacity="0" />
+                  </linearGradient>
+                  <linearGradient
+                    id="market-edge-fade"
+                    gradientUnits="userSpaceOnUse"
+                    x1="40"
+                    y1="0"
+                    x2="970"
+                    y2="0"
+                  >
+                    <stop stop-color="white" stop-opacity="0" />
+                    <stop offset=".1" stop-color="white" />
+                    <stop offset=".74" stop-color="white" />
+                    <stop offset=".9" stop-color="white" stop-opacity=".4" />
+                    <stop offset="1" stop-color="white" stop-opacity="0" />
+                  </linearGradient>
+                  <mask
+                    id="market-area-mask"
+                    maskUnits="userSpaceOnUse"
+                    x="0"
+                    y="0"
+                    width="1000"
+                    height="400"
+                  >
+                    <rect
+                      width="1000"
+                      height="400"
+                      fill="url(#market-edge-fade)"
+                    />
+                  </mask>
+                </defs>
+                <path
+                  class="chart-grid"
+                  d="M30 100H970M30 200H970M30 300H970M200 40V350M400 40V350M600 40V350M800 40V350"
+                />
+                <g clip-path="url(#market-reveal)">
+                  <path
+                    id="market-area"
+                    fill="url(#market-fill)"
+                    mask="url(#market-area-mask)"
+                  />
+                  <g id="candles"></g>
+                </g>
+                <path class="setup-line" id="setup-line" d="M30 155H970" />
+                <text class="setup-label" id="setup-label" x="790" y="142">
+                  แนวต้าน
+                </text>
+                <g class="signal" id="signal-mark">
+                  <circle class="pulse-ring" r="26" />
+                  <circle r="6" fill="#d0f64c" />
+                  <path d="M0 -30V-70" />
+                  <rect x="-50" y="-97" width="100" height="27" rx="14" />
+                  <text x="0" y="-79" text-anchor="middle">SIGNAL ↗</text>
+                </g>
+                <g id="chart-head"><path d="M0 40V350" /></g>
+              </svg>
+            </div>
+            <svg
+              class="delivery-route"
+              viewBox="0 0 1000 400"
+              aria-hidden="true"
+            >
+              <path id="delivery-path" d="M720 180Q820 180 820 280T650 330" />
+              <circle id="travel-dot" r="5" />
+            </svg>
+            <div class="alert-scene">
+              <div class="notification">
+                <img
+                  id="channel-icon"
+                  src="/assets/brands/discord.svg"
+                  alt=""
+                />
+                <div>
+                  <p>
+                    <span id="notification-channel">Discord</span
+                    ><small>ตอนนี้</small>
+                  </p>
+                  <strong>Snaap · พบสัญญาณใหม่</strong
+                  ><span id="notification-message"
+                    >BTC ปิดเหนือแนวต้านแล้ว</span
+                  >
+                </div>
+              </div>
+              <div
+                class="channels"
+                role="group"
+                aria-label="เลือกช่องทางแจ้งเตือนจำลอง"
+              >
+                <button data-channel="Telegram" aria-pressed="false">
+                  Telegram</button
+                ><button data-channel="Discord" aria-pressed="true">
+                  Discord</button
+                ><button data-channel="LINE" aria-pressed="false">LINE</button>
+              </div>
+            </div>
+          </div>
+          <div class="story-controls">
+            <div class="playback">
+              <div class="scene-dots" role="group" aria-label="ดูแต่ละจังหวะ">
+                <button
+                  data-scene="0"
+                  aria-label="ไอเดีย"
+                  aria-pressed="true"
+                ></button
+                ><button
+                  data-scene="1"
+                  aria-label="AI สร้างเซ็ตอัพ"
+                  aria-pressed="false"
+                ></button
+                ><button
+                  data-scene="2"
+                  aria-label="สัญญาณและแจ้งเตือน"
+                  aria-pressed="false"
+                ></button>
+              </div>
+              <button id="play" aria-label="เล่นโฟลว์จำลอง" type="button">
+                ▶
+              </button>
+            </div>
+          </div>
+          <p class="sr-only" id="demo-status" role="status"></p>
+        </div>
+      </section>
+      <section class="closing" aria-labelledby="closing-title">
+        <h2 id="closing-title">ไม่พลาด<em>จังหวะสำคัญ</em></h2>
+        <a class="button" href="/home"
+          >เปิด Snaap <span aria-hidden="true">↗</span></a
+        >
+      </section>
+    </main>
+    <footer>
+      <a class="wordmark" href="#top" aria-label="Snaap หน้าแรก"
+        ><img src="/assets/snaap-card-wordmark.png" alt="Snaap" width="260" height="84" /><small>BETA</small></a
+      >
+      <div class="footer-info">
+        <nav class="footer-links" aria-label="ข้อมูลบริการ">
+          <a href="/privacy.html">นโยบายความเป็นส่วนตัว</a>
+          <a href="/terms.html">เงื่อนไขการใช้งาน</a>
+        </nav>
+        <p>© 2026 Snaap · ไอเดียเทรด สู่ระบบแจ้งเตือนอัตโนมัติ</p>
+      </div>
+    </footer>
+  </body>
+</html>
