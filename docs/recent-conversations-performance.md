@@ -39,7 +39,7 @@ Selecting a conversation issued one detail request and separate messages/images 
 ## Verification
 
 - `npm run typecheck`
-- `npm test`: 541 passing tests, including 12 targeted cache/dialog/selection regressions.
+- `npm test`: 544 passing tests, including 12 targeted cache/dialog/selection regressions and three legacy recovery regressions.
 - `npm run test:conversations`: real PostgreSQL checks for summary size, legacy compatibility, limits, effective titles, owner/workspace isolation, missing IDs and authentication.
 - `npm run test:chat-save`: existing save/revision/history checks pass.
 - `npm run check:publication`
@@ -53,6 +53,16 @@ node --import tsx scripts/conversation-performance-check.ts --serve
 ```
 
 The preview serves this checkout at `http://127.0.0.1:4186`; sign in with the local test account. It uses an isolated schema and excludes live market/provider operations.
+
+## Harness compatibility audit
+
+The summary optimization exposed one recovery regression: legacy messages with `setup_changes` but no saved `ui_card` relied on the list's full draft to rebuild their setup save card. Recovery now hydrates the authorized conversation detail concurrently with messages when the cached row has no draft field. It preserves unsaved recovered edits and rejects results after a workspace or conversation change. A detail containing `draft: null` cannot turn an unaccepted proposal into a save card.
+
+Validated with `test:harness`, `test:harness-smoke`, `test:journeys` (100 user-days, 1,859 authenticated calls), typecheck and the full unit suite. The smoke test now explicitly covers summary -> authorized detail -> exact draft supplied to Harness -> analysis without mutation -> edit -> revision-safe save, including rejection of a stale revision and compatibility of the original full list.
+
+Real Chromium recovery, with `ui_card` messages omitted through a fixture-only browser route, issued the detail request and displayed the setup save button without a JavaScript exception. The server served this checkout; data was isolated PostgreSQL fixtures and the AI provider was a local HTTP mock. Live provider behavior was not exercised.
+
+Test infrastructure limitation: two simultaneous cold `localDatabase()` calls against the same port/data directory can race, causing one EmbeddedPostgres startup to reject with `undefined`. This was independently reproduced; running database-backed test scripts sequentially passes. The database launcher was not changed in this task.
 
 ## Basis
 

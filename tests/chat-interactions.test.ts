@@ -148,6 +148,59 @@ test("historical AI proposals without an accepted stored draft do not create a s
   await context.loadHistory();
   assert.equal(cards, 0);
 });
+
+test('recovered summary-only history hydrates the saved draft before rebuilding a legacy setup card', async () => {
+  let cards = 0;
+  const row: any = {id: 'a', draft_revision: 2};
+  const draft = {schemaVersion: 2, name: 'Accepted saved draft'};
+  const recoveredDraft = {...draft, name: 'Unsaved recovered edits'};
+  const state = {conversation: 'a', workspaceId: 'one', conversationRows: [row], draft: recoveredDraft};
+  const context = vm.createContext({
+    state,
+    api: async (path: string) => path.endsWith('/messages')
+      ? [{role: 'assistant', content: 'Historical change', setup_changes: [{}]}]
+      : {id: 'a', draft, draft_revision: 2},
+    conversationCache: {upsert: (detail: any) => Object.assign(row, detail)},
+    message() {}, showSetupChanges: async () => {}, showChatSetupCard: async () => cards++,
+    requestAnimationFrame() {}, scrollChatToLatest() {},
+  });
+  vm.runInContext(historySource + ';globalThis.loadHistory=loadChatHistory;', context);
+  await context.loadHistory();
+  assert.equal(cards, 1, 'a persisted legacy draft must retain its setup save card after recovery');
+  assert.equal(state.draft, recoveredDraft, 'hydrating server metadata must preserve recovered local edits');
+});
+
+test('summary hydration cannot turn an unaccepted proposal into a setup save card', async () => {
+  const row: any = {id: 'a'};
+  let cards = 0;
+  const context = vm.createContext({
+    state: {conversation: 'a', workspaceId: 'one', conversationRows: [row]},
+    api: async (path: string) => path.endsWith('/messages')
+      ? [{role: 'assistant', content: 'Proposal', setup_changes: [{}]}]
+      : {id: 'a', draft: null, draft_revision: 0},
+    conversationCache: {upsert: (detail: any) => Object.assign(row, detail)},
+    message() {}, showSetupChanges: async () => {}, showChatSetupCard: async () => cards++,
+    requestAnimationFrame() {}, scrollChatToLatest() {},
+  });
+  vm.runInContext(historySource + ';globalThis.loadHistory=loadChatHistory;', context);
+  await context.loadHistory(); assert.equal(cards, 0);
+});
+
+test('recovery detail and history load together and cannot overwrite a changed workspace', async () => {
+  const state = {conversation: 'a', workspaceId: 'one', conversationRows: [{id: 'a'}]};
+  const requests: Array<{path: string, resolve: (value: any) => void}> = [];
+  let updates = 0, rendered = 0;
+  const context = vm.createContext({
+    state, api: (path: string) => new Promise(resolve => requests.push({path, resolve})),
+    conversationCache: {upsert: () => updates++}, message: () => rendered++,
+  });
+  vm.runInContext(historySource + ';globalThis.loadHistory=loadChatHistory;', context);
+  const pending = context.loadHistory();
+  assert.equal(requests.length, 2, 'detail must not add a serial wait before history');
+  state.workspaceId = 'two';
+  requests.forEach(request => request.resolve(request.path.endsWith('/messages') ? [{role: 'assistant', content: 'Old'}] : {id: 'a', draft: {name: 'Old'}}));
+  await pending; assert.equal(updates, 0); assert.equal(rendered, 0);
+});
 const refreshSource=source.slice(source.indexOf('let refreshGeneration=0;'),source.indexOf('async function refreshContext('));
 test('delayed refresh cannot replace data from a different workspace',async()=>{
   const pending:Array<(value:any)=>void>=[];

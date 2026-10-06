@@ -1974,7 +1974,15 @@ let historyGeneration=0;
 async function loadChatHistory(){
     const generation=++historyGeneration,conversation=state.conversation,workspace=state.workspaceId;
     const current=()=>generation===historyGeneration&&state.conversation===conversation&&state.workspaceId===workspace;
-    let chatPage = await api(`/conversations/${conversation}/messages`);
+    const summary = state.conversationRows?.find(row => row.id === conversation);
+    // Recovery starts from summary metadata. Legacy change receipts need the saved
+    // draft to rebuild their save card; selecting a chat already loaded this detail.
+    const detail = summary && !Object.hasOwn(summary, 'draft')
+      ? api(`/conversations/${conversation}`).then(row => {
+          if (current()) conversationCache.upsert(row, {invalidate: false});
+        })
+      : Promise.resolve();
+    let [chatPage] = await Promise.all([api(`/conversations/${conversation}/messages`), detail]);
     if(!current())return;
     const paintPage = async (rows) => { for (const m of rows) {
       if(!current())return;
