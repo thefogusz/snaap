@@ -1,6 +1,6 @@
 'use strict';
 const loginStatus=document.querySelector('#login-status');
-const errors={not_configured:'ยังไม่ได้ตั้งค่า Google Login',cancelled:'ยกเลิกการเข้าสู่ระบบแล้ว ลองใหม่ได้เลย',expired:'การเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง',failed:'เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง',invite_required:'Snaap เปิดให้สมัครด้วย Google แล้ว กรุณาเข้าสู่ระบบอีกครั้ง'};
+const errors={blocked:'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อทีม SNAAP',not_configured:'ยังไม่ได้ตั้งค่า Google Login',cancelled:'ยกเลิกการเข้าสู่ระบบแล้ว ลองใหม่ได้เลย',expired:'การเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง',failed:'เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง',invite_required:'Snaap เปิดให้สมัครด้วย Google แล้ว กรุณาเข้าสู่ระบบอีกครั้ง'};
 const reason=new URLSearchParams(location.search).get('error');
 if(reason){history.replaceState(null,'','/login.html');loginStatus.hidden=false;loginStatus.textContent=errors[reason]??errors.failed;loginStatus.dataset.error='';}
 async function prepareLogin(){

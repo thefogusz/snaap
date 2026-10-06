@@ -6,6 +6,7 @@ import ccxt from 'ccxt';
 import { localDatabase } from "./postgres.js";
 import { database, migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
+import { usagePolicySchema } from '../src/usage-policy.js';
 import { frames, strategySchema } from "../src/domain/engine.js";
 const requests: any[] = [];
 let reply: (body: any) => Promise<any> = async () => response("complete");
@@ -96,6 +97,32 @@ try {
         selection: { ruleIds: [], importIds: [] },
       },
     });
+  // Monthly call caps are temporarily disabled; usage accounting still applies.
+  await db.query("INSERT INTO usage_ledger(id,owner_id,mode,status) SELECT gen_random_uuid(),$1,'standard','COMPLETED' FROM generate_series(1,101)", [owner]);
+  for (const pro of [false, true]) {
+    if (pro) await db.query("INSERT INTO entitlements(owner_id,pro_until) VALUES($1,now()+interval '1 day')", [owner]);
+    const unlimited = await turn("สวัสดี หลังใช้เกินเพดานเดิม");
+    assert.equal(unlimited.statusCode, 200, unlimited.body);
+    const me = (await app.inject({method: 'GET', url: '/api/v1/me', headers})).json();
+    assert.equal(me.limits.standard, null);
+    assert.equal(me.limits.deep, null);
+    assert.equal(me.usage.find((row: any) => row.mode === 'standard').count, pro ? 103 : 102);
+  }
+  await db.query("DELETE FROM entitlements WHERE owner_id=$1", [owner]);
+  const planPolicy=usagePolicySchema.parse({mode:'plans'});
+  await db.query('UPDATE usage_policy SET policy=$1 WHERE id=1',[planPolicy]);
+  assert.equal((await turn('FREE ใช้เกินเพดาน')).json().error.code,'QUOTA_EXCEEDED');
+  await db.query("INSERT INTO entitlements(owner_id,pro_until) VALUES($1,now()+interval '1 day')",[owner]);
+  assert.equal((await turn('PRO ใช้เกินเพดาน')).json().error.code,'QUOTA_EXCEEDED');
+  const unifiedPolicy=usagePolicySchema.parse({});unifiedPolicy.unified.standard=104;
+  await db.query('UPDATE usage_policy SET policy=$1 WHERE id=1',[unifiedPolicy]);
+  assert.equal((await turn('ใช้กติกากลางแทน Pro')).statusCode,200);
+  assert.equal((await turn('ครบเพดานกติกากลาง')).json().error.code,'QUOTA_EXCEEDED');
+  await db.query("UPDATE usage_policy SET policy='{}' WHERE id=1");
+  await db.query("DELETE FROM entitlements WHERE owner_id=$1", [owner]);
+  await db.query("DELETE FROM usage_ledger WHERE owner_id=$1", [owner]);
+  await db.query("DELETE FROM messages WHERE conversation_id=$1", [id]);
+  console.log('PASS unlimited trial, independent FREE/PRO caps and finite unified cap enforce correctly while usage is recorded');
   reply = async () => response("partial", "incomplete");
   const incomplete = await turn("fixture incomplete");
   assert.equal(incomplete.statusCode, 502);

@@ -1,3 +1,5 @@
+import { userLimits, usagePolicy } from './usage-policy.js';
+import { assertAccess } from './access-controls.js';
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
@@ -60,7 +62,7 @@ export async function buildApp(
   });
   await app.register(cookie);
   await app.register(rateLimit, {
-    max: 180,
+    max: async () => (await usagePolicy(db)).requestsPerMinute,
     timeWindow: "1 minute",
     hook: "preHandler",
     keyGenerator: (req) => req.userId || req.ip,
@@ -220,6 +222,7 @@ export async function buildApp(
     if (!result.rowCount)
       throw new ApiError(401, "UNAUTHENTICATED", "เซสชันหมดอายุ");
     req.userId = result.rows[0].user_id;
+    await assertAccess(db,req.userId,'account');
     const selected = req.headers["x-snaap-workspace"];
     if (selected) {
       const id = z.string().uuid().parse(selected);
@@ -237,11 +240,15 @@ export async function buildApp(
   });
   async function session(userId: string, reply: any, lifetimeSeconds = 604800) {
     const token = randomBytes(32).toString("hex");
-    await db.query("DELETE FROM sessions WHERE expires_at<=now()");
-    await db.query(
-      "INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 second')",
-      [hash(token), userId, lifetimeSeconds],
-    );
+    await transaction(db,async c => {
+      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[userId]);
+      await assertAccess(c,userId,'account');
+      await c.query("DELETE FROM sessions WHERE expires_at<=now()");
+      await c.query(
+        "INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 second')",
+        [hash(token), userId, lifetimeSeconds],
+      );
+    });
     reply.setCookie("snaap_session", token, {
       httpOnly: true,
       sameSite: "lax",
@@ -344,18 +351,19 @@ export async function buildApp(
       ).rows[0].n,
     );
     const isAdmin = isAdminIdentity(user);
+    const limits = await userLimits(db, req.userId);
+    const policy = await usagePolicy(db);
     return {
       ...user,
       plan: pro ? "PRO" : "FREE",
       proUntil: pro?.pro_until ?? null,
       isAdmin,
       impersonating,
-      requiresRuleSelection: active > (pro ? 20 : 6),
+      trial: policy.mode === "unified",
+      requiresRuleSelection: limits.activeRules !== null && active > limits.activeRules,
       limits: {
-        activeRules: pro ? 20 : 6,
+        ...limits,
         pairsPerSetup: 10,
-        standard: pro ? 100 : 20,
-        deep: pro ? 10 : 0,
       },
       usage,
       local: user?.email === "local@snaap.invalid",
@@ -368,8 +376,8 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT r.*, (r.active AND (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 6 END) AS quota_blocked FROM rules r WHERE r.deleted_at IS NULL AND owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY created_at DESC",
-          [req.userId, req.workspaceId ?? null],
+          "SELECT r.*, (r.active AND ($3::int IS NOT NULL AND (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active AND a.deleted_at IS NULL)>$3)) AS quota_blocked FROM rules r WHERE r.deleted_at IS NULL AND owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY created_at DESC",
+          [req.userId, req.workspaceId ?? null, (await userLimits(db,req.userId)).activeRules],
         )
       ).rows,
   );
@@ -503,6 +511,7 @@ export async function buildApp(
       .strict()
       .parse(req.body);
     if (input.active) {
+      await assertAccess(db,req.userId,'automation');
       if (!options.monitoring)
         throw new ApiError(409, "MONITOR_NOT_READY", "Worker ยังไม่พร้อม");
       if (input.confirmation !== "ACTIVATE")
@@ -564,26 +573,11 @@ export async function buildApp(
             "CONFIRMATION_REQUIRED",
             "ยืนยันกฎก่อนเปิดใช้งาน",
           );
-        const pro = !!(
-          await c.query(
-            "SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()",
-            [req.userId],
-          )
-        ).rowCount;
-        const count = Number(
-          (
-            await c.query(
-              "SELECT count(*) AS n FROM rules WHERE owner_id=$1 AND active AND id<>$2",
-              [req.userId, id],
-            )
-          ).rows[0].n,
-        );
-        if (count >= (pro ? 20 : 6))
-          throw new ApiError(
-            409,
-            "RULE_LIMIT",
-            "กฎที่เปิดครบโควตาแล้ว กรุณาเลือกกฎที่จะหยุด",
-          );
+        const { activeRules } = await userLimits(c, req.userId);
+        if (activeRules !== null) {
+          const count = Number((await c.query('SELECT count(*) AS n FROM rules WHERE owner_id=$1 AND active AND id<>$2 AND deleted_at IS NULL',[req.userId,id])).rows[0].n);
+          if (count >= activeRules) throw new ApiError(409,'RULE_LIMIT','กฎที่เปิดครบโควตาแล้ว กรุณาเลือกกฎที่จะหยุด');
+        }
         const spec = strategySchema.parse(rule.spec);
         const verified = await c.query(
           "SELECT id FROM destinations WHERE owner_id=$1 AND id=ANY($2::uuid[]) AND verified",
@@ -611,8 +605,8 @@ export async function buildApp(
     async (req) =>
       (
         await db.query(
-          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,r.spec->>'name' AS setup_name,r.spec->>'market' AS setup_market,r.spec->>'side' AS setup_side,c.state,i.freshness,i.progress,CASE WHEN NOT r.active THEN 'PAUSED' WHEN (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active)>CASE WHEN EXISTS(SELECT 1 FROM entitlements e WHERE e.owner_id=r.owner_id AND e.pro_until>now()) THEN 20 ELSE 6 END THEN 'QUOTA_BLOCKED' WHEN s.status='READY' AND i.rule_id IS NULL THEN 'RECOVERING' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id LEFT JOIN monitor_insights i ON i.rule_id=s.rule_id AND i.exchange=s.exchange AND i.pair=s.pair AND i.revision=r.revision LEFT JOIN monitor_checkpoints c ON c.rule_id=s.rule_id AND c.revision=r.revision AND c.exchange=s.exchange AND c.pair=s.pair WHERE r.deleted_at IS NULL AND r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY s.exchange,s.pair,r.id",
-          [req.userId, req.workspaceId ?? null],
+          "SELECT s.rule_id,s.exchange,s.pair,s.checked_at,r.spec->>'name' AS setup_name,r.spec->>'market' AS setup_market,r.spec->>'side' AS setup_side,c.state,i.freshness,i.progress,CASE WHEN NOT r.active THEN 'PAUSED' WHEN ($3::int IS NOT NULL AND (SELECT count(*) FROM rules a WHERE a.owner_id=r.owner_id AND a.active AND a.deleted_at IS NULL)>$3) THEN 'QUOTA_BLOCKED' WHEN s.status='READY' AND i.rule_id IS NULL THEN 'RECOVERING' ELSE s.status END AS status FROM monitor_status s JOIN rules r ON r.id=s.rule_id LEFT JOIN monitor_insights i ON i.rule_id=s.rule_id AND i.exchange=s.exchange AND i.pair=s.pair AND i.revision=r.revision LEFT JOIN monitor_checkpoints c ON c.rule_id=s.rule_id AND c.revision=r.revision AND c.exchange=s.exchange AND c.pair=s.pair WHERE r.deleted_at IS NULL AND r.owner_id=$1 AND ($2::uuid IS NULL OR r.workspace_id=$2) ORDER BY s.exchange,s.pair,r.id",
+          [req.userId, req.workspaceId ?? null, (await userLimits(db,req.userId)).activeRules],
         )
       ).rows,
   );

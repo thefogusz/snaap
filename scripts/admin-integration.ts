@@ -42,6 +42,13 @@ try {
     if (apiBroken) throw new Error("private-provider-token");
     return { ok: true };
   });
+  if (serving) {
+    // Fixture-only entry route on the loopback preview; never registered in production.
+    app.get('/__fixture_admin', async (_req, reply) => {
+      reply.setCookie('snaap_session', token, {path:'/',httpOnly:true,sameSite:'lax'});
+      return reply.redirect('/admin');
+    });
+  }
   const headers = {
     host: new URL(origin).host,
     "x-snaap-client": "web",

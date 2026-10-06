@@ -1,3 +1,5 @@
+import { userLimits } from './usage-policy.js';
+import { accessBlocked } from './access-controls.js';
 import type { FastifyInstance } from "fastify";
 import type pg from "pg";
 import { telegramChartPng } from "./telegram-chart.js";
@@ -29,7 +31,7 @@ import {
   type Signal,
 } from "./notification-format.js";
 import { sendNotification, type Destination } from "./notification-send.js";
-import { lineLimits, lineMonth, reserveLine } from "./line-quota.js";
+import { lineMonth, reserveLine } from "./line-quota.js";
 import { chartPng, registerSignalCharts, demoChart } from "./signal-chart.js";
 import {
   bindRecipient,
@@ -101,7 +103,7 @@ export async function registerDestinations(
             ? process.env.LINE_OA_URL
             : undefined,
       },
-      lineQuota: { used: usage, limit: lineLimits().user, month: lineMonth() },
+      lineQuota: { used: usage, limit: (await userLimits(db,req.userId)).lineUser, month: lineMonth() },
     };
   });
   app.post("/api/v1/destinations/preview", async (req) => {
@@ -430,12 +432,31 @@ export async function deliver(db: pg.Pool, id: string) {
         [id],
       )
     ).rows[0];
-    if (!row || !["PENDING", "RETRY"].includes(row.status)) return;
+    if (!row || !["PENDING", "RETRY", "USAGE_LIMIT", "ADMIN_PAUSED"].includes(row.status)) return;
+    const blocked = await accessBlocked(c,row.owner_id,'notifications');
+    if (blocked) {
+      await c.query("UPDATE deliveries SET status='ADMIN_PAUSED',detail=$2,usage_retry_at=now()+interval '1 minute' WHERE id=$1",[id,blocked.message]);
+      return;
+    }
+    if (row.status === 'ADMIN_PAUSED') {
+      // Old trading alerts must not burst out after a suspension expires or is lifted.
+      await c.query("UPDATE deliveries SET status='CANCELLED_ADMIN',detail='ไม่ส่งแจ้งเตือนย้อนหลังหลังคืนสิทธิ์',usage_retry_at=NULL WHERE id=$1",[id]);
+      return;
+    }
     if (!row.verified) {
       await c.query("UPDATE deliveries SET status='DISCONNECTED' WHERE id=$1", [
         id,
       ]);
       return;
+    }
+    const { notifications } = await userLimits(c,row.owner_id);
+    if (notifications !== null) {
+      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[row.owner_id]);
+      const sent = Number((await c.query("SELECT count(*) AS n FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.owner_id=$1 AND d.status IN ('SENT','DELIVERED') AND COALESCE(d.sent_at,s.created_at)>=(date_trunc('month',now() AT TIME ZONE 'Asia/Bangkok') AT TIME ZONE 'Asia/Bangkok')",[row.owner_id])).rows[0].n);
+      if (sent >= notifications) {
+        await c.query("UPDATE deliveries SET status='USAGE_LIMIT',detail='ถึงเพดานแจ้งเตือนรายเดือนที่ผู้ดูแลกำหนด',usage_retry_at=now()+interval '1 minute' WHERE id=$1",[id]);
+        return;
+      }
     }
     let result;
     if (
@@ -443,7 +464,7 @@ export async function deliver(db: pg.Pool, id: string) {
       !(await transaction(db, (q) => reserveLine(q, row.owner_id, id)))
     )
       result = {
-        status: "QUOTA_OR_RATE_LIMIT",
+        status: "USAGE_LIMIT",
         detail: "ถึงโควตา LINE เดือนนี้ สัญญาณยังอยู่ในเว็บ",
       };
     else
@@ -462,7 +483,7 @@ export async function deliver(db: pg.Pool, id: string) {
     if (result.status === "RETRY" && row.attempts >= 4)
       result.status = "FAILED";
     await c.query(
-      "UPDATE deliveries SET status=$2,attempts=attempts+1,detail=$3 WHERE id=$1",
+      "UPDATE deliveries SET status=$2,attempts=attempts+1,detail=$3,sent_at=CASE WHEN $2 IN ('SENT','DELIVERED') THEN now() ELSE sent_at END,usage_retry_at=CASE WHEN $2='USAGE_LIMIT' THEN now()+interval '1 minute' ELSE NULL END WHERE id=$1",
       [id, result.status, result.detail],
     );
   });

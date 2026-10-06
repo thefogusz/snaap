@@ -272,7 +272,7 @@ try {
   const freeLimit = (
     await app.inject({ url: "/api/v1/me", headers: auth })
   ).json().limits.activeRules;
-  assert.equal(freeLimit, 6);
+  assert.equal(freeLimit, null);
   const alreadyActive = Number(
     (
       await db.query(
@@ -281,7 +281,7 @@ try {
       )
     ).rows[0].n,
   );
-  for (let i = alreadyActive; i <= freeLimit; i++) {
+  for (let i = alreadyActive; i <= 20; i++) {
     const next = (
       await app.inject({
         method: "POST",
@@ -299,7 +299,7 @@ try {
           payload: { ...activation, expectedRevision: 1 },
         })
       ).statusCode,
-      i < freeLimit ? 200 : 409,
+      200,
     );
   }
   const customer = "cus_" + owner,
@@ -393,10 +393,10 @@ try {
         method: "POST",
         url: "/api/v1/workspaces",
         headers: auth,
-        payload: { name: "Free blocked" },
+        payload: { name: "Trial workspace" },
       })
     ).statusCode,
-    403,
+    201,
   );
   assert.equal(
     (

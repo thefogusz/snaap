@@ -7,6 +7,9 @@ import { transaction } from "./data/db.js";
 import { registerAdminEvents, auditAdmin } from "./admin-events.js";
 import { hash } from "./crypto.js";
 import { ADMIN_EMAIL, isAdminIdentity } from "./admin-access.js";
+import { usagePolicy, usagePolicySchema } from './usage-policy.js';
+import { registerAdminUsage } from './admin-usage.js';
+import { registerAccessControls } from './access-controls.js';
 
 export interface SystemLogEntry {
   id: string;
@@ -90,6 +93,20 @@ export function registerAdmin(
     }
   });
 
+  app.get('/api/v1/admin/usage-policy', async () => usagePolicy(db));
+  registerAdminUsage(app, db);
+  registerAccessControls(app, db);
+  app.post('/api/v1/admin/usage-policy', async req => {
+    const input = z.object({policy: usagePolicySchema, expectedRevision: z.number().int().nonnegative()}).strict().parse(req.body);
+    return transaction(db, async c => {
+      const before = await usagePolicy(c);
+      const updated = await c.query('UPDATE usage_policy SET policy=$1,revision=revision+1,updated_at=now() WHERE id=1 AND revision=$2 RETURNING revision', [input.policy, input.expectedRevision]);
+      if (!updated.rowCount) throw new ApiError(409, 'REVISION_CONFLICT', 'การตั้งค่าถูกเปลี่ยนแล้ว กรุณาโหลดใหม่ก่อนบันทึก');
+      await c.query("UPDATE deliveries SET usage_retry_at=NULL WHERE status IN ('USAGE_LIMIT','ADMIN_PAUSED')");
+      await auditAdmin(c, req.userId, 'usage-policy.update', undefined, {before, after: input.policy});
+      return {...input.policy, revision: updated.rows[0].revision};
+    });
+  });
   // Overview & Diagnostics
   app.post("/api/v1/impersonation/restore", async (req, reply) => {
     const sessionHash = hash(req.cookies.snaap_session ?? "");
@@ -233,7 +250,7 @@ export function registerAdmin(
         signals24h: signals24hRes.rows[0]?.n ?? 0,
         deliveries24h: {
           total: Object.values(deliveryMap).reduce((a, b) => a + b, 0),
-          delivered: deliveryMap["DELIVERED"] ?? 0,
+          delivered: (deliveryMap["DELIVERED"] ?? 0) + (deliveryMap["SENT"] ?? 0),
           failed:
             (deliveryMap["FAILED"] ?? 0) + (deliveryMap["AMBIGUOUS"] ?? 0),
           retry: deliveryMap["RETRY"] ?? 0,
@@ -274,17 +291,27 @@ export function registerAdmin(
         u.id, 
         u.email, 
         u.role, u.google_sub,
+        ur.scope AS restriction_scope, ur.until_at AS restriction_until,
+        (ur.scope<>'none' AND (ur.until_at IS NULL OR ur.until_at>now())) AS restriction_active,
         u.created_at,
         (u.google_sub IS NOT NULL AND COALESCE(lower(u.email)=ANY($1::text[]),false)) AS is_admin,
         e.pro_until,
         (e.pro_until IS NOT NULL AND e.pro_until > now()) AS is_pro,
         (SELECT count(*)::int FROM rules r WHERE r.owner_id = u.id AND r.deleted_at IS NULL) AS rules_count,
         (SELECT count(*)::int FROM rules r WHERE r.owner_id = u.id AND r.active AND r.deleted_at IS NULL) AS active_rules_count,
-        (SELECT count(*)::int FROM signals s WHERE s.owner_id = u.id) AS signals_count,
-        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'standard' AND ul.created_at >= date_trunc('month', now()) AND ul.status IN ('RESERVED','COMPLETED') AND NOT quota_waived) AS ai_standard_used,
-        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'deep' AND ul.created_at >= date_trunc('month', now()) AND ul.status IN ('RESERVED','COMPLETED') AND NOT quota_waived) AS ai_deep_used
+        (SELECT count(*)::int FROM signals s WHERE s.owner_id = u.id AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED') AS signals_count,
+        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'standard' AND ul.created_at >= date_trunc('month', now()) AND ul.status='COMPLETED') AS ai_standard_used,
+        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id = u.id AND ul.mode = 'deep' AND ul.created_at >= date_trunc('month', now()) AND ul.status='COMPLETED') AS ai_deep_used,
+        (SELECT count(*)::int FROM workspaces w WHERE w.owner_id=u.id) AS workspaces_count,
+        (SELECT count(*)::int FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.owner_id=u.id AND d.status IN ('SENT','DELIVERED')) AS notifications_sent,
+        (SELECT count(*)::int FROM notification_quota nq WHERE nq.owner_id=u.id AND nq.month=to_char(now() AT TIME ZONE 'Asia/Bangkok','YYYY-MM')) AS line_used_month,
+        (SELECT COALESCE(sum(input_tokens),0)::bigint FROM usage_ledger ul WHERE ul.owner_id=u.id AND ul.created_at>=date_trunc('month',now())) AS ai_input_tokens,
+        (SELECT COALESCE(sum(output_tokens),0)::bigint FROM usage_ledger ul WHERE ul.owner_id=u.id AND ul.created_at>=date_trunc('month',now())) AS ai_output_tokens,
+        (SELECT COALESCE(sum(estimated_usd),0) FROM usage_ledger ul WHERE ul.owner_id=u.id AND ul.created_at>=date_trunc('month',now())) AS ai_estimated_usd,
+        (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id=u.id AND ul.status='REFUNDED' AND ul.created_at>=date_trunc('month',now())) AS ai_failed_count
       FROM users u
       LEFT JOIN entitlements e ON e.owner_id = u.id
+      LEFT JOIN user_restrictions ur ON ur.owner_id=u.id
       WHERE ($2='' OR position(lower($2) IN lower(COALESCE(u.email,'')))>0 OR position(lower($2) IN u.id::text)>0)
       AND ($3::uuid IS NULL OR (u.created_at,u.id)<(SELECT created_at,id FROM users WHERE id=$3)))
       SELECT * FROM listed WHERE $4='all' OR ($4='pro' AND is_pro) OR ($4='free' AND NOT is_pro AND NOT is_admin) OR ($4='admin' AND is_admin)
@@ -296,6 +323,7 @@ export function registerAdmin(
     return {
       nextCursor:
         result.rows.length > q.limit ? result.rows[q.limit - 1].id : null,
+      policy: await usagePolicy(db),
       users: result.rows.slice(0, q.limit).map((row) => ({
         ...row,
         isAdmin: isAdminIdentity(row),

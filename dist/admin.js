@@ -527,6 +527,7 @@
       const data = await apiFetch(`/api/v1/admin/users?${query}`);
       if (request !== state.userRequest) return;
       state.users = append ? [...state.users, ...data.users] : data.users || [];
+      state.usagePolicy = data.policy;
       state.userCursor = data.nextCursor;
       $("#btn-users-more").hidden = !data.nextCursor;
       renderUsers();
@@ -590,11 +591,11 @@
           <td>${planBadge}</td>
           <td>
             <strong>${u.active_rules_count}</strong>
-            <span style="color:var(--tertiary);"> / ${u.rules_count} กฎ</span>
+            <span style="color:var(--tertiary);"> / ${u.rules_count} กฎ</span><div style="font-size:11px;">สัญญาณ ${Number(u.signals_count ?? 0)} · แจ้งเตือน ${Number(u.notifications_sent ?? 0)}</div>
           </td>
           <td>
-            <div>Std: <strong>${u.ai_standard_used}</strong> / ${u.is_pro ? 100 : 20}</div>
-            <div style="font-size:11px;color:var(--tertiary);">Deep: <strong>${u.ai_deep_used}</strong> · อยู่ระหว่างพัฒนา</div>
+            <div>Std: <strong>${u.ai_standard_used}</strong> ครั้ง · ${"เพดาน " + (state.usagePolicy?.[state.usagePolicy?.mode === "plans" ? (u.is_pro ? "pro" : "free") : "unified"]?.standard ?? "ไม่จำกัด")}</div>
+            <div style="font-size:11px;color:var(--tertiary);">ต้นทุนประมาณ USD ${Number(u.ai_estimated_usd ?? 0).toFixed(4)} · ล้มเหลว ${Number(u.ai_failed_count ?? 0)}</div>
           </td>
           <td>${formatDate(u.created_at)}</td>
           <td style="text-align: right;">
@@ -602,8 +603,10 @@
               <button class="btn btn-sm btn-primary" data-action="plan" data-user="${escapeHTML(u.id)}">
                 ปรับสิทธิ์
               </button>
-              <button class="btn btn-sm" data-action="reset-quota" data-user="${escapeHTML(u.id)}" title="ล้างจำนวนการใช้ AI เดือนนี้">
-                🧹 ล้างโควตา AI
+              <button class="btn btn-sm" data-action="usage-report" data-user="${escapeHTML(u.id)}" aria-expanded="false">การใช้งาน</button>
+              ${u.isAdmin ? '' : `<button class="btn btn-sm" data-action="restriction" data-user="${escapeHTML(u.id)}" data-email="${escapeHTML(u.email)}">${u.restriction_active ? '⏸ ระงับอยู่' : 'ควบคุม'}</button>`}
+              <button class="btn btn-sm" data-action="reset-quota" data-user="${escapeHTML(u.id)}" title="คืนโควตา AI เดือนนี้ โดยเก็บประวัติการใช้">
+                🧹 คืนโควตา AI
               </button>
               <button class="btn btn-sm" data-action="impersonate" data-user="${escapeHTML(u.id)}" title="เข้าสู่บัญชีผู้ใช้เพื่อช่วยตรวจสอบ 15 นาที" ${u.isAdmin ? "disabled" : ""}>
                 👁️ สวมรอย
