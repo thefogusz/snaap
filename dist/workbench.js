@@ -523,7 +523,7 @@ accountContact.className = "account-contact";
 accountContact.href = "mailto:contract@snaap.me";
 accountContact.textContent = "contract@snaap.me";
 accountContact.setAttribute("aria-label", "ติดต่อเรา: contract@snaap.me");
-accountButton.after(accountContact);
+accountButton.before(accountContact);
 function closeAccountMenu(restoreFocus = false) {
   accountMenu.hidden = true;
   accountButton.setAttribute("aria-expanded", "false");
