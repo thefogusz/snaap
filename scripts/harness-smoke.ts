@@ -398,6 +398,27 @@ try {
     "foreign-destination",
   ])
     assert.equal((await turn(text)).draft, null, text);
+  // Match the recent-conversations client: summaries contain no draft, so resume
+  // from an authorized detail and carry its exact draft/revision into the harness.
+  const accepted = (await turn('complex')).draft;
+  await call(`/conversations/${conv.id}/draft`, 'PUT', {spec: accepted, expectedRevision: 0});
+  const summary = (await call('/conversations?view=summary')).find((row: any) => row.id === conv.id);
+  assert.ok(summary && !Object.hasOwn(summary, 'draft'));
+  const detail = await call(`/conversations/${conv.id}`);
+  assert.deepEqual(detail.draft, accepted);
+  const analysis = await turn('text-only', {draft: detail.draft});
+  assert.equal(analysis.draft, null);
+  const supplied = JSON.parse(requests.at(-1).instructions.split('Current editable draft (not activated): ')[1].split('\nEdit the current draft')[0]);
+  assert.deepEqual(supplied, strategySchema.parse(detail.draft));
+  assert.equal((await call(`/conversations/${conv.id}`)).draft_revision, detail.draft_revision, 'analysis cannot mutate the saved draft');
+  const revised = await turn('short', {draft: detail.draft});
+  assert.ok(revised.draft && revised.changes.length);
+  const saved = await call(`/conversations/${conv.id}/draft`, 'PUT', {spec: revised.draft, expectedRevision: detail.draft_revision});
+  assert.equal(saved.draft_revision, detail.draft_revision + 1);
+  await call(`/conversations/${conv.id}/draft`, 'PUT', {spec: detail.draft, expectedRevision: detail.draft_revision}, 409);
+  assert.deepEqual((await call(`/conversations/${conv.id}`)).draft, revised.draft);
+  assert.deepEqual((await call('/conversations')).find((row: any) => row.id === conv.id).draft, revised.draft);
+  console.log('PASS: summary -> fresh detail -> harness analysis/edit -> revision-safe save preserves the exact accepted draft and legacy list');
   await turn("skill-budget");
   assert.equal(
     JSON.parse(

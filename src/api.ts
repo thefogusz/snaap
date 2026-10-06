@@ -641,14 +641,31 @@ export async function buildApp(
   });
   app.get(
     "/api/v1/conversations",
-    async (req) =>
-      (
-        await db.query(
-          "SELECT c.*,EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id=c.id) AS has_messages,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่','เซ็ตอัพใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY created_at DESC LIMIT 100",
+    async (req, reply) => {
+      const {view} = z.object({view: z.literal('summary').optional()}).parse(req.query);
+      const fields = view === 'summary'
+        ? 'c.id,c.created_at,c.workspace_id,c.setup_saved_at,c.setup_status_known,c.saved_rule_id,c.draft_revision'
+        : 'c.*';
+      const started = performance.now();
+      const result = await db.query(
+          `SELECT ${fields},EXISTS(SELECT 1 FROM messages m WHERE m.conversation_id=c.id) AS has_messages,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่','เซ็ตอัพใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE owner_id=$1 AND ($2::uuid IS NULL OR workspace_id=$2) ORDER BY c.created_at DESC,c.id DESC LIMIT 100`,
           [req.userId, req.workspaceId ?? null],
-        )
-      ).rows,
+      );
+      reply.header('Server-Timing', `db;dur=${(performance.now() - started).toFixed(1)}`);
+      return result.rows;
+    },
   );
+  app.get('/api/v1/conversations/:id', async (req, reply) => {
+    const {id} = z.object({id: z.string().uuid()}).parse(req.params);
+    const started = performance.now();
+    const row = (await db.query(
+      "SELECT c.*,CASE WHEN c.setup_saved_at IS NOT NULL AND c.title IN ('เซตอัพใหม่','เซตอัปใหม่','เซ็ตอัพใหม่') THEN COALESCE(NULLIF(btrim(c.draft->>'name'),''),c.title) ELSE c.title END AS title FROM conversations c WHERE c.id=$1 AND owner_id=$2 AND ($3::uuid IS NULL OR workspace_id=$3)",
+      [id, req.userId, req.workspaceId ?? null],
+    )).rows[0];
+    if (!row) throw new ApiError(404, 'NOT_FOUND', 'ไม่พบบทสนทนา');
+    reply.header('Server-Timing', `db;dur=${(performance.now() - started).toFixed(1)}`);
+    return row;
+  });
   app.post("/api/v1/conversations", async (req, reply) => {
     const { title } = z
       .object({ title: z.string().trim().min(1).max(100) })

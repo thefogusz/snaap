@@ -34,7 +34,7 @@ function bootFixture(failure = false) {
   let revealed = 0;
   const failures: string[] = [];
   const context = vm.createContext({
-    companionScriptsReady: Promise.resolve(), setupLimitsReady: Promise.resolve(), timeframeToolsReady: Promise.resolve(), directionToolsReady: Promise.resolve(), indicatorCatalogReady: Promise.resolve(), entryFlexReady: Promise.resolve(),
+    conversationCacheReady: Promise.resolve(), companionScriptsReady: Promise.resolve(), setupLimitsReady: Promise.resolve(), timeframeToolsReady: Promise.resolve(), directionToolsReady: Promise.resolve(), indicatorCatalogReady: Promise.resolve(), entryFlexReady: Promise.resolve(),
     state: {draft: {}, me: null}, workbench: {hidden: false}, status: {textContent: '', hidden: true},
     healthReady: Promise.resolve(),
     api: async (url: string) => url === '/health' ? health.promise : {local: false},
