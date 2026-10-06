@@ -130,6 +130,12 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   padding: 0 4px 12px;
   overscroll-behavior: contain;
 }
+/* Let the scroll track reach the card border while retaining the text inset. */
+.workbench[data-tab="split"] #messages:has(.message) {
+  margin-inline: -12px;
+  max-width: none;
+  padding-inline: 16px;
+}
 .workbench[data-tab="split"] .chat-composer {
   flex: none;
   max-height: 42%;
