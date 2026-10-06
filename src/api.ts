@@ -154,6 +154,11 @@ export async function buildApp(
       throw new ApiError(400, "INVALID_URL", "รูปแบบ URL ไม่ถูกต้อง");
     }
     if (
+      ["/home", "/notifications", "/history", "/watch", "/billing", "/index.html", "/login.html"].includes(pagePath) ||
+      pagePath === "/admin" || pagePath.startsWith("/admin/") ||
+      ["/admin.html", "/admin-login.html"].includes(pagePath) || pagePath.startsWith("/api/")
+    ) reply.header("X-Robots-Tag", "noindex, nofollow");
+    if (
       pagePath === "/admin" ||
       pagePath.startsWith("/admin/") ||
       pagePath === "/admin.html" ||
