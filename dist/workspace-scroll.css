@@ -22,6 +22,28 @@ body:has(#admin-impersonation-banner):has(#view-home:not([hidden]) .workbench:no
  overflow:hidden;
 }
 .workbench-toolbar { position:relative; z-index:5; isolation:isolate; }
+/* Keep the conversation identity between the same controls in both modes. */
+.home-view .workbench-toolbar {
+ display:grid;
+ grid-template-columns:auto minmax(0,1fr) auto;
+}
+.workbench-toolbar .conversation-title {
+ min-width:0;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+ text-align:center;
+ color:var(--ink);
+ font-size:16px;
+ font-weight:600;
+ line-height:1.5;
+}
+.workbench-toolbar .conversation-actions { margin-left:0; }
+@media(max-width:650px) {
+ .home-view .workbench-toolbar { grid-template-columns:minmax(0,1fr) auto; }
+ .workbench-toolbar .conversation-title { grid-column:1 / -1; grid-row:2; font-size:14px; }
+ .workbench-toolbar .conversation-actions { margin-top:0; }
+}
 .workbench .chat-composer { min-height:var(--chat-composer-min-height,0px); }
 .chat-latest { position:absolute; bottom:210px; left:50%; transform:translateX(-50%); z-index:3; padding:9px 15px; border:1px solid var(--line); border-radius:24px; background:var(--white); box-shadow:0 4px 16px #0002; font-size:12px; white-space:nowrap; }
 .setup-change-card { padding:14px 16px; border-radius:14px; border-left:3px solid var(--lime); }

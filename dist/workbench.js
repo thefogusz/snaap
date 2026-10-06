@@ -180,7 +180,19 @@ workbenchToolbar.className = "workbench-toolbar";
 conversations.after(workbenchToolbar);
 const conversationActions=document.createElement('div');
 conversationActions.className='conversation-actions';
-workbenchToolbar.append(tabs,conversationActions);
+const conversationTitle = document.createElement('div');
+conversationTitle.className = 'conversation-title';
+conversationTitle.setAttribute('role', 'status');
+conversationTitle.setAttribute('aria-live', 'polite');
+conversationTitle.setAttribute('aria-atomic', 'true');
+function renderConversationTitle() {
+  const row = state.conversationRows.find(row => row.id === state.conversation);
+  const title = row?.title?.trim() || 'แชทใหม่';
+  if (conversationTitle.textContent !== title) conversationTitle.textContent = title;
+  conversationTitle.title = title;
+}
+renderConversationTitle();
+workbenchToolbar.append(tabs,conversationTitle,conversationActions);
 conversationActions.append(setupPaneNav,conversationPicker);
 const newConversationButton=document.createElement('button');
 newConversationButton.type='button';
@@ -195,6 +207,7 @@ conversationPicker.setAttribute("aria-label", "บทสนทนาล่าส
 conversationPicker.title = "บทสนทนาล่าสุด";
 conversationPicker.onclick = async () => {
   try { state.conversationRows = await api("/conversations"); } catch(error) { toast(error.message); return; }
+  renderConversationTitle();
   const dialog = document.createElement("dialog");
   dialog.className = "conversation-dialog";
   dialog.setAttribute("aria-labelledby", "conversation-dialog-title");
@@ -612,6 +625,7 @@ function navigate(view, load = true) {
   if (view === "billing") renderBilling();
 }
 function showDesigner() {
+  renderConversationTitle();
   chatEmpty();
   state.draft ??= initial();
   $("#welcome").hidden = true;
@@ -688,6 +702,7 @@ async function ensureConversation(title = state.draft?.name ?? "เซ็ตอ�
       window.SnaapStudio?.adoptConversation(c.id);
       state.conversation = c.id;
       state.conversationRows.unshift({ ...c, workspace_id:state.workspaceId, draft: null, draft_revision: 0 });
+      renderConversationTitle();
       const option = new Option(c.title, c.id, true, true);
       conversations.add(option);
       conversationPicker.hidden = false;
@@ -1288,6 +1303,7 @@ async function refresh({ reuseMe = false } = {}) {
   $("#ai-mode").value = 'standard';
   renderWatch();
   state.conversationRows = rows;
+  renderConversationTitle();
   conversationPicker.hidden = rows.length === 0;
   state.destinations = destinations.items;
   conversations.innerHTML =
@@ -2299,6 +2315,7 @@ async function restoreRecovery() {
     $('#chat-input').dispatchEvent(new Event('input',{bubbles:true}));
     const row=state.conversationRows.find(r=>r.id===stored.conversation);
     state.conversation=row?.id??null;
+    renderConversationTitle();
     conversations.value=state.conversation??'';
     state.draft=stored.draft?.schemaVersion===2?stored.draft:null;
     state.draftRevision=row?stored.draftRevision??0:0;

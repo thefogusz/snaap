@@ -79,7 +79,7 @@ test('recovery starts history, context and images together and waits for them be
   const context = vm.createContext({
     recoveryReady: true, localStorage: {getItem: () => JSON.stringify(stored)}, recoveryKey: () => 'key',
     state: {conversationRows: [{id: 'chat'}], rules: []}, conversations: {},
-    $: () => ({value: '', dispatchEvent() {}}), Event: class {}, setWorkbenchTab() {}, showDesigner() {}, queueDraftSave() {},
+    $: () => ({value: '', dispatchEvent() {}}), Event: class {}, setWorkbenchTab() {}, showDesigner() {}, queueDraftSave() {}, renderConversationTitle() {},
     loadChatHistory: () => {started.push('history'); return jobs[0].promise;},
     setMyData: () => {started.push('context'); return jobs[1].promise;},
     restoreChatImages: () => {started.push('images'); return jobs[2].promise;},
