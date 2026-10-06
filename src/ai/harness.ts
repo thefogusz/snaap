@@ -64,7 +64,7 @@ export function registerHarness(
       req.workspaceId,
     ),
   );
-  app.post("/api/v1/conversations/:id/turns", async (req) => {
+  app.post("/api/v1/conversations/:id/turns", async (req, reply) => {
     await assertAccess(db,req.userId,'ai');
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const input = z
@@ -241,6 +241,19 @@ export function registerHarness(
     });
     const trace: unknown[] = [];
     const deadline = AbortSignal.timeout(90000);
+    const streaming = req.headers.accept === 'application/x-ndjson';
+    const emit = (event: unknown) => {
+      if (!reply.raw.destroyed) reply.raw.write(JSON.stringify(event) + '\n');
+    };
+    if (streaming) {
+      reply.hijack();
+      for (const [name, value] of Object.entries(reply.getHeaders()))
+        if (value !== undefined) reply.raw.setHeader(name, value);
+      reply.raw.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' });
+      emit({ type: 'start' });
+    }
+    const heartbeat = streaming ? setInterval(() => emit({ type: 'ping' }), 10000) : undefined;
     try {
       const context = await contextBundle(
         db,
@@ -395,6 +408,7 @@ export function registerHarness(
       for (let round = 0; round < 7; round++) {
         if (deadline.aborted) throw new Error("REQUEST_DEADLINE");
         await assertAccess(db,req.userId,'ai');
+        if (streaming) emit({ type: 'reset' });
         const response = await createProviderResponse(client,
           {
             ...(process.env.AI_BASE_URL && new URL(process.env.AI_BASE_URL).hostname === 'openrouter.ai'
@@ -485,7 +499,7 @@ export function registerHarness(
               },
             ],
           },
-          deadline, trace,
+          deadline, trace, streaming ? delta => emit({ type: 'delta', delta }) : undefined,
         );
         const roundInput = response.usage?.input_tokens;
         const roundOutput = response.usage?.output_tokens;
@@ -819,13 +833,15 @@ export function registerHarness(
           [runId, JSON.stringify(trace)],
         );
       });
-      return {
+      const result = {
         text,
         draft,
         changes: draft ? diffSetup(input.draft, draft) : [],
         sources: references,
         runId,
       };
+      if (streaming) { emit({ type: 'done', result }); reply.raw.end(); return; }
+      return result;
     } catch (error) {
       trace.push({
         failure: {
@@ -855,19 +871,27 @@ export function registerHarness(
         "UPDATE agent_runs SET status='FAILED',trace=$2 WHERE id=$1",
         [runId, JSON.stringify(trace)],
       );
-      if (error instanceof ApiError) throw error;
+      const fail = (failure: ApiError) => {
+        if (!streaming) throw failure;
+        emit({ type: 'error', error: { code: failure.code, message: failure.message } });
+        reply.raw.end();
+      };
+      if (error instanceof ApiError) return fail(error);
       if(error instanceof OpenAI.APIConnectionTimeoutError || deadline.aborted)
-        throw new ApiError(502,'AI_TIMEOUT','AI ตอบกลับไม่ทันเวลา คืนโควตาแล้ว กรุณาลองใหม่หรือแบ่งคำขอเป็นขั้นย่อย');
+        return fail(new ApiError(502,'AI_TIMEOUT','AI ตอบกลับไม่ทันเวลา คืนโควตาแล้ว กรุณาลองใหม่หรือแบ่งคำขอเป็นขั้นย่อย'));
       const failure = providerFailureDetails(error);
       const reason = failure.status === 429 ? 'ผู้ให้บริการ AI จำกัดคำขอชั่วคราว'
         : [400, 422].includes(failure.status ?? 0) ? 'ผู้ให้บริการ AI ไม่รองรับรูปแบบคำขอนี้'
         : failure.kind === 'APIConnectionTimeoutError' || deadline.aborted ? 'ผู้ให้บริการ AI ใช้เวลานานเกินกำหนด'
         : 'ผู้ให้บริการ AI ตอบกลับไม่สำเร็จ';
-      throw new ApiError(
+      return fail(new ApiError(
         502,
         "AI_UNAVAILABLE",
         `${reason} คืนโควตาแล้ว ภาพและข้อความยังอยู่ ลองส่งอีกครั้ง`,
-      );
+      ));
+    } finally {
+      clearInterval(heartbeat);
+      if (streaming && !reply.raw.writableEnded) reply.raw.end();
     }
   });
 }

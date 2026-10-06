@@ -47,3 +47,37 @@ test('partially charged failures do not retry and keep usage for refund accounti
   await assert.rejects(createProviderResponse(f.client, { model: 'fixture', input: 'hi' }, AbortSignal.timeout(5000), trace), ProviderFailure);
   assert.equal(f.calls(), 1); assert.deepEqual(trace[0], { inputTokens: 100, outputTokens: 40 });
 });
+
+function streamingFixture(events: unknown[]) {
+  let calls = 0;
+  const client = new OpenAI({ apiKey: 'fixture', maxRetries: 0, fetch: async (_url, init) => {
+    calls++;
+    assert.equal(JSON.parse(init!.body as string).stream, true);
+    return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      { headers: { 'content-type': 'text/event-stream' } });
+  }});
+  return { client, calls: () => calls };
+}
+test('provider forwards real text deltas and preserves terminal tool calls and usage', async () => {
+  const terminal = { ...success, usage: { input_tokens: 100, output_tokens: 40 },
+    output: [...success.output, { type: 'function_call', name: 'read_skill', arguments: '{}', call_id: 'one' }] };
+  const f = streamingFixture([
+    { type: 'response.output_text.delta', delta: 'สวัสดี' },
+    { type: 'response.output_text.delta', delta: 'ครับ' },
+    { type: 'response.completed', response: terminal },
+  ]);
+  const deltas: string[] = [];
+  const result = await createProviderResponse(f.client, { model: 'fixture', input: 'hi' }, AbortSignal.timeout(5000), [], delta => deltas.push(delta));
+  assert.deepEqual(deltas, ['สวัสดี', 'ครับ']);
+  assert.deepEqual(result.output, terminal.output); assert.deepEqual(result.usage, terminal.usage);
+});
+test('broken streams and failures after generation never retry or expose provider messages', async () => {
+  for (const ending of [[], [{ type: 'error', code: 'server_error', message: 'secret' }],
+    [{ type: 'response.failed', response: { error: { code: 503, message: 'secret' }, usage: { input_tokens: 10, output_tokens: 5 } } }]]) {
+    const f = streamingFixture([{ type: 'response.output_text.delta', delta: 'partial' }, ...ending]);
+    await assert.rejects(createProviderResponse(f.client, { model: 'fixture', input: 'hi' }, AbortSignal.timeout(5000), [], () => {}), (e: unknown) => {
+      assert.ok(e instanceof ProviderFailure); assert.ok(!e.message.includes('secret')); return true;
+    });
+    assert.equal(f.calls(), 1);
+  }
+});

@@ -19,11 +19,25 @@ export function providerFailureDetails(error: unknown) {
   return { kind: error instanceof Error ? safeCode(error.name) : 'UnknownError', status: null };
 }
 export async function createProviderResponse(client: OpenAI, body: ResponseCreateParamsNonStreaming,
-  signal: AbortSignal, trace: unknown[]): Promise<AIResponse> {
+  signal: AbortSignal, trace: unknown[], onText?: (delta: string) => void): Promise<AIResponse> {
   for (let attempt = 0; ; attempt++) {
+    let streamStarted = false;
     try {
       // responses.create transforms output before the caller can inspect an HTTP 200 error.
-      const { data, response } = await client.post<any>('/responses', { body, signal }).withResponse();
+      const { data: payload, response } = await client.post<any>('/responses', {
+        body: onText ? { ...body, stream: true } : body, signal, stream: !!onText,
+      }).withResponse();
+      let data = payload;
+      if (onText) {
+        data = undefined;
+        for await (const event of payload) {
+          streamStarted = true;
+          if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') onText(event.delta);
+          if (['response.completed', 'response.incomplete', 'response.failed'].includes(event.type)) data = event.response;
+          if (event.type === 'error') throw new ProviderFailure(null, safeCode(event.code) ?? 'STREAM_ERROR', null, null, false);
+        }
+        if (!data) throw new ProviderFailure(null, 'STREAM_INCOMPLETE', null, null, false);
+      }
       const requestId = safeCode(response.headers.get('x-request-id')) ?? safeCode(data?.id);
       if (data?.error) {
         const code = data.error.code;
@@ -49,7 +63,7 @@ export async function createProviderResponse(client: OpenAI, body: ResponseCreat
       trace.push({ providerAttempt: attempt + 1, failure: details });
       // No retries for request incompatibility, incomplete output or ambiguous timeouts.
       // A single retry remains under the shared deadline and creates no extra user/run rows.
-      if (attempt > 0 || signal.aborted || (error instanceof ProviderFailure && !error.retryable) ||
+      if (attempt > 0 || streamStarted || signal.aborted || (error instanceof ProviderFailure && !error.retryable) ||
         ![429, 502, 503, 504].includes(details.status ?? 0)) throw error;
       await delay(500, undefined, { signal });
     }
