@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10110f" />
+    <meta
+      name="description"
+      content="เปลี่ยนไอเดียการเทรดให้เป็นเงื่อนไขที่ชัดเจนกับ Snaap ตั้งเซ็ตอัพ ตรวจสอบ และรับสัญญาณในที่เดียว"
+    />
+    <title>Snaap — From instinct to intention.</title>
+    <link rel="icon" href="/assets/snaap-favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/landing.css" />
+    <script src="/landing.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">ข้ามไปเนื้อหา</a>
+    <header class="navigation">
+      <a class="wordmark" href="#top" aria-label="Snaap หน้าแรก"
+        >Snaap<svg viewBox="34 20 128 155" aria-hidden="true">
+          <use href="/assets/snaap-symbol.svg#snaap-symbol" /></svg
+        ><span class="beta">BETA</span></a
+      >
+      <nav aria-label="เมนูหลัก">
+        <a href="#how-it-works">วิธีใช้งาน</a
+        ><a href="#your-rhythm">สิ่งที่ทำได้</a
+        ><a href="#questions">คำถามที่พบบ่อย</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="nav-cta" href="/home"
+          >เปิด Snaap <span aria-hidden="true">↗</span></a
+        ><button
+          class="menu-toggle"
+          type="button"
+          aria-label="เปิดเมนู"
+          aria-haspopup="dialog"
+          aria-controls="site-menu"
+          hidden
+        >
+          <span></span><span></span>
+        </button>
+      </div>
+    </header>
+    <dialog id="site-menu" aria-labelledby="menu-title">
+      <div class="menu-heading">
+        <span id="menu-title">EXPLORE SNAAP</span
+        ><button class="menu-close" aria-label="ปิดเมนู" type="button">
+          ×
+        </button>
+      </div>
+      <nav aria-label="สำรวจ Snaap">
+        <a href="#how-it-works"><small>01</small>วิธีใช้งาน <span>↗</span></a
+        ><a href="#your-rhythm"><small>02</small>สิ่งที่ทำได้ <span>↗</span></a
+        ><a href="#questions"><small>03</small>คำถามที่พบบ่อย <span>↗</span></a>
+      </nav>
+      <a class="button button-lime" href="/home"
+        >เปิดพื้นที่ของคุณ <span aria-hidden="true">↗</span></a
+      >
+    </dialog>
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-topline">
+          <span>YOUR EDGE. IN A SNAAP.</span><span>IDEA → SETUP → SIGNAL</span>
+        </div>
+        <div class="hero-copy">
+          <h1 id="hero-title">Less noise.<br />More <em>signal.</em></h1>
+          <p>
+            จากไอเดียในหัว สู่จังหวะที่ใช่<br />ให้ Snaap
+            ช่วยเปลี่ยนเงื่อนไขของคุณเป็นสัญญาณที่ชัดเจน
+          </p>
+          <a class="button button-lime" href="/home"
+            >เริ่มต้นกับ Snaap <span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <button
+          class="logo-play"
+          type="button"
+          aria-label="เล่นแอนิเมชันโลโก้ Snaap"
+          aria-pressed="false"
+        >
+          <span class="logo-orbit" aria-hidden="true"></span>
+          <span class="logo-stack" aria-hidden="true">
+            <svg class="logo-layer" style="--layer: 5" viewBox="34 20 128 155">
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+            <svg class="logo-layer" style="--layer: 4" viewBox="34 20 128 155">
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+            <svg class="logo-layer" style="--layer: 3" viewBox="34 20 128 155">
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+            <svg class="logo-layer" style="--layer: 2" viewBox="34 20 128 155">
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+            <svg class="logo-layer" style="--layer: 1" viewBox="34 20 128 155">
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+            <svg
+              class="logo-layer logo-front"
+              style="--layer: 0"
+              viewBox="34 20 128 155"
+            >
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+          </span>
+          <span class="play-hint"
+            ><span class="crosshair">＋</span>
+            <span id="play-label">CLICK TO SNAAP</span></span
+          >
+        </button>
+        <div class="hero-bottom">
+          <span>Built around your thinking.</span
+          ><a href="#how-it-works"
+            >สำรวจการทำงาน <span aria-hidden="true">↓</span></a
+          ><span class="edition">SNAAP / 01</span>
+        </div>
+      </section>
+      <section class="intro section-pad" id="how-it-works">
+        <div class="section-eyebrow">
+          <span>01 / THE PROCESS</span><span>ความคิดของคุณ ต่อกันเป็นระบบ</span>
+        </div>
+        <div class="intro-heading reveal">
+          <h2>Your idea.<br /><span>A clearer direction.</span></h2>
+          <p>
+            ไม่ต้องเริ่มจากโค้ด<br />เริ่มจากสิ่งที่คุณกำลังมองหาในตลาด<br />แล้วค่อย
+            ๆ ทำให้มันชัดเจนไปด้วยกัน
+          </p>
+        </div>
+        <div class="workflow reveal">
+          <div
+            class="step-list"
+            role="group"
+            aria-label="เลือกขั้นตอนเพื่อดูตัวอย่าง"
+          >
+            <button
+              class="step active"
+              data-step="0"
+              aria-pressed="true"
+              aria-controls="demo-stage"
+            >
+              <span class="step-number">01</span
+              ><span
+                ><strong>บอกไอเดียของคุณ</strong
+                ><small>พิมพ์สิ่งที่มองหา เหมือนคุยกับผู้ช่วย</small></span
+              ><span class="step-arrow">↗</span>
+            </button>
+            <button
+              class="step"
+              data-step="1"
+              aria-pressed="false"
+              aria-controls="demo-stage"
+            >
+              <span class="step-number">02</span
+              ><span
+                ><strong>ปรับให้เป็นเซ็ตอัพ</strong
+                ><small>ตรวจเงื่อนไข ตลาด และกรอบเวลา</small></span
+              ><span class="step-arrow">↗</span>
+            </button>
+            <button
+              class="step"
+              data-step="2"
+              aria-pressed="false"
+              aria-controls="demo-stage"
+            >
+              <span class="step-number">03</span
+              ><span
+                ><strong>รับสัญญาณที่รออยู่</strong
+                ><small>เลือกช่องทาง แล้วติดตามเมื่อเข้าเงื่อนไข</small></span
+              ><span class="step-arrow">↗</span>
+            </button>
+          </div>
+          <div
+            class="demo"
+            id="demo-stage"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <div class="demo-top">
+              <span class="demo-brand">Snaap<span>✳</span></span
+              ><span>PRODUCT WALKTHROUGH</span>
+            </div>
+            <div class="demo-panel" data-panel="0">
+              <span class="micro">YOU THINK IT.</span>
+              <h3>วันนี้กำลังมองหา<br />จังหวะแบบไหน?</h3>
+              <div class="chat-bubble">
+                อยากหาจังหวะ BTC ย่อตัวในขาขึ้น<br />ราคาอยู่เหนือ EMA 200 และ
+                RSI ตัดขึ้นเหนือ 30 <span>↑</span>
+              </div>
+              <p class="assistant-note">
+                <span class="status-dot"></span>เริ่มจากไอเดีย
+                แล้วค่อยตรวจรายละเอียดด้วยกัน
+              </p>
+            </div>
+            <div class="demo-panel" data-panel="1" hidden>
+              <span class="micro">MAKE IT PRECISE.</span>
+              <h3>ทุกเงื่อนไข<br />อยู่ในมือคุณ</h3>
+              <div class="setup-summary">
+                <div>
+                  <strong>BTC / USDT</strong><span>Binance · Spot · 1h</span>
+                </div>
+                <div>
+                  <span>แนวโน้ม</span><strong>ราคา &gt; EMA 200</strong>
+                </div>
+                <div>
+                  <span>จังหวะ</span><strong>RSI (14) ตัดขึ้น 30</strong>
+                </div>
+              </div>
+              <p class="assistant-note">ตรวจและปรับรายละเอียดก่อนเปิดใช้งาน</p>
+            </div>
+            <div class="demo-panel" data-panel="2" hidden>
+              <span class="micro">CATCH YOUR MOMENT.</span>
+              <h3>เมื่อเงื่อนไขตรงกัน<br />ก็ถึงเวลาของคุณ</h3>
+              <div class="signal-preview">
+                <span class="signal-icon">↗</span>
+                <div>
+                  <small>ตัวอย่างการแจ้งเตือน</small
+                  ><strong>BTC / USDT · เข้าเงื่อนไข</strong>
+                  <p>ราคาย่อตัวในขาขึ้น · 1h</p>
+                </div>
+              </div>
+              <div class="channel-names">
+                <span>Telegram</span><span>Discord</span><span>LINE</span
+                ><span>Webhook</span>
+              </div>
+            </div>
+            <div class="demo-bottom">
+              <span>ข้อมูลสมมติเพื่อสาธิตการใช้งาน</span
+              ><span id="demo-count">01 / 03</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="rhythm section-pad" id="your-rhythm">
+        <div class="section-eyebrow">
+          <span>02 / YOUR WORKSPACE</span><span>น้อยขั้นตอน มากความชัดเจน</span>
+        </div>
+        <div class="rhythm-layout reveal">
+          <div>
+            <svg
+              class="rhythm-symbol"
+              viewBox="34 20 128 155"
+              aria-hidden="true"
+            >
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+            <h2>Your market.<br />Your rhythm.</h2>
+            <p>พื้นที่เดียวสำหรับคิด ทดลอง และติดตาม<br />ในจังหวะที่เป็นคุณ</p>
+          </div>
+          <div class="feature-list">
+            <article>
+              <span>01</span>
+              <div>
+                <h3>คิดให้ชัด ผ่านบทสนทนา</h3>
+                <p>คุยกับ AI เพื่ออธิบายไอเดียและออกแบบเงื่อนไขให้ตรวจสอบได้</p>
+              </div>
+            </article>
+            <article>
+              <span>02</span>
+              <div>
+                <h3>มองเห็นเงื่อนไขทุกขั้น</h3>
+                <p>
+                  เลือกอินดิเคเตอร์ ปรับค่าด้วยตัวเอง
+                  และจัดการเซ็ตอัพในพื้นที่เดียว
+                </p>
+              </div>
+            </article>
+            <article>
+              <span>03</span>
+              <div>
+                <h3>ส่งต่อสัญญาณถึงที่ของคุณ</h3>
+                <p>
+                  เชื่อมต่อช่องทางแจ้งเตือนที่ใช้
+                  แล้วติดตามสัญญาณเมื่อระบบประเมินว่าเข้าเงื่อนไข
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section
+        class="questions section-pad"
+        id="questions"
+        aria-labelledby="questions-title"
+      >
+        <div class="section-eyebrow">
+          <span>03 / GOOD TO KNOW</span><span>ก่อนเริ่มต้น</span>
+        </div>
+        <div class="questions-layout reveal">
+          <h2 id="questions-title">
+            A little clarity.<br /><span>Before you start.</span>
+          </h2>
+          <div class="question-list">
+            <details name="snaap-faq">
+              <summary>
+                ต้องเขียนโค้ดเป็นไหม?<span aria-hidden="true">+</span>
+              </summary>
+              <p>
+                เริ่มจากพิมพ์ไอเดียในแชต หรือกำหนดเงื่อนไขผ่านตัวแก้ไขได้เลย
+                แล้วตรวจอินดิเคเตอร์ ตลาด
+                และกรอบเวลาให้ตรงกับสิ่งที่ต้องการก่อนเปิดใช้งาน
+              </p>
+            </details>
+            <details name="snaap-faq">
+              <summary>
+                Snaap ซื้อขายให้เลยหรือเปล่า?<span aria-hidden="true">+</span>
+              </summary>
+              <p>
+                Snaap ช่วยออกแบบเงื่อนไขและแจ้งเตือนเมื่อเข้าเงื่อนไข
+                ไม่ได้ส่งคำสั่งซื้อขายแทนคุณ การตัดสินใจยังอยู่ในมือคุณ
+              </p>
+            </details>
+            <details name="snaap-faq">
+              <summary>
+                รับแจ้งเตือนที่ไหนได้บ้าง?<span aria-hidden="true">+</span>
+              </summary>
+              <p>
+                ตั้งค่าปลายทางได้ผ่าน Telegram, Discord, LINE หรือ Webhook
+                โดยต้องเชื่อมต่อช่องทางและตรวจการตั้งค่าก่อนเริ่มรับสัญญาณ
+              </p>
+            </details>
+            <details name="snaap-faq">
+              <summary>
+                ตัวอย่างในหน้านี้เป็นข้อมูลจริงไหม?<span aria-hidden="true"
+                  >+</span
+                >
+              </summary>
+              <p>
+                ตัวอย่างนี้ใช้ข้อมูลสมมติเพื่ออธิบายขั้นตอนการใช้งาน เมื่อเปิด
+                Snaap คุณสามารถสร้างและตรวจเซ็ตอัพของตัวเองได้
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+      <section class="closing section-pad">
+        <div class="section-eyebrow">
+          <span>LESS SCROLLING. MORE CLARITY.</span
+          ><span>START SOMETHING.</span>
+        </div>
+        <div class="reveal">
+          <h2>
+            Make it<br /><em>Snaap.</em
+            ><svg viewBox="34 20 128 155" aria-hidden="true">
+              <use href="/assets/snaap-symbol.svg#snaap-symbol" />
+            </svg>
+          </h2>
+          <div class="closing-action">
+            <p>ไอเดียถัดไปของคุณ เริ่มได้ตรงนี้</p>
+            <a class="button button-dark" href="/home"
+              >เปิดพื้นที่ของคุณ <span aria-hidden="true">↗</span></a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <a class="wordmark" href="#top"
+        >Snaap<svg viewBox="34 20 128 155" aria-hidden="true">
+          <use href="/assets/snaap-symbol.svg#snaap-symbol" /></svg
+      ></a>
+      <p>
+        เครื่องมือช่วยวิเคราะห์และแจ้งเตือน ไม่ใช่ระบบส่งคำสั่งซื้อขายอัตโนมัติ
+      </p>
+      <a href="/privacy.html">ความเป็นส่วนตัว ↗</a>
+    </footer>
+  </body>
+</html>
