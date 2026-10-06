@@ -212,7 +212,7 @@ conversationTitleButton.onclick = () => {
   const row = state.conversationRows.find(row => row.id === id);
   if (!row) return;
   const dialog = document.createElement('dialog');
-  dialog.className = 'workspace-dialog';
+  dialog.className = 'workspace-dialog rename-chat-dialog';
   dialog.setAttribute('aria-labelledby', 'rename-chat-heading');
   dialog.innerHTML = '<form><h2 id="rename-chat-heading">เปลี่ยนชื่อแชท</h2><label>ชื่อแชท<input name="title" maxlength="100" required></label><p class="field-note" data-rename-error role="alert" hidden></p><div class="row-actions"><button type="button" class="secondary" data-cancel>ยกเลิก</button><button type="submit" class="primary">บันทึก</button></div></form>';
   const input = dialog.querySelector('input');
