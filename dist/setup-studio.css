@@ -23,16 +23,19 @@
   display: none;
 }
 .studio-draft-status {
-  display: block;
+  display: inline;
+  flex-shrink: 0;
   font-size: 11px;
   line-height: 14px;
   color: var(--muted);
   white-space: nowrap;
 }
 .studio-draft-status[hidden] { display: none; }
-.conversation-title:has(.studio-draft-status:not([hidden])) .conversation-title-button {
-  min-height: 28px;
-  padding-block: 0;
+.workbench-toolbar .conversation-title:has(.studio-draft-status:not([hidden])) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 @media (max-width: 1279px) {
   .conversation-actions .studio-workspace-header { display: none; }
