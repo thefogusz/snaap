@@ -593,7 +593,7 @@
             <span style="color:var(--tertiary);"> / ${u.rules_count} กฎ</span>
           </td>
           <td>
-            <div>Std: <strong>${u.ai_standard_used}</strong> / ${u.is_pro ? 100 : 20}</div>
+            <div>Std: <strong>${u.ai_standard_used}</strong> ครั้ง · ไม่จำกัด</div>
             <div style="font-size:11px;color:var(--tertiary);">Deep: <strong>${u.ai_deep_used}</strong> · อยู่ระหว่างพัฒนา</div>
           </td>
           <td>${formatDate(u.created_at)}</td>

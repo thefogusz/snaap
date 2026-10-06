@@ -1640,7 +1640,7 @@ billing.className = "view secondary-view";
 billing.hidden = true;
 $("#main").append(billing);
 function renderBilling() {
-  billing.innerHTML = `<div class="page-heading"><h1>บัญชีและแพ็กเกจ</h1></div><div class="runtime-card"><h2>${state.me?.plan ?? "ยังไม่ได้เข้าสู่ระบบ"}</h2><p>${esc(state.me?.email ?? "")} ${state.me?.local ? "· บัญชีพัฒนาบนเครื่อง" : ""}</p><p>เซ็ตอัพที่เปิดพร้อมกัน ${state.me?.limits.activeRules ?? 0} รายการ · AI ปกติ ${state.me?.limits.standard ?? 0} ครั้ง/เดือน · โหมดละเอียดอยู่ระหว่างพัฒนา</p><button class="secondary" data-export>ส่งออกข้อมูล</button></div><div class="runtime-card"><h2>Pro · 199 บาท / เดือน</h2><p>20 เซ็ตอัพ · AI ปกติ 100 ครั้ง · โหมดวิเคราะห์ละเอียดเร็ว ๆ นี้</p><p>${state.health?.billing ? "ระบบชำระเงินพร้อมตามการตั้งค่าเซิร์ฟเวอร์" : "ยังไม่ได้เชื่อม Stripe ไม่มีการเรียกเก็บเงิน"}</p><button class="primary" data-checkout="card" ${state.health?.billing ? "" : "disabled"}>สมัครด้วยบัตร</button> <button class="secondary" data-checkout="promptpay" ${state.health?.billing ? "" : "disabled"}>PromptPay · 30 วัน</button><p class="field-note">PromptPay จ่ายต่อรอบเอง บัตรต่ออายุรายเดือน</p><button class="text-button" data-portal ${state.health?.billing ? "" : "disabled"}>จัดการสมาชิก / ยกเลิกต่ออายุ</button></div>`;
+  billing.innerHTML = `<div class="page-heading"><h1>บัญชีและแพ็กเกจ</h1></div><div class="runtime-card"><h2>${state.me?.plan ?? "ยังไม่ได้เข้าสู่ระบบ"}</h2><p>${esc(state.me?.email ?? "")} ${state.me?.local ? "· บัญชีพัฒนาบนเครื่อง" : ""}</p><p>เซ็ตอัพที่เปิดพร้อมกัน ${state.me?.limits.activeRules ?? 0} รายการ · AI ปกติไม่จำกัดจำนวนครั้ง · โหมดละเอียดอยู่ระหว่างพัฒนา</p><button class="secondary" data-export>ส่งออกข้อมูล</button></div><div class="runtime-card"><h2>Pro · 199 บาท / เดือน</h2><p>20 เซ็ตอัพ · AI ปกติไม่จำกัดจำนวนครั้ง · โหมดวิเคราะห์ละเอียดเร็ว ๆ นี้</p><p>${state.health?.billing ? "ระบบชำระเงินพร้อมตามการตั้งค่าเซิร์ฟเวอร์" : "ยังไม่ได้เชื่อม Stripe ไม่มีการเรียกเก็บเงิน"}</p><button class="primary" data-checkout="card" ${state.health?.billing ? "" : "disabled"}>สมัครด้วยบัตร</button> <button class="secondary" data-checkout="promptpay" ${state.health?.billing ? "" : "disabled"}>PromptPay · 30 วัน</button><p class="field-note">PromptPay จ่ายต่อรอบเอง บัตรต่ออายุรายเดือน</p><button class="text-button" data-portal ${state.health?.billing ? "" : "disabled"}>จัดการสมาชิก / ยกเลิกต่ออายุ</button></div>`;
   const first = billing.querySelector(".runtime-card");
   const limitText = first?.querySelectorAll("p")[1];
   if (limitText) {
@@ -1648,7 +1648,7 @@ function renderBilling() {
     metrics.className = "plan-capabilities";
     metrics.innerHTML = [
       ["bell", state.me?.limits.activeRules ?? 0, "เซ็ตอัพที่เปิดได้"],
-      ["spark", state.me?.limits.standard ?? 0, "AI / เดือน"],
+      ["spark", "ไม่จำกัด", "จำนวนครั้ง AI"],
       ["layers", "เร็ว ๆ นี้", "วิเคราะห์ละเอียด · Pro"],
     ]
       .map(

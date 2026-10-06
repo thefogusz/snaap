@@ -211,29 +211,8 @@ export function registerHarness(
         ).rowCount
       )
         throw new ApiError(429, "AGENT_BUSY", "กำลังวิเคราะห์คำขอก่อนหน้า");
-      const pro = !!(
-        await c.query(
-          "SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()",
-          [req.userId],
-        )
-      ).rowCount;
-      const limit = input.mode === "deep" ? (pro ? 10 : 0) : pro ? 100 : 20;
-      const used = Number(
-        (
-          await c.query(
-            "SELECT count(*) AS n FROM usage_ledger WHERE owner_id=$1 AND mode=$2 AND status IN ('RESERVED','COMPLETED') AND NOT quota_waived AND created_at>=date_trunc('month',now())",
-            [req.userId, input.mode],
-          )
-        ).rows[0].n,
-      );
-      if (used >= limit)
-        throw new ApiError(
-          429,
-          "QUOTA_EXCEEDED",
-          input.mode === "deep" && !pro
-            ? "โหมดละเอียดสำหรับ Pro"
-            : "โควตารอบนี้หมดแล้ว",
-        );
+      // Monthly AI call caps are temporarily disabled for all plans.
+      // Keep reservations and completed usage for cost accounting.
       await c.query(
         "INSERT INTO usage_ledger(id,owner_id,mode,status) VALUES($1,$2,$3,'RESERVED')",
         [runId, req.userId, input.mode],

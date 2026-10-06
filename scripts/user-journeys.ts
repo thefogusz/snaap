@@ -429,14 +429,12 @@ export async function runUserJourneys(
                 [u.conv],
               )
             ).rows[0].n;
-            const blocked = await call(
+            await call(
               u,
               base + "/turns",
               "POST",
               { text: "simple", mode: "standard", draft: u.draft },
-              429,
             );
-            assert.equal(blocked.error.code, "QUOTA_EXCEEDED");
             assert.equal(
               (
                 await db.query(
@@ -444,8 +442,8 @@ export async function runUserJourneys(
                   [u.conv],
                 )
               ).rows[0].n,
-              countBefore,
-              "quota rejection does not pollute history",
+              countBefore + 2,
+              "chat past the former cap persists both messages",
             );
             assert.equal(
               (
@@ -454,7 +452,7 @@ export async function runUserJourneys(
                   [u.id],
                 )
               ).rows[0].n,
-              20,
+              Math.max(used, 20) + 1,
             );
           }
           // Cross-account isolation on every day, not only on the initial save.

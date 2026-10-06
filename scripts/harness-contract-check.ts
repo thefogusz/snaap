@@ -96,6 +96,21 @@ try {
         selection: { ruleIds: [], importIds: [] },
       },
     });
+  // Monthly call caps are temporarily disabled; usage accounting still applies.
+  await db.query("INSERT INTO usage_ledger(id,owner_id,mode,status) SELECT gen_random_uuid(),$1,'standard','COMPLETED' FROM generate_series(1,101)", [owner]);
+  for (const pro of [false, true]) {
+    if (pro) await db.query("INSERT INTO entitlements(owner_id,pro_until) VALUES($1,now()+interval '1 day')", [owner]);
+    const unlimited = await turn("สวัสดี หลังใช้เกินเพดานเดิม");
+    assert.equal(unlimited.statusCode, 200, unlimited.body);
+    const me = (await app.inject({method: 'GET', url: '/api/v1/me', headers})).json();
+    assert.equal(me.limits.standard, null);
+    assert.equal(me.limits.deep, null);
+    assert.equal(me.usage.find((row: any) => row.mode === 'standard').count, pro ? 103 : 102);
+  }
+  await db.query("DELETE FROM entitlements WHERE owner_id=$1", [owner]);
+  await db.query("DELETE FROM usage_ledger WHERE owner_id=$1", [owner]);
+  await db.query("DELETE FROM messages WHERE conversation_id=$1", [id]);
+  console.log('PASS FREE and PRO can chat past previous monthly limits while usage is recorded');
   reply = async () => response("partial", "incomplete");
   const incomplete = await turn("fixture incomplete");
   assert.equal(incomplete.statusCode, 502);

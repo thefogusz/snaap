@@ -354,8 +354,8 @@ export async function buildApp(
       limits: {
         activeRules: pro ? 20 : 6,
         pairsPerSetup: 10,
-        standard: pro ? 100 : 20,
-        deep: pro ? 10 : 0,
+        standard: null,
+        deep: null,
       },
       usage,
       local: user?.email === "local@snaap.invalid",
