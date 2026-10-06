@@ -1,34 +1,4 @@
-const logo = document.querySelector(".logo-play");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-let pointerFrame = 0;
-logo.addEventListener("pointermove", (event) => {
-  if (reducedMotion.matches || event.pointerType === "touch") return;
-  cancelAnimationFrame(pointerFrame);
-  pointerFrame = requestAnimationFrame(() => {
-    const bounds = logo.getBoundingClientRect();
-    logo.style.setProperty(
-      "--y",
-      `${((event.clientX - bounds.left) / bounds.width - 0.5) * 24}deg`,
-    );
-    logo.style.setProperty(
-      "--x",
-      `${((event.clientY - bounds.top) / bounds.height - 0.5) * -18}deg`,
-    );
-  });
-});
-logo.addEventListener("pointerleave", () => {
-  cancelAnimationFrame(pointerFrame);
-  logo.style.setProperty("--x", "0deg");
-  logo.style.setProperty("--y", "0deg");
-});
-logo.addEventListener("click", () => {
-  const expanded = logo.getAttribute("aria-pressed") !== "true";
-  logo.setAttribute("aria-pressed", String(expanded));
-  document.querySelector("#play-label").textContent = expanded
-    ? "CLICK TO BRING IT TOGETHER"
-    : "CLICK TO SNAAP";
-});
-
 if (!reducedMotion.matches && "IntersectionObserver" in window) {
   const observer = new IntersectionObserver(
     (entries) => {
@@ -119,7 +89,9 @@ function updateStrategy() {
       `M${data.values.map((y, i) => `${30 + i * 40} ${y}`).join("L")}L950 310H30Z`,
     );
 }
+let signalAnimation;
 function showPhase(value) {
+  signalAnimation?.cancel();
   phase = value;
   experience.dataset.phase = phase;
   experience.dataset.delivered = "false";
@@ -134,19 +106,19 @@ function showPhase(value) {
   const copy = {
     idea: [
       "คุณมีไอเดีย ที่เหลือให้ Snaap ช่วย",
-      "What if becomes what’s next.",
+      "เริ่มที่ไอเดียของคุณ.",
       "ให้ Snaap ออกแบบ",
       "01",
     ],
     build: [
       "จากสิ่งที่คุณคิด สู่เงื่อนไขที่มองเห็น",
-      "An idea. Connected.",
+      "ไอเดีย + Agent = เซ็ตอัพ.",
       "เห็นเซ็ตอัพบนกราฟ",
       "02",
     ],
     chart: [
       "เลือกที่รับ แล้วลองปล่อยให้ตลาดเดิน",
-      "Your setup. In motion.",
+      "เห็นเงื่อนไข จับจังหวะ.",
       "จำลองสัญญาณเข้า",
       "03",
     ],
@@ -199,11 +171,73 @@ next.addEventListener("click", () => {
   else if (experience.dataset.delivered === "true") showPhase("idea");
   else {
     experience.dataset.delivered = "true";
+    animateSignalDelivery();
     document.querySelector("#story-kicker").textContent =
       `จากไอเดียของคุณ ถึง ${destination}`;
-    document.querySelector("#experience-title").textContent = "And… Snaap.";
+    document.querySelector("#experience-title").textContent =
+      "จับสัญญาณได้แล้ว.";
     next.textContent = "ลองอีกไอเดีย ↺";
   }
 });
 back.addEventListener("click", () => showPhase("idea"));
 updateStrategy();
+
+// The first impression already demonstrates the product's signal-to-alert loop.
+const heroMarket = document.querySelector(".hero-market");
+const heroCandles = document.querySelector("#hero-candles");
+heroCandles.replaceChildren(
+  ...[...document.querySelector("#story-candles").children].map((candle) =>
+    candle.cloneNode(true),
+  ),
+);
+const catchButton = document.querySelector("#hero-catch");
+catchButton.addEventListener("click", () => {
+  heroMarket.dataset.caught = "false";
+  // Restart the short, user-triggered CSS sequence, including on replay.
+  void heroMarket.offsetWidth;
+  heroMarket.dataset.caught = "true";
+  catchButton.innerHTML = 'เล่นอีกครั้ง <span aria-hidden="true">↺</span>';
+  document.querySelector("#hero-status").textContent =
+    "ตัวอย่าง: จับสัญญาณ BTC และแสดงแจ้งเตือนทาง Telegram แล้ว";
+});
+
+// Connect the actual signal point to the chosen destination at every viewport size.
+function animateSignalDelivery() {
+  if (reducedMotion.matches) return;
+  signalAnimation?.cancel();
+  const scene = document.querySelector(".chart-scene").getBoundingClientRect();
+  const entry = document
+    .querySelector(".entry-marker circle:nth-of-type(2)")
+    .getBoundingClientRect();
+  const target = document
+    .querySelector('[data-destination][aria-pressed="true"]')
+    .getBoundingClientRect();
+  const start = {
+    x: entry.left + entry.width / 2 - scene.left,
+    y: entry.top + entry.height / 2 - scene.top,
+  };
+  const end = {
+    x: target.left + target.width / 2 - scene.left,
+    y: target.top + target.height / 2 - scene.top,
+  };
+  signalAnimation = document.querySelector(".signal-particle").animate(
+    [
+      {
+        transform: `translate(${start.x}px,${start.y}px) scale(.5)`,
+        opacity: 0,
+      },
+      {
+        transform: `translate(${start.x}px,${start.y}px) scale(1)`,
+        opacity: 1,
+        offset: 0.12,
+      },
+      {
+        transform: `translate(${(start.x + end.x) / 2}px,${start.y + (end.y - start.y) * 0.65}px) scale(1)`,
+        opacity: 1,
+        offset: 0.65,
+      },
+      { transform: `translate(${end.x}px,${end.y}px) scale(2.5)`, opacity: 0 },
+    ],
+    { duration: 950, delay: 450, easing: "cubic-bezier(.4,0,.2,1)" },
+  );
+}
