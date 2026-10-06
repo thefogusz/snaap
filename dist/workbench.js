@@ -73,6 +73,14 @@ const state = {
   crop: null,
   editorNotice: null,
 };
+let conversationCache, recordConversationTiming;
+const conversationCacheReady = import('./conversation-cache.js').then(module => {
+  recordConversationTiming = module.recordConversationTiming;
+  conversationCache = module.createConversationCache({
+    load: () => api('/conversations?view=summary'),
+    scope: () => ({owner: state.me?.id, workspace: state.workspaceId}),
+  });
+});
 let tf = ["5m", "15m", "1h", "4h", "1d"];
 const names = ["Binance", "Bybit", "OKX", "Bitget", "MEXC"];
 const constant = (value) => ({ kind: "CONSTANT", value });
@@ -223,7 +231,7 @@ conversationTitleButton.onclick = () => {
       const saved = await api(`/conversations/${id}/title`, 'PUT', {title});
       if (state.workspaceId === workspace) {
         const current = state.conversationRows.find(row => row.id === id);
-        if (current) current.title = saved.title;
+        if (current) { current.title = saved.title; conversationCache.upsert(current); }
         const option = [...conversations.options].find(option => option.value === id);
         if (option) option.textContent = saved.title;
         renderConversationTitle();
@@ -249,17 +257,39 @@ newConversationButton.hidden=true;
 conversationActions.append(newConversationButton);
 conversationPicker.setAttribute("aria-label", "บทสนทนาล่าสุด");
 conversationPicker.title = "บทสนทนาล่าสุด";
-conversationPicker.onclick = async () => {
-  try { state.conversationRows = await api("/conversations"); } catch(error) { toast(error.message); return; }
+function conversationScope() {
+  return `${state.me?.id ?? ''}:${state.workspaceId ?? ''}`;
+}
+function applyConversationRows(rows) {
+  state.conversationRows = rows;
   renderConversationTitle();
+  conversationPicker.hidden = false;
+  conversations.innerHTML = '<option value="">บทสนทนาที่บันทึก</option>' + rows.map(row =>
+    `<option value="${row.id}">${esc(row.title)}</option>`).join('');
+  conversations.value = state.conversation ?? '';
+}
+let conversationDialog = null;
+let conversationDialogScope = null;
+conversationPicker.onclick = () => {
+  if (conversationDialog?.open) { conversationDialog.querySelector('input').focus(); return; }
+  const started = performance.now(), scope = conversationScope();
+  const cached = conversationCache.read();
+  applyConversationRows(cached.rows);
   const dialog = document.createElement("dialog");
+  conversationDialog = dialog;
+  conversationDialogScope = scope;
   dialog.className = "conversation-dialog";
   dialog.setAttribute("aria-labelledby", "conversation-dialog-title");
   dialog.innerHTML =
     '<header><h2 id="conversation-dialog-title">บทสนทนาล่าสุด</h2><button type="button" aria-label="ปิด">' +
     uiIcon("close") +
-    '</button></header><input type="search" autofocus aria-label="ค้นหาบทสนทนา" placeholder="ค้นหาบทสนทนา"><div class="conversation-results"></div>';
+    '</button></header><input type="search" autofocus aria-label="ค้นหาบทสนทนา" placeholder="ค้นหาบทสนทนา"><p class="field-note" data-conversation-status role="status" aria-live="polite" hidden></p><button type="button" class="text-button" data-conversation-retry hidden>ลองใหม่</button><div class="conversation-results"></div>';
   const list = dialog.querySelector(".conversation-results");
+  const status = dialog.querySelector('[data-conversation-status]');
+  const retry = dialog.querySelector('[data-conversation-retry]');
+  let ready = cached.ready;
+  const current = () => dialog.open && scope === conversationScope();
+  const note = text => { status.textContent = text; status.hidden = !text; };
   const paint = () => {
     const query = dialog.querySelector("input").value.toLocaleLowerCase();
     const rows = state.conversationRows.filter((row) =>
@@ -269,14 +299,39 @@ conversationPicker.onclick = async () => {
       ? rows
           .map(
             (row) =>
-              `<button type="button" data-conversation-id="${row.id}">${uiIcon(row.setup_saved_at ? "sliders" : "chat")}<span><strong>${esc(row.title)}</strong><small>${new Date(row.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })} · ${esc(state.workspaces.find(w=>w.id===row.workspace_id)?.name??state.workspaces.find(w=>w.id===state.workspaceId)?.name??"พื้นที่หลัก")}${row.id === state.conversation ? " · กำลังเปิด" : ""}</small><span class="conversation-kind${row.setup_saved_at ? ' is-saved' : ''}">${row.setup_saved_at ? 'บันทึกเซ็ตอัพแล้ว' : row.setup_status_known ? 'พูดคุย / วิเคราะห์' : 'บทสนทนา'}</span></span>${uiIcon("arrow")}</button>`,
+              `<button type="button" data-conversation-id="${row.id}">${uiIcon(row.setup_saved_at ? "sliders" : "chat")}<span><strong>${esc(row.title)}</strong><small>${row.created_at ? new Date(row.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) + ' · ' : ''}${esc(state.workspaces.find(w=>w.id===row.workspace_id)?.name??state.workspaces.find(w=>w.id===state.workspaceId)?.name??"พื้นที่หลัก")}${row.id === state.conversation ? " · กำลังเปิด" : ""}</small><span class="conversation-kind${row.setup_saved_at ? ' is-saved' : ''}">${row.setup_saved_at ? 'บันทึกเซ็ตอัพแล้ว' : row.setup_status_known ? 'พูดคุย / วิเคราะห์' : 'บทสนทนา'}</span></span>${uiIcon("arrow")}</button>`,
           )
           .join("")
-      : "<p>ไม่พบบทสนทนา</p>";
+      : ready ? "<p>ไม่พบบทสนทนา</p>" : '';
   };
+  const update = async (force = false) => {
+    if (!current()) return;
+    retry.hidden = true;
+    if (!force && conversationCache.read().fresh) return;
+    note(ready ? 'กำลังอัปเดตรายการ…' : 'กำลังโหลดบทสนทนา…');
+    list.setAttribute('aria-busy', 'true');
+    try {
+      const rows = await conversationCache.list({force});
+      if (!current()) { if (dialog.open && scope !== conversationScope()) dialog.close(); return; }
+      applyConversationRows(rows);
+      ready = true;
+      // Preserve search text, focus, and the focused row when background data arrives.
+      const focusedId = document.activeElement?.closest('[data-conversation-id]')?.dataset.conversationId;
+      paint();
+      if (focusedId) [...list.querySelectorAll('[data-conversation-id]')].find(button => button.dataset.conversationId === focusedId)?.focus();
+      note('');
+      recordConversationTiming('up-to-date', started);
+    } catch (error) {
+      if (!current()) return;
+      note(ready ? 'อัปเดตรายการไม่สำเร็จ ยังใช้รายการเดิมได้' : 'โหลดบทสนทนาไม่สำเร็จ');
+      retry.hidden = false;
+    } finally { if (dialog.isConnected) list.setAttribute('aria-busy', 'false'); }
+  };
+  retry.onclick = () => void update(true);
   dialog.querySelector("input").oninput = paint;
   dialog.querySelector("header button").onclick = () => dialog.close();
   list.onclick = (event) => {
+    if (!current()) { dialog.close(); return; }
     const button = event.target.closest("[data-conversation-id]");
     if (!button) return;
     conversations.value = button.dataset.conversationId;
@@ -285,11 +340,18 @@ conversationPicker.onclick = async () => {
   };
   dialog.onclose = () => {
     dialog.remove();
+    if (conversationDialog === dialog) conversationDialog = null;
     conversationPicker.focus();
   };
   document.body.append(dialog);
   paint();
   dialog.showModal();
+  requestAnimationFrame(() => {
+    if (!current()) return;
+    recordConversationTiming('visible', started, {cached: cached.ready, rows: cached.rows.length});
+    if (cached.fresh) recordConversationTiming('up-to-date', started);
+    void update();
+  });
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
     dialog.animate(
       [
@@ -299,6 +361,9 @@ conversationPicker.onclick = async () => {
       { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" },
     );
 };
+window.addEventListener('snaap-account-ready', () => {
+  if (conversationDialogScope !== conversationScope()) conversationDialog?.close();
+});
 const chatComposer = document.createElement("div");
 chatComposer.className = "chat-composer";
 $("#followup-form").before(chatComposer);
@@ -753,6 +818,7 @@ async function ensureConversation(title = state.draft?.name ?? "เซ็ตอ�
       window.SnaapStudio?.adoptConversation(c.id);
       state.conversation = c.id;
       state.conversationRows.unshift({ ...c, workspace_id:state.workspaceId, draft: null, draft_revision: 0 });
+      conversationCache.upsert(state.conversationRows[0]);
       renderConversationTitle();
       const option = new Option(c.title, c.id, true, true);
       conversations.add(option);
@@ -794,6 +860,7 @@ async function saveDraft() {
           draft: JSON.parse(sent),
           draft_revision: result.draft_revision,
         });
+      if (row) conversationCache.upsert(row);
       showDraftStatus("บันทึกร่างแล้ว");
       persistRecovery();
     } catch (error) {
@@ -1299,7 +1366,7 @@ async function refresh({ reuseMe = false } = {}) {
   const [rules, me, rows, destinations] = await Promise.all([
     api("/rules"),
     reuseMe && state.me ? Promise.resolve(state.me) : api("/me"),
-    api("/conversations"),
+    conversationCache.list({force: true}),
     api("/destinations"),
   ]);
   if (generation!==refreshGeneration || workspace !== state.workspaceId) return;
@@ -1353,18 +1420,8 @@ async function refresh({ reuseMe = false } = {}) {
   $("#ai-mode option[value=deep]").textContent = 'วิเคราะห์ละเอียด · Pro · เร็ว ๆ นี้';
   $("#ai-mode").value = 'standard';
   renderWatch();
-  state.conversationRows = rows;
-  renderConversationTitle();
-  conversationPicker.hidden = rows.length === 0;
+  applyConversationRows(rows);
   state.destinations = destinations.items;
-  conversations.innerHTML =
-    '<option value="">บทสนทนาที่บันทึก</option>' +
-    rows
-      .map(
-        (x) =>
-          `<option value="${x.id}" ${x.id === state.conversation ? "selected" : ""}>${esc(x.title)}</option>`,
-      )
-      .join("");
 }
 async function refreshContext() {
   const previous = new Map(
@@ -1524,9 +1581,9 @@ function appendChatImages(images) {
 }
 async function restoreChatImages(selectedIds, sentIds = []) {
   if (!state.conversation) return;
-  const conversationId = state.conversation;
+  const conversationId = state.conversation, workspace = state.workspaceId;
   const images = await api(`/conversations/${conversationId}/images`);
-  if (state.conversation !== conversationId) return;
+  if (state.conversation !== conversationId || state.workspaceId !== workspace) return;
   state.images = selectedIds ? images.filter(image => selectedIds.includes(image.id)).slice(-5) : images.slice(-5);
   state.images.forEach(image => { image.sent = !selectedIds || sentIds.includes(image.id); });
   renderImages();
@@ -1955,24 +2012,35 @@ async function loadChatHistory(){
     }
 }
 let conversationSelection=0;
+let conversationDetailController;
 conversations.addEventListener("change", async () => {
   if (!conversations.value) return;
   const selected = conversations.value;
   const selection=++conversationSelection,workspace=state.workspaceId;
+  const started = performance.now();
+  conversationDetailController?.abort();
   if (!(await leaveDraft())) {
     if(selection!==conversationSelection||state.workspaceId!==workspace)return;
     conversations.value = state.conversation ?? "";
     return;
   }
+  let loading;
   try {
     if(selection!==conversationSelection||state.workspaceId!==workspace)return;
-    const rows = await api("/conversations");
+    const controller = new AbortController();
+    conversationDetailController = controller;
+    loading = document.createElement('p');
+    loading.className = 'field-note';
+    loading.setAttribute('role', 'status');
+    loading.textContent = 'กำลังเปิดบทสนทนา…';
+    $('#messages').prepend(loading);
+    showDraftStatus('กำลังเปิดบทสนทนา…');
+    const stored = await api(`/conversations/${selected}`, 'GET', undefined, {signal: controller.signal});
     if(selection!==conversationSelection||state.workspaceId!==workspace)return;
-    state.conversationRows=rows;
+    conversationCache.upsert(stored, {invalidate: false});
+    applyConversationRows(conversationCache.read().rows);
     state.conversation = selected;
-    const stored = state.conversationRows.find(
-      (x) => x.id === state.conversation,
-    );
+    conversations.value = selected;
     state.draft = stored?.draft ?? initial();
     state.persistedDraft = JSON.stringify(state.draft);
     showDraftStatus(stored?.draft ? "บันทึกร่างแล้ว" : "");
@@ -1986,12 +2054,18 @@ conversations.addEventListener("change", async () => {
     setWorkbenchTab("chat");
     state.draftRevision = stored?.draft_revision ?? 0;
     $("#messages").replaceChildren();
+    $('#messages').prepend(loading);
     showDesigner();
-    await loadChatHistory();
-    await restoreChatImages();
+    await Promise.all([loadChatHistory(), restoreChatImages()]);
+    if(selection===conversationSelection&&state.workspaceId===workspace)
+      recordConversationTiming('selection', started, {outcome: 'success'});
   } catch (error) {
+    if(selection!==conversationSelection||state.workspaceId!==workspace||error.name==='AbortError')return;
+    conversations.value = state.conversation ?? '';
+    showDraftStatus('เปิดบทสนทนาไม่สำเร็จ');
+    recordConversationTiming('selection', started, {outcome: 'error'});
     toast(error.message);
-  }
+  } finally { loading?.remove(); }
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
@@ -2401,7 +2475,7 @@ window.addEventListener('online',()=>{if(state.draft&&draftDirty())saveDraft().c
 // Also checkpoint programmatic updates such as cleared text after sending a message.
 setInterval(()=>{if(recoveryReady)persistRecovery();},2000);
 async function boot() {
-  await Promise.all([directionToolsReady, indicatorCatalogReady, setupLimitsReady, timeframeToolsReady]);
+  await Promise.all([directionToolsReady, indicatorCatalogReady, setupLimitsReady, timeframeToolsReady, conversationCacheReady]);
   // Companion deferred scripts provide workspace and page helpers.
   await companionScriptsReady;
   $("#nav-count").textContent = "";

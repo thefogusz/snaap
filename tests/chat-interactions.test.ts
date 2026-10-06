@@ -152,7 +152,7 @@ const refreshSource=source.slice(source.indexOf('let refreshGeneration=0;'),sour
 test('delayed refresh cannot replace data from a different workspace',async()=>{
   const pending:Array<(value:any)=>void>=[];
   const state={workspaceId:'one',rules:['original']};
-  const context=vm.createContext({state,api:()=>new Promise(resolve=>pending.push(resolve))});
+  const context=vm.createContext({state,conversationCache:{list:()=>new Promise(resolve=>pending.push(resolve))},api:()=>new Promise(resolve=>pending.push(resolve))});
   vm.runInContext(refreshSource+';globalThis.runRefresh=refresh;',context);
   const flight=context.runRefresh();state.workspaceId='two';
   pending.forEach((resolve,i)=>resolve(i===0?['old']:{}));await flight;
