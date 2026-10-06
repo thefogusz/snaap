@@ -693,6 +693,7 @@ document.addEventListener("keydown", (event) => {
 });
 async function api(url, method = "GET", body, options = {}) {
   const headers = { "x-snaap-client": "web" };
+  if(options.onEvent)headers.Accept='application/x-ndjson';
   if(state.workspaceId)headers['x-snaap-workspace']=state.workspaceId;
   if (body && !(body instanceof FormData))
     headers["Content-Type"] = "application/json";
@@ -703,6 +704,10 @@ async function api(url, method = "GET", body, options = {}) {
     body:
       body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   });
+  if(res.ok && options.onEvent && res.headers.get('content-type')?.includes('application/x-ndjson')) {
+    const {readChatStream}=await import('./chat-stream.js');
+    return readChatStream(res,options.onEvent);
+  }
   let data;
   try {
     data = await res.json();
@@ -1566,6 +1571,22 @@ async function chat(text) {
   const thinkingStage=thinking.querySelector('[data-thinking-stage]');
   const setThinkingStage=text=>{thinkingStage.textContent=text;};
   let thinkingWaitTimer;
+  let streamedMessage, streamedBody, streamedText='';
+  const updateStream=event=>{
+    if(event.type==='reset'){
+      streamedText='';streamedMessage?.remove();streamedMessage=null;streamedBody=null;
+      thinking.hidden=false;setThinkingStage('กำลังคิดคำตอบ…');
+    }
+    if(event.type!=='delta')return;
+    clearTimeout(thinkingWaitTimer);thinking.hidden=true;
+    if(!streamedMessage){
+      streamedMessage=document.createElement('div');streamedMessage.className='message assistant';
+      streamedBody=document.createElement('div');streamedBody.className='assistant-body';
+      streamedMessage.append(streamedBody);$('#messages').append(streamedMessage);
+    }
+    streamedText+=event.delta;streamedBody.textContent=streamedText;
+    if(followingChat)requestAnimationFrame(scrollChatToLatest);
+  };
   $("#messages").append(thinking);
   $$("#chat-form button[type=submit],.chat-send-button").forEach(
     (b) => (b.disabled = true),
@@ -1598,11 +1619,15 @@ async function chat(text) {
         imageIds: [...new Set([...state.images, ...(state.useMyData ? state.libraryImages : [])].map(x=>x.id))],
 
       },
+      {onEvent:updateStream},
     );
     requestCompleted = true;
     clearTimeout(thinkingWaitTimer);
     thinking.remove();
-    message(result.text);
+    if(streamedBody){
+      const {renderAssistantText}=await assistantTextReady;
+      renderAssistantText(streamedBody,result.text);
+    }else message(result.text);
     if (result.draft) {
       if (JSON.stringify(state.draft) !== submittedDraft) {
         message('คุณแก้เซ็ตอัพระหว่างรอคำตอบ ลองเทียบข้อเสนอก่อนใช้');
@@ -1623,6 +1648,7 @@ async function chat(text) {
     await refresh();
   } catch (error) {
     if (!requestCompleted) {
+      streamedMessage?.remove();
       pendingImages.forEach(image => { image.sent = false; });
       renderImages();
     }

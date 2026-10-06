@@ -38,6 +38,12 @@ const server = http.createServer(async (req, res) => {
     const body = JSON.parse(Buffer.concat(chunks).toString());
     requests.push(body);
     const result = await reply(body);
+    if (body.stream) {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      for (const delta of ['สวัสดี', 'ครับ']) res.write(`data: ${JSON.stringify({ type: 'response.output_text.delta', delta })}\n\n`);
+      res.end(`data: ${JSON.stringify({ type: 'response.' + result.status, response: result })}\n\n`);
+      return;
+    }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(result));
   } catch {
@@ -97,6 +103,29 @@ try {
         selection: { ruleIds: [], importIds: [] },
       },
     });
+  const streamedTurn = () => app.inject({ method: 'POST', url: `/api/v1/conversations/${id}/turns`,
+    headers: { ...headers, accept: 'application/x-ndjson' }, payload: { text: 'ทดสอบ streaming', mode: 'standard' } });
+  reply = async () => response('สวัสดีครับ');
+  const streamed = await streamedTurn();
+  assert.equal(streamed.statusCode, 200, streamed.body);
+  assert.match(streamed.headers['content-type'] as string, /application\/x-ndjson/);
+  const events = streamed.body.trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(events.filter(event => event.type === 'delta').map(event => event.delta), ['สวัสดี', 'ครับ']);
+  assert.equal(events.at(-1).type, 'done');
+  assert.equal(events.at(-1).result.text, 'สวัสดีครับ');
+  assert.equal((await db.query("SELECT content FROM messages WHERE conversation_id=$1 AND role='assistant'", [id])).rows[0].content, 'สวัสดีครับ');
+  reply = async () => response('partial', 'incomplete');
+  const failedStream = await streamedTurn();
+  const failedEvents = failedStream.body.trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(failedEvents.at(-1).type, 'error');
+  assert.equal(failedEvents.at(-1).error.code, 'AI_INCOMPLETE');
+  assert.equal((await db.query("SELECT count(*) n FROM messages WHERE conversation_id=$1 AND role='assistant'", [id])).rows[0].n, '1');
+  assert.equal((await db.query("SELECT status FROM usage_ledger WHERE id=(SELECT id FROM agent_runs WHERE conversation_id=$1 AND status='FAILED')", [id])).rows[0].status, 'REFUNDED');
+  await db.query('DELETE FROM messages WHERE conversation_id=$1', [id]);
+  await db.query('DELETE FROM agent_runs WHERE conversation_id=$1', [id]);
+  await db.query('DELETE FROM usage_ledger WHERE owner_id=$1', [owner]);
+  reply = async () => response('complete');
+  console.log('PASS streaming text, saved final answer and incomplete-response refund');
   // Monthly call caps are temporarily disabled; usage accounting still applies.
   await db.query("INSERT INTO usage_ledger(id,owner_id,mode,status) SELECT gen_random_uuid(),$1,'standard','COMPLETED' FROM generate_series(1,101)", [owner]);
   for (const pro of [false, true]) {
