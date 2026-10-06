@@ -721,14 +721,13 @@ summary:focus-visible {
 }
 .account-menu .auth-signout:hover { background: rgb(128 128 128 / 12%); }
 .account-contact {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  border-radius: 9px;
-  font-size: 14px;
+  display: block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
-.account-contact small { color: var(--muted); font-size: 12px; }
 .account-contact:hover { background: rgb(128 128 128 / 12%); }
 @keyframes account-menu-in {
   from { opacity: 0; transform: translateY(5px); }

@@ -517,7 +517,7 @@ accountMenu.id = "account-menu";
 accountMenu.className = "account-menu";
 accountMenu.hidden = true;
 accountMenu.setAttribute("aria-label", "เมนูบัญชี");
-accountMenu.innerHTML = '<a class="account-contact" href="mailto:contract@snaap.me"><span>ติดต่อเรา</span><small>contract@snaap.me</small></a>';
+accountMenu.innerHTML = '<a class="account-contact" href="mailto:contract@snaap.me" aria-label="ติดต่อเรา: contract@snaap.me">contract@snaap.me</a>';
 accountButton.before(accountMenu);
 function closeAccountMenu(restoreFocus = false) {
   accountMenu.hidden = true;
