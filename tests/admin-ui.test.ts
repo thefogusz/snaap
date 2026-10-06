@@ -143,6 +143,7 @@ async function dashboard() {
   runInNewContext(
     await readFile(new URL("../dist/admin.js", import.meta.url), "utf8"),
     {
+      skeletonUI: runInNewContext(await readFile(new URL('../dist/loading-ui.js',import.meta.url),'utf8')+';skeletonUI'),
       document: {
         querySelector: node,
         querySelectorAll: (selector: string) =>

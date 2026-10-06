@@ -1,4 +1,4 @@
-// Static placeholders: no animation, observers, timers, or extra network reads.
+// Shared markup: no per-placeholder listeners, timers, or extra network reads.
 function skeletonUI(kind = 'rows', label = 'กำลังโหลด…') {
   const line = '<i class="skeleton-line"></i>';
   const copy = '<div class="skeleton-copy">' + line + line + '</div>';
@@ -13,4 +13,11 @@ function skeletonUI(kind = 'rows', label = 'กำลังโหลด…') {
   // Callers supply fixed labels, but escape them so this helper is safe to reuse.
   const safeLabel = String(label).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   return '<div class="skeleton" role="status"><span class="sr-only">' + safeLabel + '</span><div aria-hidden="true">' + body + '</div></div>';
+}
+
+// One listener for the whole app. Pause CSS motion when the tab is hidden.
+if (typeof document !== 'undefined' && document.addEventListener) {
+  const syncLoadingMotion = () => document.documentElement.toggleAttribute('data-loading-paused', document.hidden);
+  syncLoadingMotion();
+  document.addEventListener('visibilitychange', syncLoadingMotion);
 }

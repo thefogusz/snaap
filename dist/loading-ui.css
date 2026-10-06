@@ -1,13 +1,18 @@
-/* Intentionally static: one paint, no continuing CPU/GPU animation work. */
-.skeleton { --skeleton-fill: #e9ebe7; --skeleton-border: #e1e4de; width: 100%; pointer-events: none; }
-[data-theme="dark"] .skeleton { --skeleton-fill: #2c2d32; --skeleton-border: #35363c; }
+/* One opacity animation per placeholder group; no per-shape paint animation. */
+.skeleton { --skeleton-fill: #eceef0; --skeleton-border: #e3e5e8; width: 100%; pointer-events: none; }
+[data-theme="dark"] .skeleton { --skeleton-fill: #2b2c32; --skeleton-border: #33343b; }
+.skeleton > div[aria-hidden="true"] { animation: skeleton-breathe 2.8s ease-in-out infinite; }
+@keyframes skeleton-breathe { 0%, 100% { opacity: .95; } 50% { opacity: .6; } }
+[data-loading-paused] .skeleton > div[aria-hidden="true"] { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .skeleton > div[aria-hidden="true"] { animation: none; } }
 .skeleton i { display: block; background: var(--skeleton-fill); border-radius: 6px; }
+.skeleton .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .skeleton-copy { display: grid; gap: 12px; flex: 1; min-width: 0; }
 .skeleton-line { width: 72%; height: 12px; }
 .skeleton-line:first-child { width: 42%; height: 16px; }
 .skeleton-row { display: flex; align-items: center; gap: 16px; padding: 22px 18px; border-bottom: 1px solid var(--skeleton-border); }
 .skeleton-icon { flex: 0 0 40px; height: 40px; border-radius: 12px !important; }
-.skeleton-card { padding: 24px; border: 1px solid var(--skeleton-border); border-radius: 16px; background: var(--white, #fff); }
+.skeleton-card { padding: 24px; border: 1px solid var(--skeleton-border); border-radius: 12px; background: var(--surface, var(--white, #fff)); }
 .skeleton-block { height: 100px; margin: 24px 0; }
 .skeleton-history { display: grid; gap: 20px; }
 .skeleton-history .skeleton-card:nth-child(2) .skeleton-block { height: 64px; }

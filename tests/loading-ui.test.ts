@@ -21,3 +21,15 @@ test('loading labels are escaped rather than interpreted as markup',()=>{
   assert.doesNotMatch(html,/<img/);
   assert.match(html,/&lt;img/);
 });
+
+test('one shared visibility listener pauses loading motion while the tab is hidden',()=>{
+  let paused=false;
+  const listeners=new Map<string,()=>void>();
+  const document={hidden:false,documentElement:{toggleAttribute:(_name:string,value:boolean)=>{paused=value;}},
+    addEventListener:(name:string,callback:()=>void)=>listeners.set(name,callback)};
+  vm.runInNewContext(source,{document});
+  assert.equal(paused,false);
+  assert.equal(listeners.size,1);
+  document.hidden=true;listeners.get('visibilitychange')!();assert.equal(paused,true);
+  document.hidden=false;listeners.get('visibilitychange')!();assert.equal(paused,false);
+});
