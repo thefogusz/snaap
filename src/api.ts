@@ -786,7 +786,7 @@ export async function buildApp(
   registerRuleRemoval(app, db);
   await app.register(staticFiles, {
     root: path.resolve("dist"),
-    index: "index.html",
+    index: "landing.html",
   });
   // Explicit SPA routes keep direct links and refreshes working without hiding
   // missing assets or unknown API endpoints behind the app shell.
