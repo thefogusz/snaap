@@ -777,6 +777,14 @@ export async function buildApp(
     root: path.resolve("dist"),
     index: "index.html",
   });
+  // Explicit SPA routes keep direct links and refreshes working without hiding
+  // missing assets or unknown API endpoints behind the app shell.
+  for (const view of ["home", "notifications", "history", "watch", "billing"]) {
+    app.get(`/${view}`, async (_req, reply) => reply.sendFile("index.html"));
+    app.get(`/${view}/`, async (req, reply) =>
+      reply.redirect(`/${view}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`),
+    );
+  }
   app.get("/admin", async (_req, reply) => reply.sendFile("admin.html"));
   app.get("/admin/login", async (_req, reply) =>
     reply.sendFile("admin-login.html"),

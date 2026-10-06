@@ -58,7 +58,7 @@ function paintWorkspacePicker(){
         await switchWorkspace(primary.id);
         await api('/workspaces/'+space.id,'DELETE');
         state.workspaces=state.workspaces.filter(w=>w.id!==space.id);
-        paintWorkspacePicker();await refresh();navigate(location.hash.slice(1)||'home');
+        paintWorkspacePicker();await refresh();navigate(window.SnaapRouter.current());
         dialog.close();toast('ลบเวิร์กสเปซแล้ว ข้อมูลย้ายไปพื้นที่หลัก');
       }catch(error){toast(error.message);button.disabled=false;}
     };
@@ -93,7 +93,7 @@ async function switchWorkspace(id){
     await refresh();await restoreRecovery();
     if(workbench.hidden||!state.draft){showDesigner();setWorkbenchTab('chat');}
     if(state.useMyData){await refreshContext();await renderLabImageChoices(true);}
-    const view=location.hash.slice(1)||'home';
+    const view=window.SnaapRouter.current();
     // Await the destination page, rather than revealing its previous workspace first.
     if(view==='history')await renderHistory();
     if(['notifications','watch'].includes(view))await renderNotifications();

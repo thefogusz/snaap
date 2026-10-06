@@ -17,7 +17,7 @@ function navigate(view) {
   $('#sidebar').classList.remove('is-open'); if(view==='watch')renderWatch();
   window.scrollTo({top:0,behavior:'instant'});
 }
-function go(view){if(location.hash===`#${view}`)navigate(view);else location.hash=view;}
+function go(view){window.SnaapRouter.go(view);}
 function summary(rule){return `ราคา > EMA ${rule.ema} · RSI (14) ตัดขึ้นเหนือ ${rule.rsi} · วอลุ่ม > ${rule.volume}× ค่าเฉลี่ย 20 แท่ง · ${rule.timeframe} · ${rule.close?'รอแท่งปิด':'ตรวจระหว่างแท่ง'}`;}
 function renderWatch(){
   const rules=state.rules.filter(r=>state.filter==='all'||(state.filter==='active'?r.active:!r.active));
@@ -101,12 +101,12 @@ document.addEventListener('click',e=>{
 document.addEventListener('click',e=>{if(matchMedia('(max-width: 760px)').matches&&!e.target.closest('#sidebar')&&!e.target.closest('[data-action="menu"]'))$('#sidebar').classList.remove('is-open');});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#sidebar').classList.remove('is-open');});
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
-window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)));
-navigate(location.hash.slice(1)||'home');renderWatch();
+window.addEventListener('snaap:navigate',()=>navigate(window.SnaapRouter.current()));
+navigate(window.SnaapRouter.current());renderWatch();
 // Optional browser-native agent access uses exactly the same navigation as the UI.
 const context=document.modelContext;
 if(context?.registerTool){
   const lifecycle=new AbortController();
-  try{Promise.resolve(context.registerTool({name:'navigate_snaap_prototype',title:'Open a Snaap prototype screen',description:'Navigate this design prototype. Does not connect an exchange, monitor markets, or send notifications.',inputSchema:{type:'object',properties:{view:{type:'string',enum:Object.keys(pageNames)}},required:['view'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||!Object.hasOwn(pageNames,input.view)||Object.keys(input).some(k=>k!=='view'))throw new Error('Invalid view');history.replaceState(null,'',`#${input.view}`);navigate(input.view);return {view:state.view,prototype:true};}},{signal:lifecycle.signal})).catch(()=>{});}catch{}
+  try{Promise.resolve(context.registerTool({name:'navigate_snaap_prototype',title:'Open a Snaap prototype screen',description:'Navigate this design prototype. Does not connect an exchange, monitor markets, or send notifications.',inputSchema:{type:'object',properties:{view:{type:'string',enum:Object.keys(pageNames)}},required:['view'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||!Object.hasOwn(pageNames,input.view)||Object.keys(input).some(k=>k!=='view'))throw new Error('Invalid view');window.SnaapRouter.replace(input.view);navigate(input.view);return {view:state.view,prototype:true};}},{signal:lifecycle.signal})).catch(()=>{});}catch{}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }

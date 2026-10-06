@@ -13,7 +13,7 @@ function openSetupImport(){
   try{
    if(state.workspaceId!==workspaceId)throw Error('เวิร์กสเปซเปลี่ยนแล้ว กรุณาเปิดนำเข้าอีกครั้ง');
    const code=field.value.trim();
-   if(previewCode===code){await api('/setup-shares/'+encodeURIComponent(code)+'/import','POST',{});dialog.close();await refresh();toast('เพิ่มเซ็ตอัพแล้ว');location.hash='notifications';}
+   if(previewCode===code){await api('/setup-shares/'+encodeURIComponent(code)+'/import','POST',{});dialog.close();await refresh();toast('เพิ่มเซ็ตอัพแล้ว');window.SnaapRouter.go("notifications");}
    else{
     const {setup}=await api('/setup-shares/'+encodeURIComponent(code));if(field.value.trim()!==code)return;
     preview.innerHTML=`<strong>${esc(setup.name)}</strong><small>${esc(setup.exchange.join(', '))} · ${esc(setup.market)} · ${esc(setup.pairs.join(', '))} · ${esc(setup.timeframe)}</small><p>${esc(fullSummary(setup))}</p><small>เพิ่มใน ${esc(state.workspaces.find(w=>w.id===workspaceId)?.name??'พื้นที่หลัก')} · ยังไม่เปิดแจ้งเตือน</small>`;

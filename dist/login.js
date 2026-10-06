@@ -15,7 +15,7 @@ async function prepareLogin(){
       const button=event.currentTarget;button.disabled=true;
       try{
         const result=await fetch('/api/v1/auth/local',{method:'POST',headers:{'x-snaap-client':'web','Content-Type':'application/json'},body:'{}'});
-        if(!result.ok)throw Error();sessionStorage.removeItem('snaap-signed-out');location.replace('/#home');
+        if(!result.ok)throw Error();sessionStorage.removeItem('snaap-signed-out');location.replace('/home');
       }catch{loginStatus.hidden=false;loginStatus.textContent='เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง';button.disabled=false;}
     };
   }catch{loginStatus.hidden=false;loginStatus.textContent='ยังเชื่อมต่อ Snaap ไม่ได้ กรุณารีเฟรชเพื่อลองอีกครั้ง';}

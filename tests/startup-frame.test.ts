@@ -41,9 +41,9 @@ function bootFixture(failure = false) {
     initWorkspaces: () => failure ? Promise.reject(Error('workspace unavailable')) : workspace.promise,
     refresh: () => rules.promise, restoreRecovery: () => recovery.promise,
     $: () => ({textContent: ''}), navigate() {}, showDesigner() {}, setWorkbenchTab() {}, renderDesigner() {},
-    sizeWorkbench() {}, sessionStorage: {removeItem() {}}, location: {hash: '#home', replace() {}},
+    sizeWorkbench() {}, sessionStorage: {removeItem() {}}, location: {replace() {}},
     document: {querySelectorAll: () => []}, requestAnimationFrame: (callback: () => void) => callback(),
-    window: {SnaapBoot: {finish: () => {revealed++;}, fail: (message: string) => failures.push(message)}},
+    window: {SnaapRouter: {current: () => 'home'}, SnaapBoot: {finish: () => {revealed++;}, fail: (message: string) => failures.push(message)}},
   });
   vm.runInContext(boot + ';globalThis.start=boot;', context);
   return {start: context.start as () => Promise<void>, workspace, rules, recovery, health, revealed: () => revealed, failures};

@@ -110,11 +110,11 @@
           if (!viewingInbox && preferences.desktop && supported() && Notification.permission === "granted") {
             try {
               const notice = new Notification("Snaap · สัญญาณใหม่", { body: text, tag: "snaap-signals", silent: true });
-              notice.onclick = () => { window.focus(); notificationSection = 'inbox'; location.hash = "notifications"; navigate('notifications'); notice.close(); };
+              notice.onclick = () => { window.focus(); notificationSection = 'inbox'; window.SnaapRouter.go("notifications"); navigate('notifications'); notice.close(); };
               setTimeout(() => notice.close(), 8000);
             } catch { /* Some mobile browsers require a service worker. Inbox still works. */ }
           }
-          if (notificationData && ["notifications", "watch"].includes(location.hash.slice(1))) void renderNotifications();
+          if (notificationData && ["notifications", "watch"].includes(window.SnaapRouter.current())) void renderNotifications();
         }
       }
       failed = false;

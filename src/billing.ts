@@ -71,8 +71,8 @@ export async function registerBilling(
             },
           }
         : { payment_intent_data: { metadata: { ownerId: req.userId } } }),
-      success_url: `${origin}/#billing`,
-      cancel_url: `${origin}/#billing`,
+      success_url: `${origin}/billing`,
+      cancel_url: `${origin}/billing`,
     });
     return { url: session.url };
   });
@@ -95,7 +95,7 @@ export async function registerBilling(
       url: (
         await stripe.billingPortal.sessions.create({
           customer: row.stripe_customer,
-          return_url: origin + "/#billing",
+          return_url: origin + "/billing",
         })
       ).url,
     };
