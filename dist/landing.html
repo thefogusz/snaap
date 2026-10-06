@@ -79,11 +79,6 @@
         >
           <svg class="hero-chart" viewBox="0 0 1000 330" aria-hidden="true">
             <defs>
-              <linearGradient id="hero-sweep-light">
-                <stop stop-color="#eff5db" stop-opacity="0" />
-                <stop offset=".5" stop-color="#eff5db" stop-opacity=".065" />
-                <stop offset="1" stop-color="#eff5db" stop-opacity="0" />
-              </linearGradient>
               <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop stop-color="#d0f64c" stop-opacity=".12" />
                 <stop offset="1" stop-color="#d0f64c" stop-opacity="0" />
@@ -129,7 +124,7 @@
               d="M100 286C250 290 330 208 480 219S760 193 940 152"
             />
             <g mask="url(#hero-area-mask)">
-              <rect class="hero-sweep-light" width="220" height="330" fill="url(#hero-sweep-light)" />
+              <path class="hero-sweep-light" d="M100 286C250 290 330 208 480 219S760 193 940 152" pathLength="100" />
             </g>
             <g id="hero-agent" transform="translate(352 181)">
               <path class="agent-tether" d="M0 -8V-27" />
