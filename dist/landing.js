@@ -431,8 +431,13 @@
   reduced.addEventListener("change", () => {
     if (reduced.matches && heroFrame) finishHeroScan();
   });
+  let heroVisible = false;
+  const updateSweep = () => hero.classList.toggle("sweep-active", heroVisible && !document.hidden);
+  document.addEventListener("visibilitychange", updateSweep);
   new IntersectionObserver(
     ([entry]) => {
+      heroVisible = entry.isIntersecting;
+      updateSweep();
       if (!entry.isIntersecting && heroFrame) finishHeroScan();
     },
     { threshold: 0.05 },
