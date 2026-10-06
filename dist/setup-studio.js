@@ -14,11 +14,16 @@
     bar = null,
     selectedOperand = null,
     editorMode = null;
-  const header = document.createElement("header");
+  const header = document.createElement("nav");
   header.className = "studio-workspace-header";
+  header.setAttribute("aria-label", "แสดงแผงเซ็ตอัพ");
   header.innerHTML =
-    '<div><strong data-studio-name>เซ็ตอัพ</strong><span data-studio-draft>ร่าง</span></div><div><button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button></div>';
-  workbench.before(header);
+    '<button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button>';
+  conversationActions.prepend(header);
+  const draftStatus = document.createElement("span");
+  draftStatus.className = "studio-draft-status";
+  draftStatus.setAttribute("role", "status");
+  conversationTitle.append(draftStatus);
   const tabsBar = document.createElement("nav");
   tabsBar.className = "studio-inspector-tabs";
   tabsBar.setAttribute("aria-label", "พื้นที่ทำงานเซ็ตอัพ");
@@ -387,8 +392,11 @@
     }
     header.hidden = workbench.hidden || workbench.dataset.tab === "chat";
     tabsBar.hidden = header.hidden;
-    header.querySelector("[data-studio-name]").textContent = state.draft.name;
-    header.querySelector("[data-studio-draft]").textContent = state.saved
+    draftStatus.hidden = header.hidden;
+    // Directly opening a saved setup may have no conversation title yet.
+    if (conversationTitle.hidden) conversationActions.prepend(draftStatus);
+    else conversationTitle.append(draftStatus);
+    draftStatus.textContent = state.saved
       ? "ร่าง · เวอร์ชัน " + state.saved.revision
       : "ร่างใหม่";
     const savedMatchesDraft = Boolean(state.saved && JSON.stringify(comparableSpec(state.saved.spec)) === JSON.stringify(comparableSpec(state.draft)));
@@ -862,5 +870,5 @@
   window.visualViewport?.addEventListener("resize", viewport);
   viewport();
   if (state.draft) decorate();
-  else header.hidden = tabsBar.hidden = true;
+  else header.hidden = tabsBar.hidden = draftStatus.hidden = true;
 })();
