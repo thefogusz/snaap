@@ -722,13 +722,13 @@ summary:focus-visible {
 .account-menu .auth-signout:hover { background: rgb(128 128 128 / 12%); }
 .account-contact {
   display: block;
-  padding: 8px 12px;
-  border-radius: 6px;
+  width: fit-content;
+  margin: 12px 10px 0;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
 }
-.account-contact:hover { background: rgb(128 128 128 / 12%); }
+.account-contact:hover { color: var(--ink); }
 @keyframes account-menu-in {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
