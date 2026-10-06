@@ -47,7 +47,13 @@ export function createConversationCache({load, scope, now = Date.now, staleTime 
     }).finally(() => { value.pending = null; });
     return value.pending;
   }
-  return {read, list, upsert};
+  function remove(id) {
+    const value = entry();
+    value.rows = value.rows.filter(row => row.id !== id);
+    value.version++;
+    value.at = -Infinity;
+  }
+  return {read, list, upsert, remove};
 }
 
 // Keep only the latest sample per phase; no chat text, user IDs or credentials.

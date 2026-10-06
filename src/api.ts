@@ -24,6 +24,7 @@ import { registerSetupFiles } from "./setup-files.js";
 import { registerSetupShares } from "./setup-shares.js";
 import { registerPresets } from "./presets.js";
 import { registerRuleRemoval } from "./rule-removal.js";
+import { registerConversationRemoval } from "./conversation-removal.js";
 import { registerEntryFlexibility } from "./entry-flexibility.js";
 import { registerRuleDestinations } from "./rule-destinations.js";
 import { registerAdmin, recordSystemLog, isUserAdmin } from "./admin.js";
@@ -653,6 +654,7 @@ export async function buildApp(
       return result.rows;
     },
   );
+  registerConversationRemoval(app, db);
   app.get('/api/v1/conversations/:id', async (req, reply) => {
     const {id} = z.object({id: z.string().uuid()}).parse(req.params);
     const started = performance.now();
