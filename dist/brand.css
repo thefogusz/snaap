@@ -16,6 +16,21 @@
 .startup-logo .brand-symbol {
   animation: startup-wave .4s ease-in-out .78s both;
 }
+.brand-beta {
+  flex: none;
+  align-self: flex-end;
+  margin: 0 0 5px 3px;
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--muted) 20%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 6%, transparent);
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .6px;
+  white-space: nowrap;
+}
 @media (prefers-reduced-motion: reduce) {
   .startup-logo .brand-symbol { animation: none; }
 }
