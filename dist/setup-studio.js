@@ -139,7 +139,7 @@
   chartPane.querySelector("header").after(toolbar);
   const eventList = document.createElement("div");
   eventList.className = "studio-event-list";
-  chartPane.querySelector(".replay-controls").after(eventList);
+  chartPane.querySelector(".studio-signals-dialog").append(eventList);
   const overlayEditor = document.createElement("section");
   overlayEditor.className = "studio-operand-inspector";
   overlayEditor.hidden = true;

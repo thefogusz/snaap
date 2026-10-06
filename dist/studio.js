@@ -5,6 +5,25 @@
   studio.setAttribute("aria-label", "กราฟจำลองเซ็ตอัพ");
   studio.innerHTML = `<header><div class="studio-header-info"><strong data-chart-title>กราฟเซ็ตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class="studio-header-actions"><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></div></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class="setup-insights" data-setup-insights></div><details class="chart-evidence"><summary>รายละเอียดเงื่อนไข · คลิกแท่งบนกราฟเพื่อดูย้อนหลัง</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
   setupPane.insertBefore(studio, panel);
+  // Keep diagnostic content available without taking height from the chart.
+  const signalsDialog = document.createElement('dialog');
+  signalsDialog.className = 'studio-dialog studio-signals-dialog';
+  signalsDialog.setAttribute('aria-labelledby', 'studio-signals-title');
+  signalsDialog.innerHTML = '<header><h2 id="studio-signals-title">สถานะสัญญาณ</h2><button type="button" data-close-signals aria-label="ปิดสถานะสัญญาณ">ปิด</button></header>';
+  for (const selector of ['.chart-disclaimer', '.setup-insights', '.chart-evidence'])
+    signalsDialog.append(studio.querySelector(selector));
+  studio.append(signalsDialog);
+  const footer = document.createElement('div');
+  footer.className = 'studio-chart-footer';
+  const replay = document.createElement('details');
+  replay.className = 'studio-replay';
+  replay.innerHTML = '<summary>เล่นย้อนหลัง</summary>';
+  replay.append(studio.querySelector('.replay-controls'));
+  footer.innerHTML = '<button type="button" class="secondary" data-open-signals>สถานะสัญญาณ</button>';
+  footer.append(replay, studio.querySelector('.chart-credit'));
+  studio.insertBefore(footer, signalsDialog);
+  studio.querySelector('[data-open-signals]').onclick = () => signalsDialog.showModal();
+  signalsDialog.querySelector('[data-close-signals]').onclick = () => signalsDialog.close();
   const status = studio.querySelector("[data-chart-status]");
   const canvas = studio.querySelector(".studio-canvas");
   const scrub = studio.querySelector("[data-scrub]");
@@ -80,8 +99,8 @@
   function fitStudyPanes() {
     if (!chart) return;
     const studies = chart.panes().slice(1);
-    canvas.style.setProperty("--studio-pane-space", `${studies.length * 120}px`);
-    chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
+    // Divide the available height between price and studies; never grow the page.
+    chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? Math.max(3, studies.length * 1.5) : 1));
   }
   new ResizeObserver(() => {
     const visible = canvas.clientWidth > 0 && canvas.clientHeight > 0;
@@ -178,7 +197,7 @@
     });
     markers = LightweightCharts.createSeriesMarkers(candles, []);
     let pane = 0;
-    const macdPanes = new Map();
+    const studyPanes = new Map();
     lines = data.overlays.map((o, i) => {
       const overlay = window.SnaapIndicatorCatalog?.indicatorByName[o.operand.name]?.overlay ?? ["EMA", "SMA", "BB_UPPER", "BB_LOWER","WMA","RMA","VWMA","HIGHEST","LOWEST","DONCHIAN_UPPER","DONCHIAN_LOWER","DONCHIAN_MID","BB_MIDDLE"].includes(
         o.operand.name,
@@ -186,10 +205,14 @@
       const histogram = ['VOLUME', 'MACD_HIST', 'AO'].includes(o.operand.name);
       const macd = ['MACD','MACD_SIGNAL','MACD_HIST'].includes(o.operand.name);
       const macdKey = macd ? JSON.stringify([o.operand.timeframe,o.operand.period,o.operand.slow??26,o.operand.signal??9,o.operand.source??'close']) : null;
+      const stochRsi = ['STOCH_RSI_K', 'STOCH_RSI_D'].includes(o.operand.name);
+      const studyKey = macd ? 'macd:' + macdKey : stochRsi
+        ? 'stoch-rsi:' + JSON.stringify([o.operand.timeframe, o.operand.period, o.operand.params?.stochPeriod ?? 14, o.operand.params?.smooth ?? 3, o.operand.params?.signal ?? 3, o.operand.source ?? 'close'])
+        : null;
       let studyPane = 0;
       if (!overlay) {
-        studyPane = macdPanes.get(macdKey) ?? ++pane;
-        if (macd) macdPanes.set(macdKey,studyPane);
+        studyPane = studyPanes.get(studyKey) ?? ++pane;
+        if (studyKey) studyPanes.set(studyKey,studyPane);
       }
       const displayOperand = o.chartOperand ?? o.operand;
       const series = chart.addSeries(

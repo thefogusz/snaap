@@ -745,7 +745,7 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   }
   .workbench[data-tab="split"]:not([hidden]) {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(310px, 44%) minmax(0, 1fr);
+    grid-template-rows: minmax(310px, 60%) minmax(0, 1fr);
     gap: 6px;
   }
   .workbench[data-tab="split"] .setup-studio {
@@ -949,21 +949,67 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   .workbench[data-tab="split"] [data-resize-panel="conditions"] { display: block; grid-column: 2; grid-row: 1; }
 }
 
-/* The chart and signal summaries share one scroll area; neither may shrink. */
+/* Price and study panes share the remaining viewport, without vertical scrolling. */
 .workbench[data-tab="split"] .setup-pane .setup-studio {
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow: hidden;
 }
 .workbench[data-tab="split"] .setup-studio > * {
   flex-shrink: 0;
 }
 .workbench[data-tab="split"] .setup-studio .studio-canvas {
-  flex: none;
-  height: calc(clamp(360px,52dvh,560px) + var(--studio-pane-space,0px));
-  min-height: calc(360px + var(--studio-pane-space,0px));
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
 }
+.workbench[data-tab="split"] .chart-legend {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-height: none;
+  min-height: 0;
+}
+.chart-legend .studio-legend-chip { flex: none; }
+.chart-legend .studio-legend-item { white-space: nowrap; }
+.chart-legend:empty { display: none; }
+.studio-chart-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--line);
+}
+.studio-chart-footer > button,
+.studio-replay > summary {
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.studio-chart-footer .chart-credit { margin-left: auto; padding: 0; }
+.studio-replay { display: contents; }
+.studio-replay > summary { display: list-item; margin-left: 16px; }
+.studio-replay[open] .replay-controls {
+  flex: 1 0 100%;
+  order: 1;
+  border: 0;
+  padding: 0;
+}
+.studio-signals-dialog { color: var(--ink); background: var(--white); }
+.studio-signals-dialog > header {
+  position: sticky;
+  top: -20px;
+  background: var(--white);
+  z-index: 1;
+  padding: 0 0 12px;
+}
+.workbench[data-tab="split"] .studio-signals-dialog .chart-evidence {
+  display: block;
+  max-height: none;
+  overflow: visible;
+}
+.workbench[data-tab="split"] .studio-signals-dialog .chart-disclaimer { display: block; }
 .setup-studio .setup-insights,
 .setup-studio .chart-evidence {
   min-width: 0;
