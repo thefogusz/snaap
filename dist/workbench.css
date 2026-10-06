@@ -531,14 +531,22 @@ dialog.chat-image-viewer .chat-image-close:focus-visible { outline:2px solid #ff
 .workspace-dialog form { display: grid; gap: 24px; }
 .workspace-dialog h2 { font-size: 22px; font-weight: 600; line-height: 1.4; }
 .workspace-dialog label { display: flex; align-items: center; gap: 10px; }
-.workspace-dialog label:has(input[name="name"]) { display: grid; gap: 10px; font-size: 13px; font-weight: 500; }
-.workspace-dialog input[name="name"] { appearance: none; width: 100%; min-width: 0; height: 48px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--ink); font-size: 15px; font-weight: 400; outline: none; transition: border-color .15s, box-shadow .15s; }
-.workspace-dialog input[name="name"]::placeholder { color: var(--muted); opacity: 1; }
-.workspace-dialog input[name="name"]:focus { border-color: #89a73a; box-shadow: 0 0 0 3px #b9d96620; }
+.workspace-dialog label:has(input:is([name="name"], [name="title"])) { display: grid; gap: 10px; font-size: 13px; font-weight: 500; }
+.workspace-dialog input:is([name="name"], [name="title"]) { appearance: none; width: 100%; min-width: 0; height: 48px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--ink); font-size: 15px; font-weight: 400; outline: none; transition: border-color .15s, box-shadow .15s; }
+.workspace-dialog input:is([name="name"], [name="title"])::placeholder { color: var(--muted); opacity: 1; }
+.workspace-dialog input:is([name="name"], [name="title"]):focus { border-color: #89a73a; box-shadow: 0 0 0 3px #b9d96620; }
 .workspace-dialog .row-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .workspace-dialog .row-actions button { min-height: 44px; padding: 10px 20px; border-radius: 14px; }
 @keyframes workspace-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .workspace-dialog[open] { animation: none; } .workspace-dialog input[name="name"] { transition: none; } }
+.workspace-dialog.rename-chat-dialog { width: min(360px, calc(100vw - 32px)); padding: 20px; border-radius: 18px; }
+.rename-chat-dialog form { gap: 16px; }
+.rename-chat-dialog h2 { font-size: 18px; }
+.rename-chat-dialog label:has(input[name="title"]) { gap: 8px; }
+.rename-chat-dialog input[name="title"] { height: 44px; padding: 10px 12px; border-radius: 12px; }
+.rename-chat-dialog .row-actions { gap: 8px; }
+.rename-chat-dialog .row-actions button { padding: 10px 16px; border-radius: 12px; }
+.rename-chat-dialog [data-rename-error] { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .workspace-dialog[open] { animation: none; } .workspace-dialog input:is([name="name"], [name="title"]) { transition: none; } }
 #history-connections [data-sync] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 16px; align-items: end; margin: 16px 0; }
 .history-exchange-capabilities { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 8px; }
 .history-exchange-capabilities > div { display: grid; gap: 6px; flex: 1 1 140px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
