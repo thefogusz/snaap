@@ -68,8 +68,21 @@
       <button class="tab-btn" data-tab="diagnostics">
         🚨 ตรวจจับปัญหา & Logs
       </button>
+      <button class="tab-btn" data-tab="usage-policy">⚙️ ข้อจำกัดการใช้งาน</button>
     </nav>
 
+<section id="panel-usage-policy" class="tab-panel">
+<div class="usage-policy-card"><h2>ข้อจำกัดการใช้งาน</h2>
+<form id="usage-policy-form">
+<label class="usage-policy-mode">โหมดการใช้งาน<select name="mode"><option value="unified">ปิดข้อจำกัดแพ็กเกจ · ใช้กติกากลาง</option><option value="plans">แยก FREE / PRO</option></select></label>
+<p id="usage-policy-mode-help">กติกากลางใช้กับทุกบัญชี โดยไม่ตรวจแพ็กเกจ</p>
+<div class="usage-profile-tabs" id="usage-profile-tabs" hidden><button type="button" class="btn" data-edit-profile="free">FREE</button><button type="button" class="btn" data-edit-profile="pro">PRO</button></div>
+<fieldset data-policy-profile="unified" hidden><div class="usage-policy-grid"><label>AI ปกติ / เดือน<input type="number" name="unified.standard" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>เซ็ตอัพที่เปิดพร้อมกัน<input type="number" name="unified.activeRules" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>เวิร์กสเปซ (รวมพื้นที่หลัก)<input type="number" name="unified.workspaces" min="1" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>แจ้งเตือนทุกช่องทาง / คน / เดือน<input type="number" name="unified.notifications" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>LINE / คน / เดือน<input type="number" name="unified.lineUser" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label></div></fieldset><fieldset data-policy-profile="free" hidden><div class="usage-policy-grid"><label>AI ปกติ / เดือน<input type="number" name="free.standard" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>เซ็ตอัพที่เปิดพร้อมกัน<input type="number" name="free.activeRules" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>เวิร์กสเปซ (รวมพื้นที่หลัก)<input type="number" name="free.workspaces" min="1" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>แจ้งเตือนทุกช่องทาง / คน / เดือน<input type="number" name="free.notifications" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>LINE / คน / เดือน<input type="number" name="free.lineUser" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label></div></fieldset><fieldset data-policy-profile="pro" hidden><div class="usage-policy-grid"><label>AI ปกติ / เดือน<input type="number" name="pro.standard" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>เซ็ตอัพที่เปิดพร้อมกัน<input type="number" name="pro.activeRules" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>เวิร์กสเปซ (รวมพื้นที่หลัก)<input type="number" name="pro.workspaces" min="1" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>แจ้งเตือนทุกช่องทาง / คน / เดือน<input type="number" name="pro.notifications" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label><label>LINE / คน / เดือน<input type="number" name="pro.lineUser" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label></div></fieldset>
+<p class="usage-policy-hint">ว่าง = ไม่จำกัด · 0 = ปิดการใช้ · โหมด AI ละเอียดยังไม่เปิดใช้งาน</p>
+<details class="usage-policy-advanced"><summary>เพดาน LINE รวมทั้งระบบ</summary><label>ข้อความรวม / เดือน<input type="number" name="lineTotal" min="0" max="10000000" step="1" placeholder="ไม่จำกัด"></label></details>
+<p class="usage-policy-hint">ลดเพดานเวิร์กสเปซแล้วพื้นที่เดิมยังอยู่ การลดเพดาน AI จะนับยอดเดือนนี้ และเซ็ตอัพที่เกินเพดานจะหยุดเฝ้าติดตาม</p>
+<div class="usage-policy-actions"><button class="btn btn-primary" id="usage-policy-save" type="submit" disabled>บันทึก</button><button class="btn" id="usage-policy-reload" type="button">โหลดค่าปัจจุบัน</button><span id="usage-policy-status" role="status" aria-live="polite">ยังไม่ได้โหลด</span></div>
+</form></div></section>
     <!-- Tab 1: Overview -->
     <section id="panel-overview" class="tab-panel active">
       <!-- KPIs -->
@@ -362,7 +375,7 @@
         <button class="modal-option-btn" data-plan="pro_30d">
           <div>
             <strong>SNAAP Pro (30 วัน)</strong>
-            <div style="font-size:12px;color:var(--secondary);">20 เซ็ตอัพ, AI ไม่จำกัดจำนวนครั้ง · Deep อยู่ระหว่างพัฒนา</div>
+            <div style="font-size:12px;color:var(--secondary);">สิทธิ์ใช้งานตามการตั้งค่าข้อจำกัด · Deep อยู่ระหว่างพัฒนา</div>
           </div>
           <span class="badge badge-pro">+30 วัน</span>
         </button>
@@ -383,7 +396,7 @@
         <button class="modal-option-btn" data-plan="free">
           <div>
             <strong>สลับกลับเป็น Free Tier</strong>
-            <div style="font-size:12px;color:var(--secondary);">จำกัด 6 กฎ, AI ไม่จำกัดจำนวนครั้ง · Deep อยู่ระหว่างพัฒนา</div>
+            <div style="font-size:12px;color:var(--secondary);">สิทธิ์ใช้งานตามการตั้งค่าข้อจำกัด · Deep อยู่ระหว่างพัฒนา</div>
           </div>
           <span class="badge badge-free">Free</span>
         </button>
@@ -396,5 +409,6 @@
 
   <!-- Toast Element -->
   <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+  <script src="/usage-policy-admin.js" defer></script>
 </body>
 </html>

@@ -170,6 +170,8 @@ const check = (name: string, ok: boolean, detail: unknown) =>
   checks.push({ name, ok, detail });
 try {
   await migrate(db);
+  // This simulation explicitly exercises the optional plan enforcement mode.
+  await db.query('UPDATE usage_policy SET policy=$1 WHERE id=1', [{mode:'plans'}]);
   app = (
     await buildApp(db, {
       local: true,

@@ -1313,7 +1313,7 @@ async function refresh({ reuseMe = false } = {}) {
     const name = state.me.email.split("@")[0];
     $(".profile .avatar").textContent = name.slice(0, 1).toUpperCase();
     $(".profile>span:not(.avatar)").innerHTML =
-      esc(name) + "<small>" + esc(state.me.plan) + "</small>";
+      esc(name) + "<small>" + esc(state.me.trial ? "ทดลองใช้งาน" : state.me.plan) + "</small>";
   }
   if(!$('#auth-signout')){
     const signout=document.createElement('button');signout.id='auth-signout';signout.className='auth-signout';signout.innerHTML=uiIcon('exit', 'icon')+'<span>ออกจากระบบ</span>';
@@ -1640,16 +1640,16 @@ billing.className = "view secondary-view";
 billing.hidden = true;
 $("#main").append(billing);
 function renderBilling() {
-  billing.innerHTML = `<div class="page-heading"><h1>บัญชีและแพ็กเกจ</h1></div><div class="runtime-card"><h2>${state.me?.plan ?? "ยังไม่ได้เข้าสู่ระบบ"}</h2><p>${esc(state.me?.email ?? "")} ${state.me?.local ? "· บัญชีพัฒนาบนเครื่อง" : ""}</p><p>เซ็ตอัพที่เปิดพร้อมกัน ${state.me?.limits.activeRules ?? 0} รายการ · AI ปกติไม่จำกัดจำนวนครั้ง · โหมดละเอียดอยู่ระหว่างพัฒนา</p><button class="secondary" data-export>ส่งออกข้อมูล</button></div><div class="runtime-card"><h2>Pro · 199 บาท / เดือน</h2><p>20 เซ็ตอัพ · AI ปกติไม่จำกัดจำนวนครั้ง · โหมดวิเคราะห์ละเอียดเร็ว ๆ นี้</p><p>${state.health?.billing ? "ระบบชำระเงินพร้อมตามการตั้งค่าเซิร์ฟเวอร์" : "ยังไม่ได้เชื่อม Stripe ไม่มีการเรียกเก็บเงิน"}</p><button class="primary" data-checkout="card" ${state.health?.billing ? "" : "disabled"}>สมัครด้วยบัตร</button> <button class="secondary" data-checkout="promptpay" ${state.health?.billing ? "" : "disabled"}>PromptPay · 30 วัน</button><p class="field-note">PromptPay จ่ายต่อรอบเอง บัตรต่ออายุรายเดือน</p><button class="text-button" data-portal ${state.health?.billing ? "" : "disabled"}>จัดการสมาชิก / ยกเลิกต่ออายุ</button></div>`;
+  billing.innerHTML = `<div class="page-heading"><h1>บัญชีและการใช้งาน</h1></div><div class="runtime-card"><h2>${state.me?.trial ? "ช่วงทดลองใช้งาน" : esc(state.me?.plan ?? "ยังไม่ได้เข้าสู่ระบบ")}</h2><p>${esc(state.me?.email ?? "")} ${state.me?.local ? "· บัญชีพัฒนาบนเครื่อง" : ""}</p><p>เซ็ตอัพที่เปิดพร้อมกัน ${state.me?.limits.activeRules ?? "ไม่จำกัด"} · AI ปกติ ${state.me?.limits.standard ?? "ไม่จำกัด"} ครั้ง/เดือน · เวิร์กสเปซ ${state.me?.limits.workspaces ?? "ไม่จำกัด"} พื้นที่</p><p>โหมดละเอียดอยู่ระหว่างพัฒนา</p><button class="secondary" data-export>ส่งออกข้อมูล</button></div>`;
   const first = billing.querySelector(".runtime-card");
   const limitText = first?.querySelectorAll("p")[1];
   if (limitText) {
     const metrics = document.createElement("div");
     metrics.className = "plan-capabilities";
     metrics.innerHTML = [
-      ["bell", state.me?.limits.activeRules ?? 0, "เซ็ตอัพที่เปิดได้"],
-      ["spark", "ไม่จำกัด", "จำนวนครั้ง AI"],
-      ["layers", "เร็ว ๆ นี้", "วิเคราะห์ละเอียด · Pro"],
+      ["bell", state.me?.limits.activeRules ?? "ไม่จำกัด", "เซ็ตอัพที่เปิดได้"],
+      ["spark", state.me?.limits.standard ?? "ไม่จำกัด", "AI ต่อเดือน"],
+      ["layers", state.me?.limits.workspaces ?? "ไม่จำกัด", "เวิร์กสเปซ"],
     ]
       .map(
         ([icon, value, label]) =>

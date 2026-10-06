@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ApiError } from "./errors.js";
 import { transaction } from "./data/db.js";
+import { userLimits } from './usage-policy.js';
 export const scopeTables = {
   image: "assets",
   import: "imports",
@@ -47,19 +48,12 @@ export function registerWorkspaces(app: FastifyInstance, db: pg.Pool) {
       await c.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [
         req.userId,
       ]);
-      if (
-        !(
-          await c.query(
-            "SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()",
-            [req.userId],
-          )
-        ).rowCount
-      )
-        throw new ApiError(
-          403,
-          "PRO_REQUIRED",
-          "สร้างเวิร์กสเปซเพิ่มได้ในแพ็กเกจ Pro",
-        );
+      const { workspaces: workspaceLimit } = await userLimits(c, req.userId);
+      const workspaces = (await c.query('SELECT count(*)::int AS n,bool_or(is_default) AS has_default FROM workspaces WHERE owner_id=$1', [req.userId])).rows[0];
+      // Reserve a slot for the primary workspace even before its first lazy creation.
+      const used = Number(workspaces.n) + (workspaces.has_default ? 0 : 1);
+      if (workspaceLimit !== null && used >= workspaceLimit)
+        throw new ApiError(409, 'WORKSPACE_LIMIT', `สร้างเวิร์กสเปซได้สูงสุด ${workspaceLimit} พื้นที่ รวมพื้นที่หลัก`);
       const id = randomUUID();
       await c.query(
         "INSERT INTO workspaces(id,owner_id,name) VALUES($1,$2,$3)",

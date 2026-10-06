@@ -3,6 +3,14 @@ import type pg from "pg";
 /** Durable operational events are captured in the same transaction as their source. */
 export async function migrateAdmin(db: pg.Pool) {
   await db.query(`
+    CREATE INDEX IF NOT EXISTS deliveries_usage_recovery ON deliveries(attempts,id) WHERE status='USAGE_LIMIT';
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS sent_at timestamptz;
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS usage_retry_at timestamptz;
+    CREATE TABLE IF NOT EXISTS usage_policy (
+      id integer PRIMARY KEY CHECK(id=1), policy jsonb NOT NULL DEFAULT '{}',
+      revision integer NOT NULL DEFAULT 0, updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    INSERT INTO usage_policy(id) VALUES(1) ON CONFLICT DO NOTHING;
     CREATE TABLE IF NOT EXISTS admin_events (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), event_key text NOT NULL UNIQUE,
       category text NOT NULL, severity text NOT NULL, title text NOT NULL, detail text NOT NULL,

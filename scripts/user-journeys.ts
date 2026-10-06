@@ -145,14 +145,14 @@ export async function runUserJourneys(
               "UPDATE entitlements SET pro_until=now()-interval '1 second' WHERE owner_id=$1",
               [u.id],
             );
-            const blocked = await call(
+            const workspace = await call(
               u,
               "/workspaces",
               "POST",
               { name: "Pro หมดอายุ" },
-              403,
+              201,
             );
-            assert.equal(blocked.error.code, "PRO_REQUIRED");
+            assert.ok(workspace.id, "trial ignores expired Pro");
           }
           if (day === 10 && u.index === 5)
             await db.query(

@@ -1,3 +1,4 @@
+import { usagePolicySchema } from '../src/usage-policy.js';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { localDatabase } from "./postgres.js";
@@ -17,8 +18,8 @@ const owner = randomUUID(),
   outsiderToken = randomUUID(),
   destination = randomUUID(),
   code = "b".repeat(48);
-const beforeUser = process.env.LINE_MONTHLY_USER_LIMIT,
-  beforeTotal = process.env.LINE_MONTHLY_TOTAL_LIMIT;
+const priorPolicy=(await db.query('SELECT policy FROM usage_policy WHERE id=1')).rows[0].policy;
+const setPolicy=async(user:number,total:number)=>{const policy=usagePolicySchema.parse({});policy.unified.lineUser=user;policy.lineTotal=total;await db.query('UPDATE usage_policy SET policy=$1 WHERE id=1',[policy]);};
 try {
   await db.query("INSERT INTO users(id) VALUES($1),($2)", [owner, other]);
   await db.query(
@@ -113,8 +114,7 @@ try {
     ).rows[0].verified,
     false,
   );
-  process.env.LINE_MONTHLY_USER_LIMIT = "2";
-  process.env.LINE_MONTHLY_TOTAL_LIMIT = "10000000";
+  await setPolicy(2,10000000);
   const results = await Promise.all(
     Array.from({ length: 8 }, () =>
       transaction(db, (c) => reserveLine(c, owner, randomUUID())),
@@ -143,15 +143,14 @@ try {
       [lineMonth()],
     )
   ).rows[0].n;
-  process.env.LINE_MONTHLY_USER_LIMIT = "100";
-  process.env.LINE_MONTHLY_TOTAL_LIMIT = String(total + 1);
+  await setPolicy(100,total+1);
   const sharedResults = await Promise.all(
     Array.from({ length: 8 }, () =>
       transaction(db, (c) => reserveLine(c, other, randomUUID())),
     ),
   );
   assert.equal(sharedResults.filter(Boolean).length, 1);
-  process.env.LINE_MONTHLY_TOTAL_LIMIT = "0";
+  await setPolicy(100,0);
   assert.equal(
     await transaction(db, (c) => reserveLine(c, owner, slot)),
     false,
@@ -187,10 +186,7 @@ try {
   await db.query("DELETE FROM users WHERE id=ANY($1::uuid[])", [
     [owner, other],
   ]);
+  await db.query('UPDATE usage_policy SET policy=$1 WHERE id=1',[priorPolicy]);
   await db.end();
   await postgres.stop();
-  if (beforeUser === undefined) delete process.env.LINE_MONTHLY_USER_LIMIT;
-  else process.env.LINE_MONTHLY_USER_LIMIT = beforeUser;
-  if (beforeTotal === undefined) delete process.env.LINE_MONTHLY_TOTAL_LIMIT;
-  else process.env.LINE_MONTHLY_TOTAL_LIMIT = beforeTotal;
 }
