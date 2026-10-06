@@ -139,7 +139,7 @@ test("Google admin entry accepts only the verified allowed email and preserves p
           scenario.accepted
             ? scenario.admin
               ? "/admin"
-              : "/#home"
+              : "/home"
             : `/admin/login?error=${scenario.verified && scenario.nonce ? "admin_denied" : "failed"}`,
         );
       } finally {

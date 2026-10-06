@@ -642,12 +642,12 @@ function navigate(view, load = true) {
   if (view === "watch") {
     notificationSection = "rules";
     view = "notifications";
-    history.replaceState(null, "", "#notifications");
+    window.SnaapRouter.replace("notifications");
   }
   if (view === "billing") {
     toast("เร็ว ๆ นี้");
     view = "home";
-    history.replaceState(null, "", "#home");
+    window.SnaapRouter.replace("home");
   }
   if (!["home", "watch", "history", "notifications"].includes(view))
     view = "home";
@@ -1114,7 +1114,7 @@ function showEditorFeedback(text, success = false, focus = true) {
   box.append(message);
   if (success) {
     const link = document.createElement("a");
-    link.href = "#watch";
+    link.href = "/watch";
     link.textContent = "ไปดูเซ็ตอัพที่ตั้งไว้";
     box.append(link);
   }
@@ -1206,7 +1206,7 @@ async function setRuleActivation(r, t, active = !r?.active) {
 }
 function watchChannelPicker(r) {
   const channels = state.destinations.filter(d => d.verified);
-  return `<details class="watch-channel-picker"><summary aria-label="เลือกช่องทางแจ้งเตือน ${esc(r.spec.name)}" title="เลือกช่องทางแจ้งเตือน">${uiIcon("bell")}แจ้งเตือน<svg class="ui-icon watch-channel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="watch-channel-menu"><strong>ส่งสัญญาณไปที่</strong><p>รับในเว็บเสมอ · เลือกเพิ่มได้ 5 ช่องทาง</p>${channels.length ? channels.map(d => `<label>${watchChannelMark(d)}<span>${esc(d.name)}</span><input type="checkbox" value="${esc(d.id)}" ${r.spec.destinations.includes(d.id) ? "checked" : ""}></label>`).join("") : '<p class="watch-channel-empty">ยังไม่มีช่องทางที่เชื่อมไว้</p>'}<div class="watch-channel-actions"><a href="#notifications" data-watch-connect-channel>เชื่อมช่องทาง</a><button type="button" class="primary" data-save-rule-channels="${esc(r.id)}">บันทึก</button></div></div></details>`;
+  return `<details class="watch-channel-picker"><summary aria-label="เลือกช่องทางแจ้งเตือน ${esc(r.spec.name)}" title="เลือกช่องทางแจ้งเตือน">${uiIcon("bell")}แจ้งเตือน<svg class="ui-icon watch-channel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="watch-channel-menu"><strong>ส่งสัญญาณไปที่</strong><p>รับในเว็บเสมอ · เลือกเพิ่มได้ 5 ช่องทาง</p>${channels.length ? channels.map(d => `<label>${watchChannelMark(d)}<span>${esc(d.name)}</span><input type="checkbox" value="${esc(d.id)}" ${r.spec.destinations.includes(d.id) ? "checked" : ""}></label>`).join("") : '<p class="watch-channel-empty">ยังไม่มีช่องทางที่เชื่อมไว้</p>'}<div class="watch-channel-actions"><a href="/notifications" data-watch-connect-channel>เชื่อมช่องทาง</a><button type="button" class="primary" data-save-rule-channels="${esc(r.id)}">บันทึก</button></div></div></details>`;
 }
 function watchSetupRow(r) {
   const pairs = r.spec.pairs;
@@ -1399,7 +1399,7 @@ async function chat(text) {
   }
   if(workbench.dataset.tab!=="split")setWorkbenchTab("chat");
   showDesigner();
-  location.hash = "home";
+  window.SnaapRouter.go("home");
   message(text, true);
   const pendingImages = state.images.filter(image => !image.sent);
   appendChatImages([...pendingImages, ...(state.useMyData ? state.libraryImages : [])]);
@@ -2014,7 +2014,7 @@ document.addEventListener("click", async (e) => {
   if (!t) return;
   if (t.classList.contains("nav-item")) $("#sidebar").classList.remove("is-open");
   try {
-    if (t.classList.contains("nav-item") && t.dataset.view !== "home" && location.hash === "#" + t.dataset.view) {
+    if (t.classList.contains("nav-item") && t.dataset.view !== "home" && window.SnaapRouter.current() === t.dataset.view) {
       e.preventDefault();
       navigate(t.dataset.view);
       return;
@@ -2024,7 +2024,7 @@ document.addEventListener("click", async (e) => {
       setWorkbenchTab("chat");
       showDesigner();
       navigate("home");
-      location.hash = "home";
+      window.SnaapRouter.go("home");
       persistRecovery();
       return;
     }
@@ -2048,7 +2048,7 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (t.dataset.action === "history") {
-      location.hash = "history";
+      window.SnaapRouter.go("history");
       return;
     }
     if (t.dataset.action === "new" || t.dataset.action === "new-rule") {
@@ -2074,13 +2074,13 @@ document.addEventListener("click", async (e) => {
       window.SnaapChart?.reset();
       setWorkbenchTab(t.dataset.action === "new-rule" ? "design" : "chat");
       showDesigner();
-      location.hash = "home";
+      window.SnaapRouter.go("home");
       await refreshContext();
       return;
     }
     if (t.dataset.action === "advanced" || t.dataset.action === "sample-rule") {
       showDesigner();
-      location.hash = "home";
+      window.SnaapRouter.go("home");
       setWorkbenchTab("design");
       return;
     }
@@ -2163,7 +2163,7 @@ document.addEventListener("click", async (e) => {
       state.undo = [];
       state.replay = null;
       showDesigner();
-      location.hash = "home";
+      window.SnaapRouter.go("home");
       setWorkbenchTab("design");
       return;
     }
@@ -2332,7 +2332,7 @@ document.addEventListener("click", async (e) => {
     }
   }
 });
-window.addEventListener("hashchange", () => navigate(location.hash.slice(1)));
+window.addEventListener("snaap:navigate", () => navigate(window.SnaapRouter.current()));
 let recoveryReady = false, recoveryFingerprint = '';
 function recoveryKey() {
   return state.me?.id && state.workspaceId ? `snaap-draft-v1:${state.me.id}:${state.workspaceId}` : null;
@@ -2405,7 +2405,7 @@ async function boot() {
   // Companion deferred scripts provide workspace and page helpers.
   await companionScriptsReady;
   $("#nav-count").textContent = "";
-  navigate(location.hash.slice(1) || "home", false);
+  navigate(window.SnaapRouter.current(), false);
   try {
     try {
       healthReady = api('/health').then(health => { state.health = health; }).catch(() => { state.health = { ai: false, billing: false }; });
@@ -2424,7 +2424,7 @@ async function boot() {
     window.SnaapBoot?.fail(error.message);
     return;
   }
-  navigate(location.hash.slice(1) || "home");
+  navigate(window.SnaapRouter.current());
   if(workbench.hidden || !state.draft){showDesigner();setWorkbenchTab('chat');}
   else renderDesigner();
   // Allow restored geometry and fonts to settle before the first visible frame.

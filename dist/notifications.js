@@ -322,7 +322,7 @@ function paintNotifications() {
   } else if (notificationSection === "inbox") {
     content = signals.length
       ? `<div class="signal-list">${signals.map(signalCard).join('')}</div>`
-      : `<div class="inbox-empty"><span class="inbox-illustration" aria-hidden="true">${uiIcon("inbox")}</span><h2>ยังไม่มีสัญญาณ</h2><p>เมื่อเซ็ตอัพที่เปิดไว้เข้าเงื่อนไข สัญญาณจะปรากฏที่นี่<br>ดูได้เสมอ แม้ยังไม่ได้เชื่อมช่องทางภายนอก</p><a class="secondary with-icon" href="#watch">${uiIcon("sliders")}ดูเซ็ตอัพที่ตั้งไว้</a></div>`;
+      : `<div class="inbox-empty"><span class="inbox-illustration" aria-hidden="true">${uiIcon("inbox")}</span><h2>ยังไม่มีสัญญาณ</h2><p>เมื่อเซ็ตอัพที่เปิดไว้เข้าเงื่อนไข สัญญาณจะปรากฏที่นี่<br>ดูได้เสมอ แม้ยังไม่ได้เชื่อมช่องทางภายนอก</p><a class="secondary with-icon" href="/watch">${uiIcon("sliders")}ดูเซ็ตอัพที่ตั้งไว้</a></div>`;
   } else if (notificationSection === "channels") {
     content = `<div class="notification-section-heading"><h2>เลือกช่องทางรับสัญญาณ</h2></div><div class="channel-options">${Object.entries(
       channelInfo,

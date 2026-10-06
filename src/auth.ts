@@ -164,7 +164,7 @@ export function registerGoogle(
           digest(req.cookies.snaap_session),
         ]);
       await session(row.rows[0].id, reply);
-      return reply.redirect(adminFlow ? "/admin" : "/#home");
+      return reply.redirect(adminFlow ? "/admin" : "/home");
     } catch {
       // Never expose authorization codes, tokens, provider replies or DB errors.
       return fail(reply, "failed");

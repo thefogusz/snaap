@@ -208,7 +208,7 @@ export function renderSignal(
     ? clean(appearance.creatorName, 13)
     : "";
   const brand = publicBrandOrigin(origin);
-  const url = brand ? brand + "/#notifications" : undefined;
+  const url = brand ? brand + "/notifications" : undefined;
   const image =
     appearance.layout === "minimal"
       ? undefined
