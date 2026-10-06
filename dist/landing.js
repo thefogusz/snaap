@@ -1,243 +1,240 @@
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-if (!reducedMotion.matches && "IntersectionObserver" in window) {
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.remove("pending");
-        observer.unobserve(entry.target);
-      });
-    },
-    { threshold: 0.12 },
-  );
-  document.querySelectorAll(".reveal").forEach((section) => {
-    section.classList.add("pending");
-    observer.observe(section);
-  });
-}
-const experience = document.querySelector(".experience");
-const next = document.querySelector("#story-next");
-const back = document.querySelector("#story-back");
-let phase = "idea";
-let idea = "pullback";
-let destination = "Telegram";
-const strategies = {
-  pullback: {
-    trend: "ราคาเหนือ EMA 200",
-    timing: "RSI ตัดขึ้นเหนือ 30",
-    label: "PULLBACK SETUP",
-    caption: "ราคาเหนือ EMA 200 + RSI ตัดขึ้น 30",
-    alert: "BTC เข้าเงื่อนไขย่อในขาขึ้น",
-    indicator: "EMA 200",
-    path: "M25 269C220 262 300 205 440 209S700 192 955 150",
-    values: [
-      230, 213, 224, 181, 200, 163, 174, 141, 151, 114, 130, 152, 165, 176, 161,
-      138, 145, 112, 83, 94, 56, 71, 36, 42,
-    ],
-  },
-  breakout: {
-    trend: "ราคาทะลุจุดสูงสุด 20 แท่ง",
-    timing: "Volume เหนือค่าเฉลี่ย 20 แท่ง",
-    label: "BREAKOUT SETUP",
-    caption: "ทะลุแนวต้าน 20 แท่ง + Volume ยืนยัน",
-    alert: "BTC ทะลุแนวต้านพร้อม Volume",
-    indicator: "RESISTANCE · 20",
-    path: "M25 150H955",
-    values: [
-      238, 212, 225, 197, 213, 179, 194, 174, 187, 169, 180, 170, 188, 176, 164,
-      136, 143, 108, 91, 102, 64, 76, 40, 49,
-    ],
-  },
-};
-function updateStrategy() {
-  const data = strategies[idea];
-  document.querySelector("#rule-trend").textContent = data.trend;
-  document.querySelector("#rule-timing").textContent = data.timing;
-  document.querySelector("#chart-strategy").textContent = data.label;
-  document.querySelector("#condition-caption").textContent = data.caption;
-  document.querySelector("#delivery-title").textContent = data.alert;
-  document.querySelector("#indicator-label").textContent = data.indicator;
-  document.querySelector("#indicator-path").setAttribute("d", data.path);
-  const candleRoot = document.querySelector("#story-candles");
-  candleRoot.replaceChildren();
-  const ns = "http://www.w3.org/2000/svg";
-  data.values.forEach((close, index) => {
-    const open = index ? data.values[index - 1] : 243;
-    const x = 30 + index * 40;
-    const group = document.createElementNS(ns, "g");
-    group.classList.add("candle");
-    group.classList.toggle("candle-down", close > open);
-    if (index >= 15) group.classList.add("future-candle");
-    group.style.setProperty("--i", index);
-    const wick = document.createElementNS(ns, "path");
-    wick.setAttribute(
-      "d",
-      `M${x} ${Math.min(open, close) - 9}V${Math.max(open, close) + 9}`,
-    );
-    const body = document.createElementNS(ns, "rect");
-    body.setAttribute("x", x - 8);
-    body.setAttribute("y", Math.min(open, close));
-    body.setAttribute("width", 16);
-    body.setAttribute("height", Math.max(Math.abs(open - close), 3));
-    group.append(wick, body);
-    candleRoot.append(group);
-  });
-  document
-    .querySelector(".chart-area")
-    .setAttribute(
-      "d",
-      `M${data.values.map((y, i) => `${30 + i * 40} ${y}`).join("L")}L950 310H30Z`,
-    );
-}
-let signalAnimation;
-function showPhase(value) {
-  signalAnimation?.cancel();
-  phase = value;
-  experience.dataset.phase = phase;
-  experience.dataset.delivered = "false";
-  document.querySelectorAll("[data-scene]").forEach((scene) => {
-    scene.hidden = scene.dataset.scene !== phase;
-  });
-  document
-    .querySelectorAll("[data-progress]")
-    .forEach((item) =>
-      item.classList.toggle("active", item.dataset.progress === phase),
-    );
-  const copy = {
-    idea: [
-      "คุณมีไอเดีย ที่เหลือให้ Snaap ช่วย",
-      "เริ่มที่ไอเดียของคุณ.",
-      "ให้ Snaap ออกแบบ",
-      "01",
-    ],
-    build: [
-      "จากสิ่งที่คุณคิด สู่เงื่อนไขที่มองเห็น",
-      "ไอเดีย + Agent = เซ็ตอัพ.",
-      "เห็นเซ็ตอัพบนกราฟ",
-      "02",
-    ],
-    chart: [
-      "เลือกที่รับ แล้วลองปล่อยให้ตลาดเดิน",
-      "เห็นเงื่อนไข จับจังหวะ.",
-      "จำลองสัญญาณเข้า",
-      "03",
-    ],
-  }[phase];
-  document.querySelector("#story-kicker").textContent = copy[0];
-  document.querySelector("#experience-title").textContent = copy[1];
-  next.replaceChildren(document.createTextNode(copy[2] + " "));
-  const arrow = document.createElement("span");
-  arrow.textContent = "↗";
-  arrow.setAttribute("aria-hidden", "true");
-  next.append(arrow);
-  document.querySelector("#story-count").textContent = copy[3];
-  back.hidden = phase === "idea";
-}
-document.querySelectorAll("[data-idea]").forEach((button) =>
-  button.addEventListener("click", () => {
-    idea = button.dataset.idea;
-    document
-      .querySelectorAll("[data-idea]")
-      .forEach((item) =>
-        item.setAttribute("aria-pressed", String(item === button)),
-      );
-    updateStrategy();
-  }),
-);
-document.querySelectorAll("[data-destination]").forEach((button) =>
-  button.addEventListener("click", () => {
-    destination = button.dataset.destination;
-    document
-      .querySelectorAll("[data-destination]")
-      .forEach((item) =>
-        item.setAttribute("aria-pressed", String(item === button)),
-      );
-    document.querySelector("#delivery-channel").textContent =
-      `${destination} · ตัวอย่างแจ้งเตือน`;
-    experience.style.setProperty(
-      "--destination-x",
-      `${["Telegram", "Discord", "LINE"].indexOf(destination) * 130 - 130}px`,
-    );
-    if (experience.dataset.delivered === "true") showPhase("chart");
-  }),
-);
-next.addEventListener("click", () => {
-  experience.scrollIntoView({
-    behavior: reducedMotion.matches ? "instant" : "smooth",
-    block: "start",
-  });
-  if (phase === "idea") showPhase("build");
-  else if (phase === "build") showPhase("chart");
-  else if (experience.dataset.delivered === "true") showPhase("idea");
-  else {
-    experience.dataset.delivered = "true";
-    animateSignalDelivery();
-    document.querySelector("#story-kicker").textContent =
-      `จากไอเดียของคุณ ถึง ${destination}`;
-    document.querySelector("#experience-title").textContent =
-      "จับสัญญาณได้แล้ว.";
-    next.textContent = "ลองอีกไอเดีย ↺";
-  }
-});
-back.addEventListener("click", () => showPhase("idea"));
-updateStrategy();
-
-// The first impression already demonstrates the product's signal-to-alert loop.
-const heroMarket = document.querySelector(".hero-market");
-const heroCandles = document.querySelector("#hero-candles");
-heroCandles.replaceChildren(
-  ...[...document.querySelector("#story-candles").children].map((candle) =>
-    candle.cloneNode(true),
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const logo = document.querySelector(".logo-play");
+logo.addEventListener("click", () =>
+  logo.setAttribute(
+    "aria-pressed",
+    String(logo.getAttribute("aria-pressed") !== "true"),
   ),
 );
-const catchButton = document.querySelector("#hero-catch");
-catchButton.addEventListener("click", () => {
-  heroMarket.dataset.caught = "false";
-  // Restart the short, user-triggered CSS sequence, including on replay.
-  void heroMarket.offsetWidth;
-  heroMarket.dataset.caught = "true";
-  catchButton.innerHTML = 'เล่นอีกครั้ง <span aria-hidden="true">↺</span>';
-  document.querySelector("#hero-status").textContent =
-    "ตัวอย่าง: จับสัญญาณ BTC และแสดงแจ้งเตือนทาง Telegram แล้ว";
+logo.addEventListener("pointermove", (event) => {
+  if (reducedMotion.matches || event.pointerType === "touch") return;
+  const bounds = logo.getBoundingClientRect();
+  logo.style.setProperty(
+    "--ry",
+    `${((event.clientX - bounds.left) / bounds.width - 0.5) * 20}deg`,
+  );
+  logo.style.setProperty(
+    "--rx",
+    `${((event.clientY - bounds.top) / bounds.height - 0.5) * -15}deg`,
+  );
 });
-
-// Connect the actual signal point to the chosen destination at every viewport size.
-function animateSignalDelivery() {
-  if (reducedMotion.matches) return;
-  signalAnimation?.cancel();
-  const scene = document.querySelector(".chart-scene").getBoundingClientRect();
-  const entry = document
-    .querySelector(".entry-marker circle:nth-of-type(2)")
-    .getBoundingClientRect();
-  const target = document
-    .querySelector('[data-destination][aria-pressed="true"]')
-    .getBoundingClientRect();
-  const start = {
-    x: entry.left + entry.width / 2 - scene.left,
-    y: entry.top + entry.height / 2 - scene.top,
-  };
-  const end = {
-    x: target.left + target.width / 2 - scene.left,
-    y: target.top + target.height / 2 - scene.top,
-  };
-  signalAnimation = document.querySelector(".signal-particle").animate(
-    [
-      {
-        transform: `translate(${start.x}px,${start.y}px) scale(.5)`,
-        opacity: 0,
-      },
-      {
-        transform: `translate(${start.x}px,${start.y}px) scale(1)`,
-        opacity: 1,
-        offset: 0.12,
-      },
-      {
-        transform: `translate(${(start.x + end.x) / 2}px,${start.y + (end.y - start.y) * 0.65}px) scale(1)`,
-        opacity: 1,
-        offset: 0.65,
-      },
-      { transform: `translate(${end.x}px,${end.y}px) scale(2.5)`, opacity: 0 },
+logo.addEventListener("pointerleave", () => {
+  logo.style.setProperty("--ry", "0deg");
+  logo.style.setProperty("--rx", "0deg");
+});
+const demo = document.querySelector(".demo");
+const progress = document.querySelector("#progress");
+const play = document.querySelector("#play");
+const svgNS = "http://www.w3.org/2000/svg";
+let value = 0,
+  playing = false,
+  previousTime = 0,
+  frame = 0,
+  channel = "Telegram",
+  strategy = "pullback";
+const strategies = {
+  pullback: {
+    values: [
+      270, 250, 262, 222, 235, 201, 210, 176, 188, 155, 174, 186, 199, 212, 205,
+      192, 170, 178, 148, 130, 145, 108, 92, 106,
     ],
-    { duration: 950, delay: 450, easing: "cubic-bezier(.4,0,.2,1)" },
+    line: "M20 288 Q350 245 550 220 T980 195",
+    label: "EMA 200",
+    rules: ["ราคาอยู่เหนือ EMA 200", "ราคาย่อแตะเส้น แล้วปิดกลับขึ้น"],
+    alert: "BTC เข้าเงื่อนไขย่อในขาขึ้น",
+  },
+  breakout: {
+    values: [
+      270, 250, 259, 224, 236, 206, 217, 186, 204, 180, 195, 211, 188, 200, 180,
+      143, 119, 130, 102, 116, 83, 96, 65, 78,
+    ],
+    line: "M20 165H980",
+    label: "RESISTANCE",
+    rules: ["ราคาทะลุแนวต้าน", "ปิดเหนือจุดสูงสุด 20 แท่ง"],
+    alert: "BTC ปิดเหนือแนวต้าน 20 แท่ง",
+  },
+};
+const phases = [
+  "เริ่มจากไอเดียของคุณ",
+  "AI วางเงื่อนไข แล้วเฝ้ากราฟ",
+  "พบสัญญาณที่ตรงกับเซ็ตอัพ",
+  "ส่งสัญญาณไปยังช่องทางของคุณ",
+];
+let candleNodes = [];
+function makeSVG(tag, attrs) {
+  const node = document.createElementNS(svgNS, tag);
+  for (const [key, val] of Object.entries(attrs)) node.setAttribute(key, val);
+  return node;
+}
+function buildChart() {
+  const data = strategies[strategy];
+  const root = document.querySelector("#candles");
+  root.replaceChildren();
+  candleNodes = data.values.map((close, index) => {
+    const open = index ? data.values[index - 1] : 282;
+    const x = 35 + index * 40;
+    const group = makeSVG("g", {
+      class: `candle${close > open ? " down" : ""}`,
+    });
+    group.append(
+      makeSVG("path", {
+        d: `M${x} ${Math.min(open, close) - 9}V${Math.max(open, close) + 9}`,
+      }),
+      makeSVG("rect", {
+        x: x - 7,
+        y: Math.min(open, close),
+        width: 14,
+        height: Math.max(4, Math.abs(open - close)),
+        rx: 1,
+      }),
+    );
+    root.append(group);
+    return group;
+  });
+  document.querySelector("#indicator").setAttribute("d", data.line);
+  document.querySelector("#indicator-label").textContent = data.label;
+  document
+    .querySelector("#indicator-label")
+    .setAttribute("y", strategy === "breakout" ? 154 : 230);
+  document.querySelector("#rule-one").textContent = data.rules[0];
+  document.querySelector("#rule-two").textContent = data.rules[1];
+  document.querySelector("#notification-title").textContent = data.alert;
+  document
+    .querySelector("#signal-mark")
+    .setAttribute("transform", `translate(635 ${data.values[15]})`);
+}
+function render() {
+  const phase = value < 15 ? 0 : value < 66 ? 1 : value < 85 ? 2 : 3;
+  if (demo.dataset.phase !== String(phase)) {
+    demo.dataset.phase = phase;
+    document.querySelector("#phase-label").textContent = phases[phase];
+  }
+  progress.value = value;
+  const count = value < 28 ? 10 : Math.min(24, 10 + (value - 28) / 4.8);
+  candleNodes.forEach((node, index) => {
+    const reveal = Math.max(0, Math.min(1, count - index));
+    node.style.opacity = index < 10 ? 0.6 : reveal;
+  });
+  document
+    .querySelector("#market-head")
+    .setAttribute(
+      "transform",
+      `translate(${35 + Math.min(23, Math.floor(count) - 1) * 40} 0)`,
+    );
+  document.querySelector("#market-head").style.opacity =
+    value >= 28 && value < 85 ? 1 : 0;
+  document.querySelector("#signal-mark").style.opacity = value >= 66 ? 1 : 0;
+  document.querySelector(".signal-zone").style.opacity = value >= 66 ? 1 : 0;
+  const travel = Math.max(0, Math.min(1, (value - 72) / 13));
+  const dot = document.querySelector(".travel-dot");
+  dot.style.opacity = travel > 0 && travel < 1 ? 1 : 0;
+  dot.style.left = `${60 + travel * 23}%`;
+  dot.style.top = `${travel * 45}px`;
+  document.querySelector(".delivery-line").style.opacity = value >= 72 ? 1 : 0;
+  const arrival = Math.max(0, Math.min(1, (value - 85) / 6));
+  const notification = document.querySelector(".notification");
+  notification.style.opacity = arrival;
+  notification.style.transform = `translateY(${(1 - arrival) * 15}px)`;
+  document
+    .querySelectorAll(".timeline-labels span")
+    .forEach((item, index) => item.classList.toggle("active", index === phase));
+  play.replaceChildren(
+    document.createTextNode(
+      playing
+        ? "หยุดชั่วคราว "
+        : value >= 100
+          ? "เล่นอีกครั้ง "
+          : value > 0
+            ? "เล่นต่อ "
+            : "เล่นโฟลว์ ",
+    ),
+  );
+  const icon = document.createElement("span");
+  icon.textContent = playing ? "Ⅱ" : value >= 100 ? "↻" : "▶";
+  play.append(icon);
+  progress.setAttribute(
+    "aria-valuetext",
+    `${Math.round(value)}% — ${phases[phase]}`,
   );
 }
+function stop() {
+  playing = false;
+  cancelAnimationFrame(frame);
+  previousTime = 0;
+  render();
+}
+function tick(time) {
+  if (!playing) return;
+  if (previousTime) value = Math.min(100, value + (time - previousTime) / 140);
+  previousTime = time;
+  if (value >= 100) {
+    stop();
+    return;
+  }
+  render();
+  frame = requestAnimationFrame(tick);
+}
+play.addEventListener("click", () => {
+  if (playing) {
+    stop();
+    return;
+  }
+  if (value >= 100) value = 0;
+  if (reducedMotion.matches) {
+    value = value < 15 ? 28 : value < 66 ? 66 : 100;
+    render();
+    return;
+  }
+  playing = true;
+  previousTime = 0;
+  render();
+  frame = requestAnimationFrame(tick);
+});
+progress.addEventListener("input", () => {
+  const requested = Number(progress.value);
+  stop();
+  value = requested;
+  render();
+});
+// Read the slider before stop() renders its previous value.
+progress.addEventListener("pointerdown", () => {
+  if (playing) stop();
+});
+document.querySelectorAll("[data-idea]").forEach((button) =>
+  button.addEventListener("click", () => {
+    stop();
+    strategy = button.dataset.idea;
+    value = 0;
+    document.querySelectorAll("[data-idea]").forEach((item) => {
+      const selected = item === button;
+      item.classList.toggle("active", selected);
+      item.setAttribute("aria-pressed", selected);
+    });
+    buildChart();
+    render();
+  }),
+);
+document.querySelectorAll("[data-channel]").forEach((button) =>
+  button.addEventListener("click", () => {
+    channel = button.dataset.channel;
+    document
+      .querySelectorAll("[data-channel]")
+      .forEach((item) => item.setAttribute("aria-pressed", item === button));
+    document.querySelector("#notification-channel").textContent =
+      `SNAAP → ${channel.toUpperCase()}`;
+  }),
+);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && playing) stop();
+});
+new IntersectionObserver(
+  (entries) => {
+    if (!entries[0].isIntersecting && playing) stop();
+  },
+  { threshold: 0.1 },
+).observe(demo);
+reducedMotion.addEventListener("change", () => {
+  stop();
+});
+buildChart();
+render();
