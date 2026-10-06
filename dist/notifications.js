@@ -274,6 +274,7 @@ async function renderNotifications(force = true) {
   }
   if (notificationFlight?.workspace === workspace) return notificationFlight.promise;
   if (!force && notificationData.loaded && Date.now() - notificationLoadedAt < 30000) return;
+  if (notificationData.failed) { notificationData.failed = false; paintNotifications(); }
   const promise = loadNotifications(workspace);
   notificationFlight = { workspace, promise };
   try { await promise; } finally { if (notificationFlight?.promise === promise) notificationFlight = null; }
@@ -281,12 +282,13 @@ async function renderNotifications(force = true) {
 async function loadNotifications(workspace) {
   const request = ++notificationRequest;
   const view = $("#view-notifications");
+  const signal = AbortSignal.timeout(12000);
   try {
     const [signals, channels, deliveries, monitor] = await Promise.all([
-      api("/signals?view=signals"),
-      api("/destinations"),
-      api("/deliveries"),
-      api("/monitor"),
+      api("/signals?view=signals", 'GET', undefined, {signal}),
+      api("/destinations", 'GET', undefined, {signal}),
+      api("/deliveries", 'GET', undefined, {signal}),
+      api("/monitor", 'GET', undefined, {signal}),
     ]);
     if (request !== notificationRequest || workspace !== state.workspaceId) return;
     state.destinations = channels.items;
@@ -303,8 +305,11 @@ async function loadNotifications(workspace) {
     window.SnaapSignalUnread?.markVisible();
   } catch (error) {
     if (request !== notificationRequest || workspace !== state.workspaceId) return;
+    notificationData.failed = true;
+    view.querySelector('.skeleton')?.remove();
     view.querySelector('.notification-error')?.remove();
-    view.insertAdjacentHTML('beforeend', `<div class="notification-error" role="alert"><p>${esc(error.message)}</p><button class="secondary" data-notification-refresh>ลองอีกครั้ง</button></div>`);
+    const message = error.name === 'TimeoutError' ? 'โหลดข้อมูลนานกว่าปกติ · ลองอีกครั้งได้' : error.message;
+    view.insertAdjacentHTML('beforeend', `<div class="notification-error" role="alert"><p>${esc(message)}</p><button class="secondary" data-notification-refresh>ลองอีกครั้ง</button></div>`);
   }
 }
 function paintNotifications() {
@@ -340,7 +345,9 @@ function paintNotifications() {
     content = notificationActivity(monitor, deliveries);
   }
   if(notificationSection === "inbox" && notificationData.more) content += '<button class="secondary" data-more-signals>โหลดสัญญาณก่อนหน้า</button>';
-  if (notificationSection !== 'rules' && notificationData.loaded === false) content = '<p role="status">กำลังอัปเดตข้อมูลส่วนนี้…</p>';
+  if (notificationSection !== 'rules' && notificationData.loaded === false) content = notificationData.failed
+    ? '<p class="field-note">ยังโหลดข้อมูลไม่ได้ · กดรีเฟรชเพื่อลองอีกครั้ง</p>'
+    : skeletonUI(notificationSection === 'activity' ? 'cards' : 'rows', 'กำลังโหลดข้อมูลส่วนนี้…');
   if (notificationSection === "channels") content = `<div data-browser-alert-slot>${window.SnaapBrowserAlerts?.settingsMarkup() ?? ''}</div>` + content;
   parkNotificationRules();
   $("#view-notifications").innerHTML =

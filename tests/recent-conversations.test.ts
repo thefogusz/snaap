@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 
 const source = await readFile(new URL('../dist/workbench.js', import.meta.url), 'utf8');
+const loadingUI = await readFile(new URL('../dist/loading-ui.js', import.meta.url), 'utf8');
 const {createConversationCache} = await import(new URL('../dist/conversation-cache.js', import.meta.url).href);
 
 async function pickerFixture(initial: any[] = [{id: 'chat', title: 'Recent', created_at: '2026-01-01'}], cold = false) {
@@ -35,7 +36,7 @@ async function pickerFixture(initial: any[] = [{id: 'chat', title: 'Recent', cre
   });
   const start = source.indexOf('function conversationScope()');
   const end = source.indexOf('\nconst chatComposer', start);
-  vm.runInContext(source.slice(start, end), context);
+  vm.runInContext(loadingUI+'\n'+source.slice(start, end), context);
   return {picker, dialogs, list, status, input, button, state, requests, cache};
 }
 test('recent conversations opens from existing data before a slow API responds', async () => {
@@ -146,7 +147,7 @@ function selectionFixture() {
   const conversations = {value: 'first', addEventListener(_event: string, callback: typeof change) {change = callback;}};
   const messages = {prepend() {}, replaceChildren() {}};
   const context = vm.createContext({
-    state, conversations, performance, AbortController, leaveDraft: async () => true,
+    state, conversations, performance, AbortController, skeletonUI: vm.runInNewContext(loadingUI+';skeletonUI'), leaveDraft: async () => true,
     api: (path: string, _method: string, _body: unknown, options: any) => new Promise(resolve => requests.push({path, signal: options.signal, resolve})),
     conversationCache: {upsert: (row: any) => rows.push(row), read: () => ({rows})}, applyConversationRows: (value: any[]) => {state.conversationRows = value;},
     initial: () => ({}), showDraftStatus() {}, renderImages() {}, setWorkbenchTab() {}, showDesigner() {}, recordConversationTiming() {}, toast() {},

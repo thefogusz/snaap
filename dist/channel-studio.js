@@ -247,6 +247,9 @@
     if (!session || session.step !== 2) return;
     const request = ++previewRequest,
       current = session;
+    const preview = dialog.querySelector('[data-channel-preview]');
+    if (!preview.querySelector('.channel-preview-sender')) preview.innerHTML = skeletonUI('rows', 'กำลังเตรียมตัวอย่าง…');
+    preview.setAttribute('aria-busy', 'true');
     try {
       const result = await api("/destinations/preview", "POST", {
         kind: session.kind,
@@ -281,6 +284,8 @@
       if (request === previewRequest && dialog.open)
         dialog.querySelector("[data-channel-preview]").innerHTML =
           `<p role="alert">${esc(error.message)}</p>`;
+    } finally {
+      if (request === previewRequest) preview.removeAttribute('aria-busy');
     }
   }
   async function syncChannels() {

@@ -9,27 +9,41 @@ const functions = source.slice(source.indexOf('  async function update('), sourc
 function fixture() {
   const draft = { exchange: ['Binance'], pairs: ['BTC/USDT'], timeframe: '15m', market: 'Spot' };
   const pending: Array<(value: unknown) => void> = [];
+  const rejected: Array<(error: Error) => void> = [];
+  const loading: boolean[] = [];
   const rendered: unknown[] = [];
   const timers = new Map<number, () => void>();
   let timerId = 0;
   const element = { textContent: '', innerHTML: '', value: '', hidden: false, disabled: false, style: { opacity: '' } };
   const context = vm.createContext({
-    state: { draft }, workbench: { hidden: false, dataset: { tab: 'split' } },
+    state: { draft }, AbortSignal, AbortController, previewController: null, chart: null, chartLoading: (active:boolean) => loading.push(active), workbench: { hidden: false, dataset: { tab: 'split' } },
     studio: { querySelector: () => element, querySelectorAll: () => [element] },
     chartPicker: { ...element }, chartPickerWrap: { ...element }, canvas: { ...element }, status: element,
     chartFrame: null, window: {SnaapStudio: {chartIndicators: () => []}}, hasEntryCondition: () => true,
     conditionFrames: (draft: {timeframe: string}) => [draft.timeframe],
     framePicker: { dataset: {}, innerHTML: '', querySelectorAll: () => [] },
     esc: String, directionLabel: () => 'Spot', stop: () => {},
-    api: () => new Promise(resolve => pending.push(resolve)),
+    api: () => new Promise((resolve,reject) => {pending.push(resolve);rejected.push(reject);}),
     render: (data: unknown) => { rendered.push(data); context.result = data; },
     setTimeout: (callback: () => void) => { timers.set(++timerId, callback); return timerId; },
     clearTimeout: (id: number) => timers.delete(id),
     key: '', pendingKey: '', generation: 0, chartPair: null, result: null, timer: null,
   });
   vm.runInContext(functions + ';globalThis.updateChart=update;globalThis.scheduleChart=schedule;', context);
-  return { context, pending, rendered, timers, flush: () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(fn => fn()); } };
+  return { context, pending, rejected, loading, rendered, timers, flush: () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(fn => fn()); } };
 }
+
+test('a failed initial preview clears its placeholder and allows a retry', async () => {
+  const f=fixture();const first=f.context.updateChart();
+  assert.equal(f.loading.at(-1),true);
+  f.rejected[0](Object.assign(Error('deadline'),{name:'TimeoutError'}));await first;
+  assert.equal(f.loading.at(-1),false);
+  assert.equal(f.context.canvas.style.opacity,'1');
+  assert.match(f.context.status.textContent,/กดรีเฟรช/);
+  const retry=f.context.updateChart();f.pending[1]({id:'retry'});await retry;
+  assert.equal(f.rendered.length,1);
+  assert.equal(f.context.canvas.inert,false);
+});
 
 test('chart tab reveal and identical setup renders share an in-flight preview', async () => {
   const f = fixture();
@@ -48,8 +62,10 @@ test('chart tab reveal and identical setup renders share an in-flight preview', 
 test('a draft edit during preview discards stale data and automatically draws the replacement', async () => {
   const f = fixture();
   const first = f.context.updateChart();
+  const firstController=f.context.previewController;
   f.context.state.draft.timeframe = '5m';
   f.context.scheduleChart();
+  assert.equal(firstController.signal.aborted,true);
   f.flush();
   assert.equal(f.pending.length, 2);
   f.pending[0]({ id: 'stale' });

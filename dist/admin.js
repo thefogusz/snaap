@@ -161,12 +161,14 @@
 
   // Load Overview Data
   async function loadOverview() {
+    if (!state.overview) $("#recent-deliveries-tbody").innerHTML = '<tr><td colspan="5">'+skeletonUI('rows', 'กำลังโหลดภาพรวม…')+'</td></tr>';
     try {
       const data = await apiFetch("/api/v1/admin/overview", { cache: "no-store" });
       state.overview = data;
       renderOverview(data);
     } catch (err) {
       console.error("Overview error", err);
+      if (!state.overview) $("#recent-deliveries-tbody").innerHTML = '<tr><td colspan="5" class="empty-state">โหลดภาพรวมไม่สำเร็จ กดรีเฟรชเพื่อลองอีกครั้ง</td></tr>';
       $("#system-status-pill").className = "badge badge-danger";
       $("#system-status-text").textContent = "เชื่อมต่อล้มเหลว";
     }
@@ -338,6 +340,7 @@
   // Load Activity & Incident Feed
   async function loadActivity(append = false, background = false) {
     const request = ++state.feedRequest;
+    if (!state.feedLoaded) $("#activity-timeline-list").innerHTML = skeletonUI('rows', 'กำลังโหลดเหตุการณ์…');
     const query = new URLSearchParams({ state: state.feedState, limit: "50" });
     if (state.feedFilter !== "all") query.set("category", state.feedFilter);
     if (state.feedSeverity) query.set("severity", state.feedSeverity);
@@ -518,6 +521,7 @@
   // Load Users Data
   async function loadUsers(append = false) {
     const request = ++state.userRequest;
+    if (!state.users.length && !append) $("#users-tbody").innerHTML = '<tr><td colspan="6">'+skeletonUI('rows', 'กำลังโหลดผู้ใช้…')+'</td></tr>';
     const query = new URLSearchParams({
       search: state.search,
       filter: state.filter,
@@ -625,6 +629,12 @@
 
   // Load Diagnostics
   async function loadDiagnostics() {
+    if (!state.diagnostics) {
+      $("#failed-deliveries-tbody").innerHTML = '<tr><td colspan="4">'+skeletonUI('rows', 'กำลังโหลดรายการส่งที่ล้มเหลว…')+'</td></tr>';
+      $("#market-issues-tbody").innerHTML = '<tr><td colspan="5">'+skeletonUI('rows', 'กำลังโหลดสถานะตลาด…')+'</td></tr>';
+      $("#system-logs-box").innerHTML = skeletonUI('rows', 'กำลังโหลดบันทึกระบบ…');
+      $("#admin-audit-list").innerHTML = skeletonUI('rows', 'กำลังโหลดบันทึกผู้ดูแล…');
+    }
     try {
       const [data, audit] = await Promise.all([
         apiFetch("/api/v1/admin/diagnostics"),
@@ -642,6 +652,13 @@
         '<div class="empty-state">ยังไม่มีการกระทำของผู้ดูแล</div>';
     } catch (err) {
       console.error("Diagnostics error", err);
+      if (!state.diagnostics) {
+        const failure='โหลดข้อมูลไม่สำเร็จ กดรีเฟรชเพื่อลองอีกครั้ง';
+        $("#failed-deliveries-tbody").innerHTML='<tr><td colspan="4" class="empty-state">'+failure+'</td></tr>';
+        $("#market-issues-tbody").innerHTML='<tr><td colspan="5" class="empty-state">'+failure+'</td></tr>';
+        $("#system-logs-box").textContent=failure;
+        $("#admin-audit-list").textContent=failure;
+      }
       showToast("โหลด Diagnostics ไม่สำเร็จ");
     }
   }

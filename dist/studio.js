@@ -27,6 +27,11 @@
   const status = studio.querySelector("[data-chart-status]");
   const canvas = studio.querySelector(".studio-canvas");
   const scrub = studio.querySelector("[data-scrub]");
+  function chartLoading(active) {
+    canvas.setAttribute('aria-busy', String(active));
+    canvas.querySelector('.skeleton')?.remove();
+    if (active && !chart) canvas.insertAdjacentHTML('beforeend', skeletonUI('chart', 'กำลังโหลดกราฟ…'));
+  }
   let chartPair=null, chartFrame=null, selectedBarTime=null, requestedBarTime=null;
   window.SnaapChart = {
     get pair(){return chartPair;}, get frame(){return chartFrame ?? state.draft?.timeframe;},
@@ -38,10 +43,12 @@
     refresh(){key="";schedule();},
     reset(){
       generation++;
+      previewController?.abort();
       clearTimeout(timer);
-      key="";
+      key="";pendingKey="";
       chartPair=null;chartFrame=null;selectedBarTime=null;requestedBarTime=null;
       clear();
+      chartLoading(false);
       chartPickerWrap.hidden=true;
       scrub.value=0;
       studio.querySelector('[data-chart-title]').textContent='กราฟเซ็ตอัพใหม่';
@@ -63,6 +70,7 @@
     result,
     key = "",
     pendingKey = "",
+    previewController,
     timer,
     playTimer,
     generation = 0,
@@ -285,28 +293,38 @@
     if (!force && ((next === key && result) || next === pendingKey)) return;
     pendingKey = next;
     const token = ++generation;
-    canvas.inert=true;canvas.style.opacity=".35";
+    previewController?.abort();
+    previewController = new AbortController();
+    const signal = AbortSignal.any([previewController.signal, AbortSignal.timeout(20000)]);
+    canvas.inert=true;canvas.style.opacity=chart ? '.55' : '1';
+    chartLoading(true);
     stop();
+    studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
     studio.querySelector("[data-chart-title]").textContent =
       `${state.draft.exchange.join(", ")} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
     if (state.draft.exchange.length !== 1 || !state.draft.pairs.length) {
       pendingKey = "";
       status.textContent = "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ";
+      chartLoading(false);canvas.inert=false;canvas.style.opacity='1';
       return;
     }
     status.textContent = "กำลังคำนวณกราฟและสัญญาณ…";
     try {
-      const data = await api("/preview", "POST", request);
+      const data = await api("/preview", "POST", request, {signal});
       if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==request.spec.pairs[0] || chartFrame!==request.chartTimeframe || state.conversation!==scope.conversation || state.workspaceId!==scope.workspace) return;
       render(data);
       key = next;
     } catch (e) {
       if (token === generation) {
-        status.textContent = e.message;
+        status.textContent = e.name === 'TimeoutError' ? 'โหลดกราฟนานกว่าปกติ · กดรีเฟรชเพื่อลองอีกครั้ง' : e.message;
         key = "";
       }
     } finally {
-      if (token === generation) pendingKey = "";
+      if (token === generation) {
+        pendingKey = '';chartLoading(false);canvas.style.opacity='1';
+        // Keep failed refreshes visible, but do not allow replay of stale data.
+        canvas.inert = key !== next;
+      }
     }
   }
   function schedule() {
@@ -314,12 +332,13 @@
     const next = JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]},conversation:state.conversation,workspace:state.workspaceId});
     if ((next === key && result) || next === pendingKey) return;
     generation++;
+    previewController?.abort();
     selectedBarTime=null;
     stop();
     studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
     clearTimeout(timer);
     status.textContent = "เซ็ตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…";
-    canvas.style.opacity = ".35";canvas.inert=true;
+    canvas.style.opacity = chart ? '.55' : '1';canvas.inert=true;chartLoading(true);
     studio.querySelector("[data-chart-evidence]").textContent="กำลังคำนวณร่างล่าสุด…";
     timer = setTimeout(() => {
       update();
@@ -448,7 +467,7 @@
       if (loading) return;
       loading = true; refreshButton.disabled = true;selectionUI();
       dialog.querySelector("input").oninput = null;
-      dialog.querySelector(".instrument-list").innerHTML = "";
+      dialog.querySelector(".instrument-list").innerHTML = skeletonUI('rows', 'กำลังโหลดคู่เทรด…');
       dialog.querySelector("[data-catalog-status]").textContent = "กำลังซิงก์จากกระดาน…";
       try {
         const data = await api(
@@ -480,6 +499,7 @@
         dialog.querySelector("input").oninput = paint;
         paint();selectionUI();
       } catch (err) {
+        dialog.querySelector(".instrument-list").replaceChildren();
         dialog.querySelector("[data-catalog-status]").textContent = err.message;
         const retry = document.createElement("button");
         retry.className = "secondary";
