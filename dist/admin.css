@@ -862,3 +862,22 @@ button, input, select {
 .service-switches { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
 .service-switches label { display:flex; align-items:center; gap:6px; }
 .service-switches input[type=checkbox] { width:auto; }
+/* Keep the user list compact without splitting emails, labels or action groups. */
+#panel-users > .table-container > .admin-table { table-layout:fixed; min-width:1100px; }
+#panel-users > .table-container > .admin-table > thead th:nth-child(1) { width:24%; }
+#panel-users > .table-container > .admin-table > thead th:nth-child(2) { width:9%; }
+#panel-users > .table-container > .admin-table > thead th:nth-child(3) { width:12%; }
+#panel-users > .table-container > .admin-table > thead th:nth-child(4) { width:20%; }
+#panel-users > .table-container > .admin-table > thead th:nth-child(5) { width:11%; }
+#panel-users > .table-container > .admin-table > thead th:nth-child(6) { width:24%; }
+#panel-users > .table-container > .admin-table > thead th,
+#users-tbody > tr > td { padding:12px; }
+#users-tbody .user-cell { min-width:0; gap:6px; }
+#users-tbody .user-email { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#users-tbody .user-id { align-self:flex-start; }
+#users-tbody .user-ai-summary { white-space:nowrap; }
+.user-row-meta { display:flex; flex-wrap:wrap; gap:2px 10px; margin-top:4px; font-size:11px; color:var(--tertiary); }
+.user-row-meta span { white-space:nowrap; }
+.user-actions { display:grid; gap:6px; }
+.user-actions-row { display:flex; justify-content:flex-end; gap:6px; flex-wrap:nowrap; }
+.user-actions-row .btn { white-space:nowrap; padding:6px 9px; font-size:11px; }

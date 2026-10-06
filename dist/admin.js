@@ -582,7 +582,7 @@
         <tr>
           <td>
             <div class="user-cell">
-              <span class="user-email">${escapeHTML(u.email || "ไม่ระบุอีเมล")}</span>
+              <span class="user-email" title="${escapeHTML(u.email || "ไม่ระบุอีเมล")}">${escapeHTML(u.email || "ไม่ระบุอีเมล")}</span>
               <button class="user-id btn btn-sm" data-copy="${escapeHTML(u.id)}" title="คัดลอก User ID">
                 ${u.id.slice(0, 8)}...${u.id.slice(-4)} 📋
               </button>
@@ -591,26 +591,30 @@
           <td>${planBadge}</td>
           <td>
             <strong>${u.active_rules_count}</strong>
-            <span style="color:var(--tertiary);"> / ${u.rules_count} กฎ</span><div style="font-size:11px;">สัญญาณ ${Number(u.signals_count ?? 0)} · แจ้งเตือน ${Number(u.notifications_sent ?? 0)}</div>
+            <span style="color:var(--tertiary);"> / ${u.rules_count}</span><div class="user-row-meta"><span>สัญญาณ ${Number(u.signals_count ?? 0)}</span><span>แจ้งเตือน ${Number(u.notifications_sent ?? 0)}</span></div>
           </td>
           <td>
-            <div>Std: <strong>${u.ai_standard_used}</strong> ครั้ง · ${"เพดาน " + (state.usagePolicy?.[state.usagePolicy?.mode === "plans" ? (u.is_pro ? "pro" : "free") : "unified"]?.standard ?? "ไม่จำกัด")}</div>
-            <div style="font-size:11px;color:var(--tertiary);">ต้นทุนประมาณ USD ${Number(u.ai_estimated_usd ?? 0).toFixed(4)} · ล้มเหลว ${Number(u.ai_failed_count ?? 0)}</div>
+            <div class="user-ai-summary">AI <strong>${u.ai_standard_used}</strong> ครั้ง · ${"เพดาน " + (state.usagePolicy?.[state.usagePolicy?.mode === "plans" ? (u.is_pro ? "pro" : "free") : "unified"]?.standard ?? "ไม่จำกัด")}</div>
+            <div class="user-row-meta"><span title="ต้นทุน AI โดยประมาณ">USD ${Number(u.ai_estimated_usd ?? 0).toFixed(4)}</span><span>ล้มเหลว ${Number(u.ai_failed_count ?? 0)}</span></div>
           </td>
           <td>${formatDate(u.created_at)}</td>
           <td style="text-align: right;">
-            <div class="actions-cell" style="justify-content: flex-end;">
+            <div class="user-actions">
+              <div class="user-actions-row">
               <button class="btn btn-sm btn-primary" data-action="plan" data-user="${escapeHTML(u.id)}">
                 ปรับสิทธิ์
               </button>
               <button class="btn btn-sm" data-action="usage-report" data-user="${escapeHTML(u.id)}" aria-expanded="false">การใช้งาน</button>
               ${u.isAdmin ? '' : `<button class="btn btn-sm" data-action="restriction" data-user="${escapeHTML(u.id)}" data-email="${escapeHTML(u.email)}">${u.restriction_active ? '⏸ ระงับอยู่' : 'ควบคุม'}</button>`}
+              </div>
+              <div class="user-actions-row">
               <button class="btn btn-sm" data-action="reset-quota" data-user="${escapeHTML(u.id)}" title="คืนโควตา AI เดือนนี้ โดยเก็บประวัติการใช้">
                 🧹 คืนโควตา AI
               </button>
               <button class="btn btn-sm" data-action="impersonate" data-user="${escapeHTML(u.id)}" title="เข้าสู่บัญชีผู้ใช้เพื่อช่วยตรวจสอบ 15 นาที" ${u.isAdmin ? "disabled" : ""}>
                 👁️ สวมรอย
               </button>
+              </div>
             </div>
           </td>
         </tr>
