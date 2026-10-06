@@ -9,6 +9,7 @@ import { hash } from "./crypto.js";
 import { ADMIN_EMAIL, isAdminIdentity } from "./admin-access.js";
 import { usagePolicy, usagePolicySchema } from './usage-policy.js';
 import { registerAdminUsage } from './admin-usage.js';
+import { registerAccessControls } from './access-controls.js';
 
 export interface SystemLogEntry {
   id: string;
@@ -94,13 +95,14 @@ export function registerAdmin(
 
   app.get('/api/v1/admin/usage-policy', async () => usagePolicy(db));
   registerAdminUsage(app, db);
+  registerAccessControls(app, db);
   app.post('/api/v1/admin/usage-policy', async req => {
     const input = z.object({policy: usagePolicySchema, expectedRevision: z.number().int().nonnegative()}).strict().parse(req.body);
     return transaction(db, async c => {
       const before = await usagePolicy(c);
       const updated = await c.query('UPDATE usage_policy SET policy=$1,revision=revision+1,updated_at=now() WHERE id=1 AND revision=$2 RETURNING revision', [input.policy, input.expectedRevision]);
       if (!updated.rowCount) throw new ApiError(409, 'REVISION_CONFLICT', 'การตั้งค่าถูกเปลี่ยนแล้ว กรุณาโหลดใหม่ก่อนบันทึก');
-      await c.query("UPDATE deliveries SET usage_retry_at=NULL WHERE status='USAGE_LIMIT'");
+      await c.query("UPDATE deliveries SET usage_retry_at=NULL WHERE status IN ('USAGE_LIMIT','ADMIN_PAUSED')");
       await auditAdmin(c, req.userId, 'usage-policy.update', undefined, {before, after: input.policy});
       return {...input.policy, revision: updated.rows[0].revision};
     });
@@ -289,6 +291,8 @@ export function registerAdmin(
         u.id, 
         u.email, 
         u.role, u.google_sub,
+        ur.scope AS restriction_scope, ur.until_at AS restriction_until,
+        (ur.scope<>'none' AND (ur.until_at IS NULL OR ur.until_at>now())) AS restriction_active,
         u.created_at,
         (u.google_sub IS NOT NULL AND COALESCE(lower(u.email)=ANY($1::text[]),false)) AS is_admin,
         e.pro_until,
@@ -307,6 +311,7 @@ export function registerAdmin(
         (SELECT count(*)::int FROM usage_ledger ul WHERE ul.owner_id=u.id AND ul.status='REFUNDED' AND ul.created_at>=date_trunc('month',now())) AS ai_failed_count
       FROM users u
       LEFT JOIN entitlements e ON e.owner_id = u.id
+      LEFT JOIN user_restrictions ur ON ur.owner_id=u.id
       WHERE ($2='' OR position(lower($2) IN lower(COALESCE(u.email,'')))>0 OR position(lower($2) IN u.id::text)>0)
       AND ($3::uuid IS NULL OR (u.created_at,u.id)<(SELECT created_at,id FROM users WHERE id=$3)))
       SELECT * FROM listed WHERE $4='all' OR ($4='pro' AND is_pro) OR ($4='free' AND NOT is_pro AND NOT is_admin) OR ($4='admin' AND is_admin)

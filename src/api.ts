@@ -1,4 +1,5 @@
 import { userLimits, usagePolicy } from './usage-policy.js';
+import { assertAccess } from './access-controls.js';
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
@@ -61,7 +62,7 @@ export async function buildApp(
   });
   await app.register(cookie);
   await app.register(rateLimit, {
-    max: 180,
+    max: async () => (await usagePolicy(db)).requestsPerMinute,
     timeWindow: "1 minute",
     hook: "preHandler",
     keyGenerator: (req) => req.userId || req.ip,
@@ -221,6 +222,7 @@ export async function buildApp(
     if (!result.rowCount)
       throw new ApiError(401, "UNAUTHENTICATED", "เซสชันหมดอายุ");
     req.userId = result.rows[0].user_id;
+    await assertAccess(db,req.userId,'account');
     const selected = req.headers["x-snaap-workspace"];
     if (selected) {
       const id = z.string().uuid().parse(selected);
@@ -238,11 +240,15 @@ export async function buildApp(
   });
   async function session(userId: string, reply: any, lifetimeSeconds = 604800) {
     const token = randomBytes(32).toString("hex");
-    await db.query("DELETE FROM sessions WHERE expires_at<=now()");
-    await db.query(
-      "INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 second')",
-      [hash(token), userId, lifetimeSeconds],
-    );
+    await transaction(db,async c => {
+      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[userId]);
+      await assertAccess(c,userId,'account');
+      await c.query("DELETE FROM sessions WHERE expires_at<=now()");
+      await c.query(
+        "INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 second')",
+        [hash(token), userId, lifetimeSeconds],
+      );
+    });
     reply.setCookie("snaap_session", token, {
       httpOnly: true,
       sameSite: "lax",
@@ -505,6 +511,7 @@ export async function buildApp(
       .strict()
       .parse(req.body);
     if (input.active) {
+      await assertAccess(db,req.userId,'automation');
       if (!options.monitoring)
         throw new ApiError(409, "MONITOR_NOT_READY", "Worker ยังไม่พร้อม");
       if (input.confirmation !== "ACTIVATE")

@@ -16,6 +16,8 @@ export const usagePolicySchema = z.object({
   free: plan.default({activeRules: 6, standard: 20, deep: 0,workspaces:3,lineUser:30,notifications:null}),
   pro: plan.default({activeRules: 20, standard: 100, deep: 10,workspaces:3,lineUser:30,notifications:null}),
   lineTotal: cap.default(null),
+  services: z.object({ai:z.boolean().default(true),automation:z.boolean().default(true),notifications:z.boolean().default(true)}).strict().default({ai:true,automation:true,notifications:true}),
+  requestsPerMinute: z.number().int().min(30).max(600).default(180),
 }).strict();
 export type UsagePolicy = z.infer<typeof usagePolicySchema>;
 type Queryable = Pick<pg.Pool, 'query'>;

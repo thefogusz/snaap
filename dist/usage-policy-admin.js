@@ -27,6 +27,8 @@
     form.elements.mode.value = data.mode;
     for (const profile of profiles) for (const key of keys) form.elements[`${profile}.${key}`].value = data[profile][key] ?? '';
     form.elements.lineTotal.value = data.lineTotal ?? '';
+    for (const feature of ['ai','automation','notifications']) form.elements[`services.${feature}`].checked = data.services[feature];
+    form.elements.requestsPerMinute.value = data.requestsPerMinute;
     view();
   }
   async function load() {
@@ -52,6 +54,8 @@
       }
     }
     policy.lineTotal = form.elements.lineTotal.value.trim() === '' ? null : Number(form.elements.lineTotal.value);
+    policy.services = Object.fromEntries(['ai','automation','notifications'].map(feature=>[feature,form.elements[`services.${feature}`].checked]));
+    policy.requestsPerMinute = Number(form.elements.requestsPerMinute.value);
     busy = true; save.disabled = true; reload.disabled = true;
     status.textContent = 'กำลังบันทึก…';
     try { paint(await request('POST',{policy,expectedRevision:revision})); status.textContent = 'บันทึกแล้ว · ใช้ในรอบถัดไป'; }
@@ -60,6 +64,46 @@
   });
   document.querySelector('[data-tab="usage-policy"]').addEventListener('click', () => { if (!current) load(); });
   reload.addEventListener('click', load);
+})();
+
+(() => {
+  const dialog=document.querySelector('#restriction-dialog');
+  const form=document.querySelector('#restriction-form');
+  const status=document.querySelector('#restriction-status');
+  const submit=form.querySelector('[type="submit"]');
+  const scopes={none:'ใช้งานได้',all:'ระงับทั้งหมด',ai:'พัก AI',automation:'พักการเฝ้าติดตาม',notifications:'พักแจ้งเตือน'};
+  let target,revision,busy=false;
+  const endpoint=()=>`/api/v1/admin/users/${encodeURIComponent(target.dataset.user)}/restriction`;
+  document.querySelector('#users-tbody').addEventListener('click',async event=>{
+    const button=event.target.closest('[data-action="restriction"]');
+    if(!button || busy)return;
+    target=button;busy=true;submit.disabled=true;form.reset();form.elements.duration.disabled=false;
+    document.querySelector('#restriction-user').textContent=button.dataset.email;
+    document.querySelector('#restriction-current').textContent='';
+    status.textContent='กำลังโหลด…';dialog.showModal();
+    try {
+      const response=await fetch(endpoint());const data=await response.json();
+      if(!response.ok)throw new Error(data.error?.message || 'โหลดสถานะไม่สำเร็จ');
+      revision=data.revision;
+      document.querySelector('#restriction-current').textContent=`สถานะ: ${data.active ? scopes[data.scope] : 'ใช้งานได้'}${data.active && data.until_at ? ' · ถึง '+new Date(data.until_at).toLocaleString('th-TH') : ''}${data.reason ? ' · เหตุผลล่าสุด: '+data.reason : ''}`;
+      form.elements.scope.value=data.active ? data.scope : 'all';
+      status.textContent='';submit.disabled=false;
+    }catch(error){status.textContent=error.message;}finally{busy=false;}
+  });
+  form.elements.scope.addEventListener('change',()=>{form.elements.duration.disabled=form.elements.scope.value==='none';});
+  dialog.querySelector('[data-restriction-close]').addEventListener('click',()=>{if(!busy)dialog.close();});
+  dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();if(busy || !form.reportValidity())return;
+    busy=true;submit.disabled=true;status.textContent='กำลังบันทึก…';
+    try {
+      const response=await fetch(endpoint(),{method:'POST',headers:{'content-type':'application/json','x-snaap-client':'web'},body:JSON.stringify({scope:form.elements.scope.value,durationMinutes:form.elements.duration.value===''?null:Number(form.elements.duration.value),reason:form.elements.reason.value,expectedRevision:revision})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error?.message || 'บันทึกไม่สำเร็จ');
+      revision=data.revision;target.textContent=data.active?'⏸ ระงับอยู่':'ควบคุม';
+      document.querySelector('#restriction-current').textContent='สถานะ: '+scopes[data.scope];
+      status.textContent='บันทึกแล้ว · มีประวัติใน Logs';
+    }catch(error){status.textContent=error.message;}finally{busy=false;submit.disabled=false;}
+  });
 })();
 
 (() => {

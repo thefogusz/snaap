@@ -1,4 +1,5 @@
 import { monitorQuotaBlocked } from './usage-policy.js';
+import { accessBlocked } from './access-controls.js';
 import { lastClosedBoundary } from "../dist/timeframes.js";
 import { PgBoss } from "pg-boss";
 import type pg from "pg";
@@ -48,6 +49,10 @@ export async function evaluateTarget(
     )
   ).rows[0];
   if (!row) return;
+  if (await accessBlocked(db,row.owner_id,'automation')) {
+    await db.query("INSERT INTO monitor_status VALUES($1,$2,$3,'ADMIN_PAUSED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",[row.id,target.exchange,target.pair]);
+    return;
+  }
   const spec = strategySchema.parse(row.spec);
   // The durable checkpoint also catches duplicate stream/recovery jobs after restart.
   const previous = (
@@ -144,6 +149,7 @@ export async function evaluateTarget(
       )
     ).rows[0];
     if (!current) return;
+    if (await accessBlocked(c,current.owner_id,'automation')) return;
     if (await monitorQuotaBlocked(c, current.owner_id)) {
       await c.query(
         "INSERT INTO monitor_status VALUES($1,$2,$3,'QUOTA_BLOCKED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
@@ -388,7 +394,7 @@ export async function startMonitor(
     );
     const pendingDeliveries = (
       await db.query(
-        "SELECT id FROM deliveries WHERE status IN ('PENDING','RETRY') OR (status='USAGE_LIMIT' AND (usage_retry_at IS NULL OR usage_retry_at<=now())) ORDER BY CASE WHEN status='USAGE_LIMIT' THEN 1 ELSE 0 END,usage_retry_at NULLS FIRST,attempts,id LIMIT 500",
+        "SELECT id FROM deliveries WHERE status IN ('PENDING','RETRY') OR (status IN ('USAGE_LIMIT','ADMIN_PAUSED') AND (usage_retry_at IS NULL OR usage_retry_at<=now())) ORDER BY CASE WHEN status IN ('USAGE_LIMIT','ADMIN_PAUSED') THEN 1 ELSE 0 END,usage_retry_at NULLS FIRST,attempts,id LIMIT 500",
       )
     ).rows;
     await enqueueDeliveries(pendingDeliveries.map((row) => row.id));

@@ -9,6 +9,7 @@ import {
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 import { ADMIN_EMAIL } from "./admin-access.js";
+import { accessBlocked } from './access-controls.js';
 
 const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -163,6 +164,7 @@ export function registerGoogle(
         await db.query("DELETE FROM sessions WHERE token_hash=$1", [
           digest(req.cookies.snaap_session),
         ]);
+      if (await accessBlocked(db,row.rows[0].id,'account')) return fail(reply,'blocked');
       await session(row.rows[0].id, reply);
       return reply.redirect(adminFlow ? "/admin" : "/home");
     } catch {

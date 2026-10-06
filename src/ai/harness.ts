@@ -8,6 +8,7 @@ import { createProviderResponse, providerFailureDetails } from './provider.js';
 import { z } from "zod";
 import { transaction } from "../data/db.js";
 import { userLimits } from '../usage-policy.js';
+import { assertAccess } from '../access-controls.js';
 import { ApiError } from "../errors.js";
 import { contextBundle, sourceIds } from "../context.js";
 import {
@@ -64,6 +65,7 @@ export function registerHarness(
     ),
   );
   app.post("/api/v1/conversations/:id/turns", async (req) => {
+    await assertAccess(db,req.userId,'ai');
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const input = z
       .object({
@@ -213,6 +215,7 @@ export function registerHarness(
       )
         throw new ApiError(429, "AGENT_BUSY", "กำลังวิเคราะห์คำขอก่อนหน้า");
       const limit = (await userLimits(c, req.userId))[input.mode];
+      await assertAccess(c,req.userId,'ai');
       if (limit !== null) {
         const used = Number((await c.query("SELECT count(*) AS n FROM usage_ledger WHERE owner_id=$1 AND mode=$2 AND status IN ('RESERVED','COMPLETED') AND NOT quota_waived AND created_at>=date_trunc('month',now())", [req.userId,input.mode])).rows[0].n);
         if (used >= limit) throw new ApiError(429, 'QUOTA_EXCEEDED', 'โควตา AI ประจำเดือนหมดแล้ว');
@@ -391,6 +394,7 @@ export function registerHarness(
       let requireProposal = false;
       for (let round = 0; round < 7; round++) {
         if (deadline.aborted) throw new Error("REQUEST_DEADLINE");
+        await assertAccess(db,req.userId,'ai');
         const response = await createProviderResponse(client,
           {
             ...(process.env.AI_BASE_URL && new URL(process.env.AI_BASE_URL).hostname === 'openrouter.ai'

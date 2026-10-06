@@ -23,7 +23,7 @@ export function registerAdminUsage(app: FastifyInstance, db: pg.Pool) {
         (SELECT count(*)::int FROM signals WHERE owner_id=$1 AND event->>'kind' IS DISTINCT FROM 'EXPIRED') AS signals,
         (SELECT count(*)::int FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.owner_id=$1 AND d.status IN ('SENT','DELIVERED')) AS notifications_sent,
         (SELECT count(*)::int FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.owner_id=$1 AND d.status IN ('FAILED','AMBIGUOUS','DISCONNECTED','QUOTA_OR_RATE_LIMIT','UNKNOWN')) AS notifications_failed,
-        (SELECT count(*)::int FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.owner_id=$1 AND d.status IN ('PENDING','RETRY','USAGE_LIMIT')) AS notifications_pending`,[userId]),
+        (SELECT count(*)::int FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.owner_id=$1 AND d.status IN ('PENDING','RETRY','USAGE_LIMIT','ADMIN_PAUSED')) AS notifications_pending`,[userId]),
       db.query(`SELECT r.id,r.spec->>'name' AS name,r.active,r.deleted_at IS NOT NULL AS deleted,
         (SELECT count(*)::int FROM signals s WHERE s.rule_id=r.id AND s.owner_id=$1 AND s.event->>'kind' IS DISTINCT FROM 'EXPIRED') AS signals,
         (SELECT count(*)::int FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.rule_id=r.id AND s.owner_id=$1 AND d.status IN ('SENT','DELIVERED')) AS notifications_sent

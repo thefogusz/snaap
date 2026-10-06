@@ -604,6 +604,7 @@
                 ปรับสิทธิ์
               </button>
               <button class="btn btn-sm" data-action="usage-report" data-user="${escapeHTML(u.id)}" aria-expanded="false">การใช้งาน</button>
+              ${u.isAdmin ? '' : `<button class="btn btn-sm" data-action="restriction" data-user="${escapeHTML(u.id)}" data-email="${escapeHTML(u.email)}">${u.restriction_active ? '⏸ ระงับอยู่' : 'ควบคุม'}</button>`}
               <button class="btn btn-sm" data-action="reset-quota" data-user="${escapeHTML(u.id)}" title="คืนโควตา AI เดือนนี้ โดยเก็บประวัติการใช้">
                 🧹 คืนโควตา AI
               </button>

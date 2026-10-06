@@ -1,4 +1,5 @@
 import { userLimits } from './usage-policy.js';
+import { accessBlocked } from './access-controls.js';
 import type { FastifyInstance } from "fastify";
 import type pg from "pg";
 import { telegramChartPng } from "./telegram-chart.js";
@@ -431,7 +432,17 @@ export async function deliver(db: pg.Pool, id: string) {
         [id],
       )
     ).rows[0];
-    if (!row || !["PENDING", "RETRY", "USAGE_LIMIT"].includes(row.status)) return;
+    if (!row || !["PENDING", "RETRY", "USAGE_LIMIT", "ADMIN_PAUSED"].includes(row.status)) return;
+    const blocked = await accessBlocked(c,row.owner_id,'notifications');
+    if (blocked) {
+      await c.query("UPDATE deliveries SET status='ADMIN_PAUSED',detail=$2,usage_retry_at=now()+interval '1 minute' WHERE id=$1",[id,blocked.message]);
+      return;
+    }
+    if (row.status === 'ADMIN_PAUSED') {
+      // Old trading alerts must not burst out after a suspension expires or is lifted.
+      await c.query("UPDATE deliveries SET status='CANCELLED_ADMIN',detail='ไม่ส่งแจ้งเตือนย้อนหลังหลังคืนสิทธิ์',usage_retry_at=NULL WHERE id=$1",[id]);
+      return;
+    }
     if (!row.verified) {
       await c.query("UPDATE deliveries SET status='DISCONNECTED' WHERE id=$1", [
         id,

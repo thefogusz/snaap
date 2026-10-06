@@ -854,3 +854,11 @@ button, input, select {
 .usage-report-metrics span { font-size: 11px; color: var(--secondary); }
 .usage-setup-table th,.usage-setup-table td { padding: 8px 12px; font-size: 12px; }
 @media(max-width:600px) { .usage-policy-grid { grid-template-columns: 1fr; } .usage-report-metrics { gap: 16px; } }
+.restriction-dialog { width:min(420px,calc(100vw - 32px)); padding:22px; border:1px solid var(--line); border-radius:16px; background:var(--surface); color:var(--ink); }
+.restriction-dialog::backdrop { background:rgba(0,0,0,.6); }
+.restriction-dialog h3 { margin:0 0 12px; font-size:17px; }
+.restriction-dialog label { display:grid; gap:6px; margin:12px 0; font-size:13px; }
+.restriction-dialog select,.restriction-dialog textarea { width:100%; padding:9px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+.service-switches { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
+.service-switches label { display:flex; align-items:center; gap:6px; }
+.service-switches input[type=checkbox] { width:auto; }

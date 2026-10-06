@@ -8,6 +8,8 @@ import { monitorQuotaBlocked, usagePolicySchema } from '../src/usage-policy.js';
 import { reserveLine } from '../src/line-quota.js';
 import { transaction } from '../src/data/db.js';
 import { deliver } from '../src/destinations.js';
+import { accessBlocked } from '../src/access-controls.js';
+import { evaluateTarget } from '../src/monitor.js';
 const postgres = await localDatabase();
 const admin = new pg.Pool({ connectionString: postgres.url });
 const schema = "free_limits_" + randomUUID().replaceAll("-", "");
@@ -19,13 +21,12 @@ const db = new pg.Pool({
 let app: Awaited<ReturnType<typeof buildApp>>["app"] | undefined;
 try {
   await migrate(db);
-  app = (
-    await buildApp(db, {
+  const built = await buildApp(db, {
       local: true,
       monitoring: true,
       validateMarket: async () => {},
-    })
-  ).app;
+    });
+  app = built.app;
   const owner = randomUUID(),
     token = randomUUID();
   await db.query("INSERT INTO users(id,email) VALUES($1,$2)", [
@@ -203,6 +204,63 @@ try {
   policy.unified.notifications=null;
   assert.equal((await savePolicy(policy,4)).statusCode,200);
   assert.equal((await db.query('SELECT usage_retry_at FROM deliveries WHERE id=$1',[pendingDelivery])).rows[0].usage_retry_at,null,'admin changes immediately release blocked deliveries for rechecking');
+  // Abuse controls apply independently of FREE/PRO and unified quotas.
+  const restricted=randomUUID(),restrictedToken=randomUUID(),restrictedRule=randomUUID(),restrictedSignal=randomUUID(),restrictedDest=randomUUID(),restrictedDelivery=randomUUID();
+  await db.query('INSERT INTO users(id,email) VALUES($1,$2)',[restricted,'restricted@test.invalid']);
+  await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 hour')",[hash(restrictedToken),restricted]);
+  const restrictedAuth={...headers,cookie:'snaap_session='+restrictedToken};
+  const endpoint=`/api/v1/admin/users/${restricted}/restriction`;
+  const restrict=(scope:string,revision:number,auth=headers,reason='Repeated automated requests')=>app!.inject({method:'POST',url:endpoint,headers:auth,payload:{scope,durationMinutes:60,reason,expectedRevision:revision}});
+  assert.equal((await app.inject({url:endpoint,headers:outsider})).statusCode,403);
+  assert.equal((await restrict('all',0,outsider)).statusCode,403);
+  assert.equal((await restrict('invalid',0)).statusCode,400);
+  assert.equal((await restrict('ai',0,headers,'')).statusCode,400);
+  assert.equal((await app.inject({method:'POST',url:`/api/v1/admin/users/${owner}/restriction`,headers,payload:{scope:'all',durationMinutes:null,reason:'Do not lock out admin',expectedRevision:0}})).statusCode,409);
+  assert.equal((await restrict('ai',0)).statusCode,200);
+  assert.equal((await app.inject({url:'/api/v1/me',headers:restrictedAuth})).statusCode,200);
+  assert.equal((await app.inject({method:'POST',url:`/api/v1/conversations/${randomUUID()}/turns`,headers:restrictedAuth,payload:{}})).json().error.code,'ACCOUNT_RESTRICTED');
+  assert.equal(await accessBlocked(db,restricted,'automation'),null,'AI-only suspension does not suspend monitoring');
+  assert.equal((await restrict('all',0)).statusCode,409,'stale admin writes cannot replace restrictions');
+  await db.query("UPDATE user_restrictions SET until_at=now()-interval '1 second' WHERE owner_id=$1",[restricted]);
+  assert.equal(await accessBlocked(db,restricted,'ai'),null,'expiry restores access without deleting history');
+  await db.query("INSERT INTO rules(id,owner_id,revision,spec,active,activated_at) VALUES($1,$2,1,$3,true,now())",[restrictedRule,restricted,spec]);
+  assert.equal((await restrict('automation',1)).statusCode,200);
+  let fetches=0;
+  await evaluateTarget(db,{ruleId:restrictedRule,revision:1,exchange:'Binance',pair:'PAIR0/USDT'},async()=>{fetches++;return {};});
+  assert.equal(fetches,0,'suspended monitoring performs no market fetch');
+  assert.equal((await db.query('SELECT status FROM monitor_status WHERE rule_id=$1',[restrictedRule])).rows[0].status,'ADMIN_PAUSED');
+  assert.equal((await restrict('notifications',2)).statusCode,200);
+  await db.query("INSERT INTO signals(id,owner_id,rule_id,revision,exchange,pair,event,dedup) VALUES($1::uuid,$2,$3,1,'Binance','PAIR0/USDT','{\"kind\":\"ENTRY\"}',$1::uuid::text)",[restrictedSignal,restricted,restrictedRule]);
+  await db.query("INSERT INTO destinations(id,owner_id,kind,name,config,verified) VALUES($1,$2,'TELEGRAM','fixture','{}',true)",[restrictedDest,restricted]);
+  await db.query("INSERT INTO deliveries(id,signal_id,destination_id,status) VALUES($1,$2,$3,'PENDING')",[restrictedDelivery,restrictedSignal,restrictedDest]);
+  await deliver(db,restrictedDelivery);
+  const held=(await db.query('SELECT status,attempts FROM deliveries WHERE id=$1',[restrictedDelivery])).rows[0];
+  assert.equal(held.status,'ADMIN_PAUSED');assert.equal(held.attempts,0,'suspended delivery makes no provider attempt');
+  assert.equal((await restrict('all',3)).statusCode,200);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM sessions WHERE user_id=$1',[restricted])).rows[0].n,0);
+  assert.equal((await app.inject({url:'/api/v1/me',headers:restrictedAuth})).statusCode,401);
+  await assert.rejects(built.session(restricted,{setCookie(){}}),{code:'ACCOUNT_RESTRICTED'},'blocked accounts cannot create new sessions');
+  assert.equal((await restrict('none',4)).statusCode,200);
+  assert.ok((await db.query('SELECT usage_retry_at FROM deliveries WHERE id=$1',[restrictedDelivery])).rows[0].usage_retry_at,'held delivery remains scheduled for bounded rechecking');
+  const freshSession=await built.session(restricted,{setCookie(){}});
+  await deliver(db,restrictedDelivery);
+  assert.equal((await db.query('SELECT status FROM deliveries WHERE id=$1',[restrictedDelivery])).rows[0].status,'CANCELLED_ADMIN','lifting suspension never sends stale held trading alerts');
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM admin_audit WHERE action='user.restriction.update'")).rows[0].n,5);
+  policy.services={ai:false,automation:false,notifications:false};
+  assert.equal((await savePolicy(policy,5)).statusCode,200);
+  assert.equal((await accessBlocked(db,restricted,'ai'))?.code,'SERVICE_PAUSED');
+  assert.equal((await accessBlocked(db,restricted,'automation'))?.code,'SERVICE_PAUSED');
+  await db.query("UPDATE deliveries SET status='PENDING' WHERE id=$1",[restrictedDelivery]);
+  await deliver(db,restrictedDelivery);
+  assert.equal((await db.query('SELECT status FROM deliveries WHERE id=$1',[restrictedDelivery])).rows[0].status,'ADMIN_PAUSED');
+  assert.equal((await getPolicy()).statusCode,200,'emergency switches never lock out the admin');
+  policy.requestsPerMinute=30;
+  assert.equal((await savePolicy(policy,6)).statusCode,200);
+  const throttled=[];
+  for(let i=0;i<35;i++)throttled.push(await app.inject({url:'/api/v1/me',headers:{...headers,cookie:'snaap_session='+freshSession}}));
+  assert.ok(throttled.some(r=>r.statusCode===200));
+  assert.ok(throttled.some(r=>r.statusCode===429 && r.json().error.code==='RATE_LIMITED'),'admin request-rate setting actually limits bursts');
+  console.log('PASS: scoped/expiring suspensions, session revocation, blocked login, worker and delivery guards, admin protection, conflict handling, audit history and global emergency switches');
   console.log('PASS: workspace cap includes primary and concurrent creation; independent FREE/PRO/unified settings, admin-only access, revision conflicts, monitoring and per-user/per-setup accounting');
   console.log(
     "PASS: trial accounts activate 21 setups sequentially and concurrently; technical pair validation remains",
