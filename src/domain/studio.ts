@@ -2,12 +2,12 @@ import { z } from "zod";
 import {
   frames,
   timeframe,
-  strategyConditions,
   type Strategy,
   type Condition,
   type Series,
 } from "./engine.js";
 import { preview } from "./preview.js";
+import { usedFrames } from "./insights.js";
 import { availableTimeframes } from "../../dist/timeframes.js";
 
 export const editorContextSchema = z
@@ -58,21 +58,13 @@ export function inspectSetupBar(
   const data = preview(spec, series);
   const bar =
     data.timeline.filter((b) => b.time <= selectedTime).at(-1) ?? null;
-  const used = new Set<keyof typeof frames>([spec.timeframe]);
-  function walk(c: Condition) {
-    if (c.kind === "GROUP") c.children.forEach(walk);
-    else if (c.kind === "HOLD") walk(c.condition);
-    else
-      for (const o of [c.left, c.right])
-        if (o.kind === "PRICE" || o.kind === "INDICATOR") used.add(o.timeframe);
-  }
-  strategyConditions(spec).forEach(walk);
+  const used = usedFrames(spec);
   return {
     selectedTime,
     evaluationTimeframe: spec.timeframe,
     evaluationClosedAtIso: bar ? new Date(bar.time).toISOString() : null,
     bar,
-    references: [...used].map((timeframe) => {
+    references: used.map((timeframe) => {
       const candles = series[timeframe] ?? [];
       const reference = bar
         ? candles.filter((c) => c.time <= bar.time).at(-1)
@@ -86,7 +78,7 @@ export function inspectSetupBar(
           (!!bar && bar.time - reference.time >= frames[timeframe]),
       };
     }),
-    coverage: [...used].map((timeframe) => ({
+    coverage: used.map((timeframe) => ({
       timeframe,
       bars: series[timeframe]?.length ?? 0,
       firstClosedAt: series[timeframe]?.[0]?.time ?? null,

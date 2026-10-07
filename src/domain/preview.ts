@@ -9,7 +9,7 @@ import {
   advance,
   emptyLifecycle,
   replay,
-  strategyConditions,
+  strategyOperands,
   strategyBranches,
   signalSide,
   frames,
@@ -27,16 +27,12 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = [], c
   extra.forEach((o) => {
     if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
   });
-  const walk = (c: Condition) => {
-    if (c.kind === "GROUP") c.children.forEach(walk);
-    else if (c.kind === "HOLD") walk(c.condition);
-    else
-      for (const o of [c.left, c.right]) {
-        if (o.kind === "INDICATOR" || o.kind === "PRICE") evaluationFrames.add(o.timeframe);
-        if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
-      }
-  };
-  if (!chartOnly) strategyConditions(spec).forEach(walk);
+  if (!chartOnly) {
+    for (const o of strategyOperands(spec)) {
+      if (o.kind === "INDICATOR" || o.kind === "PRICE") evaluationFrames.add(o.timeframe);
+      if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
+    }
+  }
   const chartOperands = [...operands.values()].filter(o => !chartTimeframe || (o.kind === "INDICATOR" && o.timeframe === frame));
   const studies: {operand: Operand; chartOperand?: Operand}[] = chartOperands.map(operand => ({operand}));
   // Complete the familiar MACD chart without adding strategy operands or conditions.

@@ -970,6 +970,14 @@ export function strategyConditions(spec: Strategy): Condition[] {
     ),
   );
 }
+export function strategyOperands(spec: Strategy): Operand[] {
+  const collect = (condition: Condition): Operand[] => {
+    if (condition.kind === "GROUP") return condition.children.flatMap(collect);
+    if (condition.kind === "HOLD") return collect(condition.condition);
+    return [condition.left, condition.right];
+  };
+  return strategyConditions(spec).flatMap(collect);
+}
 export function advance(
   spec: Strategy,
   series: Series,
