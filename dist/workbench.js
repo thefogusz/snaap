@@ -922,9 +922,9 @@ function showDraftStatus(text) {
   const label = panel.querySelector("[data-draft-status]");
   if (label) {
     const savedLabel = panel.querySelector(".saved-label");
-    label.textContent = text || savedLabel?.textContent || "ร่างใหม่";
+    label.textContent = text === "บันทึกร่างแล้ว" ? "เก็บร่างในแชทแล้ว" : text || savedLabel?.textContent || "ร่างใหม่";
     label.hidden = false;
-    label.title = "สถานะร่าง · บันทึกอัตโนมัติยังไม่เปิดใช้งานเซ็ตอัพ";
+    label.title = "เก็บร่างอัตโนมัติในแชท · การบันทึกเป็นเซ็ตอัพและเปิดใช้งานเป็นขั้นตอนแยกกัน";
     label.dataset.state =
       text === "บันทึกร่างแล้ว"
         ? "saved"

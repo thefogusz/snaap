@@ -43,3 +43,13 @@ The shared assistant renderer now makes bare HTTP/HTTPS citations clickable as w
 - Preview port 4173 serves this checkout with real public data and configured model, monitoring disabled. Raw isolated/model/source traces and preview configuration stay ignored under `.local`; credentials are not committed. This work is local to the task branch, not pushed or deployed.
 
 Source terms remain applicable, including [DEX Screener API terms](https://docs.dexscreener.com/api/api-terms-and-conditions). Protocol mechanics follow [Ethereum JSON-RPC](https://ethereum.org/developers/docs/apis/json-rpc/) and [ERC20](https://ethereum.org/developers/docs/standards/tokens/erc-20/).
+
+## Compatibility and desktop UX recheck
+
+Rechecked `2dfef22` on the same clean branch; fetched `origin/main` remains `0864524`. Typecheck and all 594 tests passed again. Harness contract checks passed (the first launch used the wrong local database port; the completed rerun used the existing preview database on 55913).
+
+Six additional real DeepSeek requests completed: four isolated DEX/TVL/Ethereum/unsupported-whale checks and two browser turns for native Binance Spot rankings followed by an explicit BTC+ETH RSI14 CROSS_ABOVE 30 draft on 15m. Tool traces confirm the expected readers/proposal; the browser conversation has no saved rule. EVM quantities and transaction URLs match the trace, and unsupported owner/global accumulation claims remain withheld. Model wording is not perfect: one native ranking reply mixed in a non-Thai word, and the EVM reply omitted the RPC source name despite retaining explorer links.
+
+Desktop Chrome checks covered loading/send protection, ranking tables, draft receipts/editor/chart agreement, ETH chart selection, category/search filters, cross-category selection, selected-only filtering, source dropdown, Escape cancellation and restored draft after reload. No page-width overflow or captured console errors/warnings in these checks. The source dropdown scrolls for its final option. This is desktop verification, not a mobile or concurrent-load benchmark. Raw traces/screenshots remain ignored under `.local/audit/compat-*`.
+
+Fixed the shared draft-status label to **เก็บร่างในแชทแล้ว**, with a tooltip distinguishing chat autosave from saving/activating a setup. Draft persistence and activation behavior are unchanged.
