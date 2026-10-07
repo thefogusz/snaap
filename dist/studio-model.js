@@ -1,24 +1,21 @@
 export function conditionRows(spec) {
   const rows = [];
   function walk(condition, path, section, side) {
-    if (!condition) return;
-    const frames = new Set();
-    function collect(c) {
-      if (c.kind === "GROUP") c.children.forEach(collect);
-      else if (c.kind === "HOLD") collect(c.condition);
-      else
-        [c.left, c.right].forEach((o) => {
-          if (o.timeframe) frames.add(o.timeframe);
-        });
-    }
-    collect(condition);
-    rows.push({ condition, path, section, side, frames: [...frames] });
+    if (!condition) return [];
+    const row = { condition, path, section, side, frames: [] };
+    rows.push(row);
+    let frames;
     if (condition.kind === "GROUP")
-      condition.children.forEach((c, i) =>
+      frames = condition.children.flatMap((c, i) =>
         walk(c, `${path}.children.${i}`, section, side),
       );
     else if (condition.kind === "HOLD")
-      walk(condition.condition, `${path}.condition`, section, side);
+      frames = walk(condition.condition, `${path}.condition`, section, side);
+    else
+      frames = [condition.left, condition.right].flatMap((o) => o.timeframe ? [o.timeframe] : []);
+    // Reuse child frames while keeping rows in parent-first display order.
+    row.frames = [...new Set(frames)];
+    return row.frames;
   }
   const branch = (b, prefix, side) => {
     walk(b.entry, `${prefix}entry`, "เข้า", side);
