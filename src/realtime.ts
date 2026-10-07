@@ -1,4 +1,5 @@
 import ccxt from "ccxt";
+import { strategyTargets } from '../dist/asset-catalog.js';
 import { lastClosedBoundary } from "../dist/timeframes.js";
 import {
   frames,
@@ -91,8 +92,7 @@ export function subscriptionsFor(
     const parsed = strategySchema.safeParse(row.spec);
     if (!parsed.success) continue;
     const spec = parsed.data;
-    for (const exchange of spec.exchange)
-      for (const pair of spec.pairs)
+    for (const { exchange, pair } of strategyTargets(spec))
         for (const frame of neededFrames(spec)) {
           const key = [exchange, spec.market, pair, frame].join(":");
           const sub = subscriptions.get(key) ?? {

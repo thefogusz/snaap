@@ -20,6 +20,8 @@ import {
 } from "../domain/engine.js";
 import { extendedIndicators } from "../../dist/indicator-catalog.js";
 import { strategySeries, instruments } from "../markets.js";
+import { strategyTargets } from '../../dist/asset-catalog.js';
+import { validateTargets } from '../markets.js';
 import { pricing, outputLimit } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
 import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
@@ -662,25 +664,7 @@ export function registerHarness(
                 }
                 if (checked.data.market !== "Spot" && !checked.data.side)
                   throw new Error("Ask for Futures direction first");
-                if (checked.data.exchange.length !== 1)
-                  throw new Error(
-                    "Select one exchange and supported pairs for this setup",
-                  );
-                const catalog = await readInstruments(
-                  checked.data.exchange[0],
-                  checked.data.market,
-                );
-                if (
-                  checked.data.pairs.some(
-                    (pair) =>
-                      !catalog.items.some(
-                        (m) => m.symbol === pair && m.supported,
-                      ),
-                  )
-                )
-                  throw new Error(
-                    "Instrument unavailable. Ask user to choose a supported instrument.",
-                  );
+                await validateTargets(checked.data, readInstruments);
                 draft = checked.data;
                 result = { valid: true, activation: false };
               } else result = { valid: false, errors: checked.error.issues, parameterGuide: 'Legacy MACD/MACD_SIGNAL/MACD_HIST use period (fast), slow and signal directly on the operand, not inside params. Legacy BB_* use period and deviation directly. Extended indicators use params for their catalog parameters other than period. Preserve all conditions and repair only the reported errors.' };
@@ -688,7 +672,7 @@ export function registerHarness(
               result = {
                 valid: false,
                 error:
-                  "Cannot validate draft or instrument. Select exactly one exchange and supported pairs; ask for missing details, never invent instruments.",
+                  "Cannot validate draft or instrument. Preserve explicit targets and choose supported source/pair combinations; ask for missing details, never invent instruments.",
               };
             }
           }
@@ -696,9 +680,10 @@ export function registerHarness(
             try {
               const args = z.object({ pair: z.string(), selectedBarTime: z.number().int().nonnegative() }).strict().parse(JSON.parse(call.arguments));
               const spec = strategySchema.parse(draft ?? input.draft);
-              if (spec.exchange.length !== 1 || !spec.pairs.includes(args.pair)) throw new Error("Invalid target");
-              const series = await strategySeries(spec, spec.exchange[0], args.pair);
-              result = { source: { exchange: spec.exchange[0], market: spec.market, pair: args.pair, asOf: new Date().toISOString() }, ...inspectSetupBar(spec, series, args.selectedBarTime) };
+              const target = strategyTargets(spec).find(t => t.pair === args.pair && (!input.editorContext?.exchange || t.exchange === input.editorContext.exchange));
+              if (!target) throw new Error('Invalid target');
+              const series = await strategySeries(spec, target.exchange, args.pair);
+              result = { source: { exchange: target.exchange, market: spec.market, pair: args.pair, asOf: new Date().toISOString() }, ...inspectSetupBar(spec, series, args.selectedBarTime) };
             } catch {
               result = { error: "Cannot inspect selected bar; current draft, supported pair and closed market history are required. Do not invent evidence." };
             }
@@ -708,18 +693,19 @@ export function registerHarness(
               const spec = strategySchema.parse(
                 draft ?? input.draft ?? toolSpec(call.arguments),
               );
+              const target = strategyTargets(spec)[0];
               const series = await readSeries(
                 spec,
-                spec.exchange[0],
-                spec.pairs[0],
+                target.exchange,
+                target.pair,
               );
               const last = series[spec.timeframe]?.at(-1);
               const first = series[spec.timeframe]?.[0];
               const events = replay(spec, series);
               result = {
                 source: {
-                  exchange: spec.exchange[0],
-                  pair: spec.pairs[0],
+                  exchange: target.exchange,
+                  pair: target.pair,
                   market: spec.market,
                   side:
                     spec.side ?? (spec.market === "Spot" ? "SPOT" : "UNKNOWN"),

@@ -1,4 +1,5 @@
 import { type Strategy } from "./domain/engine.js";
+import { strategyTargets } from '../dist/asset-catalog.js';
 import { lastClosedBoundary } from "../dist/timeframes.js";
 
 export type MonitorTarget = {
@@ -21,8 +22,7 @@ export function monitorBatches(
     const spec = row.spec;
     const close =
       lastClosedBoundary(now, spec.timeframe);
-    for (const exchange of spec.exchange)
-      for (const pair of spec.pairs) {
+    for (const { exchange, pair } of strategyTargets(spec)) {
         total++;
         const key = [row.id, row.revision, exchange, pair].join(":");
         if ((checkpoints.get(key) ?? -1) >= close) continue;

@@ -1,4 +1,5 @@
 import ccxt from "ccxt";
+import { mergeCatalogs, strategyTargets } from '../dist/asset-catalog.js';
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type pg from "pg";
@@ -276,6 +277,25 @@ export async function candles(
     pending.delete(key);
   }
 }
+export async function assetCatalog(market: string, refresh = false, read = instruments) {
+  const exchanges = Object.keys(ids) as (keyof typeof ids)[];
+  const results = await Promise.allSettled(exchanges.map(async exchange => ({
+    ...await read(exchange, market, refresh), exchange,
+  })));
+  const catalogs = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+  if (!catalogs.length) throw new ApiError(502, 'CATALOG_UNAVAILABLE', 'โหลดรายชื่อสินทรัพย์ไม่สำเร็จ ลองซิงก์อีกครั้ง');
+  return { at: Math.min(...catalogs.map(c => c.at)), market, items: mergeCatalogs(catalogs, market),
+    sources: results.map((result, i) => ({ exchange: exchanges[i], status: result.status === 'fulfilled' ? 'READY' : 'UNAVAILABLE' })),
+  };
+}
+export async function validateTargets(spec: Strategy, read = instruments, refresh = false) {
+  const targets = strategyTargets(spec);
+  for (const exchange of spec.exchange) {
+    const catalog = await read(exchange, spec.market, refresh);
+    if (targets.some(t => t.exchange === exchange && !catalog.items.some(m => m.symbol === t.pair && m.supported)))
+      throw new ApiError(400, 'UNSUPPORTED_INSTRUMENT', `คู่เทรดไม่พร้อมบน ${exchange} · ${spec.market} กรุณาเลือกใหม่`);
+  }
+}
 export { neededFrames };
 export async function strategySeries(
   spec: Strategy,
@@ -353,6 +373,10 @@ export function registerMarkets(
       .parse(req.query);
     return instruments(query.exchange, query.market, query.refresh === "true");
   });
+  app.get('/api/v1/assets', async req => {
+    const query = z.object({ market: z.enum(['Spot', 'Perpetual Futures']), refresh: z.enum(['true', 'false']).optional() }).strict().parse(req.query);
+    return assetCatalog(query.market, query.refresh === 'true');
+  });
   app.post("/api/v1/preview", async (req) => {
     const input = z
       .object({
@@ -402,11 +426,14 @@ export function registerMarkets(
       ...preview(spec, series, input.indicators, chartFrame, input.chartOnly),
       source: {
         exchange: spec.exchange[0],
+        market: spec.market,
+        symbol: spec.market === 'Spot' ? spec.pairs[0] : `${spec.pairs[0]}:USDT`,
         pair: spec.pairs[0],
         frame: chartFrame,
         evaluationTimeframe: spec.timeframe,
         evaluationFrame: spec.timeframe,
         asOf: new Date().toISOString(),
+        lastClosedAt: series[chartFrame]?.at(-1)?.time ?? null,
       },
     };
   });
@@ -433,8 +460,7 @@ export function registerMarkets(
       .strict()
       .parse(req.body);
     if (
-      !input.spec.exchange.includes(input.exchange) ||
-      !input.spec.pairs.includes(input.pair)
+      !strategyTargets(input.spec).some(t => t.exchange === input.exchange && t.pair === input.pair)
     )
       throw new ApiError(400, "TARGET_MISMATCH", "เลือกคู่และกระดานในกฎ");
     const series = await strategySeries(input.spec, input.exchange, input.pair);

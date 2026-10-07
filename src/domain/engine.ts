@@ -157,6 +157,10 @@ const strategyStructure = z
       .min(1)
       .max(5),
     market: z.enum(["Spot", "Perpetual Futures"]),
+    targets: z.array(z.object({
+      exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]),
+      pair: z.string().min(1).max(61),
+    }).strict()).min(1).max(50).optional(),
     side: z.enum(["SPOT", "LONG", "SHORT", "BOTH"]).optional(),
     mirrorShort: z.boolean().optional(),
     short: z
@@ -205,6 +209,12 @@ const strategyStructure = z
   })
   .strict()
   .superRefine((s, ctx) => {
+    if (s.targets && (
+      new Set(s.targets.map(t => `${t.exchange}:${t.pair}`)).size !== s.targets.length ||
+      s.targets.some(t => !s.exchange.includes(t.exchange) || !s.pairs.includes(t.pair)) ||
+      s.exchange.some(exchange => !s.targets!.some(t => t.exchange === exchange)) ||
+      s.pairs.some(pair => !s.targets!.some(t => t.pair === pair))
+    )) ctx.addIssue({ code: 'custom', path: ['targets'], message: 'Targets must uniquely cover the selected pairs and sources' });
     const supportedFrames = availableTimeframes(s.exchange, s.market);
     if (!supportedFrames.includes(s.timeframe))
       ctx.addIssue({ code: "custom", message: `กระดานและตลาดที่เลือกไม่รองรับ ${s.timeframe}` });

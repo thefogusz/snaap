@@ -9,10 +9,12 @@ import {
 import { preview } from "./preview.js";
 import { usedFrames } from "./insights.js";
 import { availableTimeframes } from "../../dist/timeframes.js";
+import { strategyTargets } from '../../dist/asset-catalog.js';
 
 export const editorContextSchema = z
   .object({
     pair: z.string().min(1).max(81),
+    exchange: z.enum(['Binance', 'Bybit', 'OKX', 'Bitget', 'MEXC']).optional(),
     chartTimeframe: timeframe,
     conditionPath: z.string().max(240).optional(),
     selectedBarTime: z.number().int().nonnegative().optional(),
@@ -44,6 +46,7 @@ export function validEditorContext(
   return (
     !!spec &&
     spec.pairs.includes(context.pair) &&
+    (!context.exchange || strategyTargets(spec).some(t => t.exchange === context.exchange && t.pair === context.pair)) &&
     availableTimeframes(spec.exchange, spec.market).includes(context.chartTimeframe) &&
     (!context.conditionPath || !!conditionAtPath(spec, context.conditionPath))
   );

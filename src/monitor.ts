@@ -1,4 +1,5 @@
 import { monitorQuotaBlocked } from './usage-policy.js';
+import { strategyTargets } from '../dist/asset-catalog.js';
 import { accessBlocked } from './access-controls.js';
 import { lastClosedBoundary } from "../dist/timeframes.js";
 import { PgBoss } from "pg-boss";
@@ -72,8 +73,7 @@ export async function evaluateTarget(
     return;
   }
   if (
-    !spec.exchange.includes(target.exchange) ||
-    !spec.pairs.includes(target.pair)
+    !strategyTargets(spec).some(t => t.exchange === target.exchange && t.pair === target.pair)
   )
     return;
   const blocked = await monitorQuotaBlocked(db, row.owner_id);

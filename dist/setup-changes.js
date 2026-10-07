@@ -11,7 +11,7 @@ export function diffSetup(before, after) {
   };
   function walk(a, b, path, label) {
     if (same(a, b)) return;
-    const atomic = ['exchange', 'pairs', 'destinations', 'formula'].includes(path.split('.').at(-1));
+    const atomic = ['exchange', 'pairs', 'targets', 'destinations', 'formula'].includes(path.split('.').at(-1));
     if (!atomic && a != null && b != null && typeof a === 'object' && typeof b === 'object' && Array.isArray(a) === Array.isArray(b) && a.kind === b.kind) {
       for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
         const part = /^\d+$/.test(k) ? `ข้อ ${Number(k) + 1}` : (k === 'name' && (a.kind === 'INDICATOR' || b.kind === 'INDICATOR') ? 'อินดิเคเตอร์' : (labels[k] ?? k));
@@ -22,7 +22,8 @@ export function diffSetup(before, after) {
     changes.push({ path, label, action: a === undefined ? 'add' : b === undefined ? 'remove' : 'change', ...(a === undefined ? {} : { before: a }), ...(b === undefined ? {} : { after: b }) });
   }
   labels.entryMatchPercent = 'ต้องผ่านเงื่อนไขอย่างน้อย (%)';
-  for (const key of ['name','exchange','market','side','mirrorShort','short','pairs','timeframe','entry','entryMatchPercent','exit','cancel','stages','cooldownBars','destinations']) {
+  labels.targets = 'แหล่งข้อมูลแต่ละคู่';
+  for (const key of ['name','exchange','market','side','mirrorShort','short','pairs','targets','timeframe','entry','entryMatchPercent','exit','cancel','stages','cooldownBars','destinations']) {
     walk(before?.[key], after?.[key], key, labels[key]);
   }
   return changes;

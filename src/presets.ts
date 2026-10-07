@@ -10,7 +10,7 @@ import {
   describePreset,
   presets,
 } from "../dist/preset-catalog.js";
-import { instruments } from "./markets.js";
+import { instruments, validateTargets } from "./markets.js";
 import { ApiError } from "./errors.js";
 import { cleanupChatImages } from "./files.js";
 const configSchema = z
@@ -25,6 +25,7 @@ const configSchema = z
       "break-retest",
     ]),
     exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]),
+    targets: z.array(z.object({ exchange: z.enum(['Binance', 'Bybit', 'OKX', 'Bitget', 'MEXC']), pair: z.string().min(1).max(61) }).strict()).min(1).max(50).optional(),
     market: z.enum(["Spot", "Perpetual Futures"]),
     side: z.enum(["SPOT", "LONG", "SHORT", "BOTH"]),
     pair: z.string().min(1).max(61).optional(),
@@ -120,14 +121,9 @@ export function registerPresets(
         "PRESET_LEVEL_REQUIRED",
         "ระบุระดับราคามากกว่า 0 และเลือก Spot, Long หรือ Short",
       );
-    const spec = strategySchema.parse(buildPreset(input.presetId, input));
-    const catalog = await readInstruments(input.exchange, input.market, true);
-    if (spec.pairs.some(pair => !catalog.items.some((p) => p.symbol === pair && p.supported)))
-      throw new ApiError(
-        400,
-        "UNSUPPORTED_INSTRUMENT",
-        "คู่เทรดไม่พร้อมบนตลาดนี้ กรุณาเลือกใหม่",
-      );
+    const built = buildPreset(input.presetId, input) as Record<string, unknown>;
+    const spec = strategySchema.parse({ ...built, ...(input.targets ? { targets: input.targets, exchange: [...new Set(input.targets.map(t => t.exchange))] } : {}) });
+    await validateTargets(spec, readInstruments, true);
     return transaction(db, async (c) => {
       const row = (
         await c.query(
@@ -191,20 +187,7 @@ export function registerPresets(
           "ร่างเปลี่ยนแล้ว กรุณาตรวจใหม่",
         );
       const checked = strategySchema.parse(candidate.draft);
-      for (const exchange of checked.exchange) {
-        const catalog = await readInstruments(exchange, checked.market, true);
-        if (
-          checked.pairs.some(
-            (pair) =>
-              !catalog.items.some((p) => p.symbol === pair && p.supported),
-          )
-        )
-          throw new ApiError(
-            400,
-            "UNSUPPORTED_INSTRUMENT",
-            "คู่เทรดไม่พร้อมบนตลาดนี้ กรุณาเลือกใหม่",
-          );
-      }
+      await validateTargets(checked, readInstruments, true);
       const saved = await transaction(db, async (c) => {
         const conv = (
           await c.query(

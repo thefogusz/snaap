@@ -14,7 +14,7 @@ import { signalValidUntil } from "./signal-validity.js";
 import { registerGoogle } from "./auth.js";
 import { registerFiles, cleanupChatImages } from "./files.js";
 import { registerHarness, type HarnessDependencies } from "./ai/harness.js";
-import { registerMarkets, instruments } from "./markets.js";
+import { registerMarkets, instruments, validateTargets } from "./markets.js";
 import { registerBilling } from "./billing.js";
 import { registerDestinations } from "./destinations.js";
 import { registerHistory } from "./history.js";
@@ -536,25 +536,7 @@ export async function buildApp(
           "เลือก Long, Short หรือทั้งสองฝั่งก่อนเปิดแจ้งเตือน",
         );
       if (options.validateMarket) await options.validateMarket(spec);
-      else
-        for (const exchange of spec.exchange) {
-          const catalog = await instruments(exchange, spec.market);
-          if (
-            spec.pairs.some(
-              (pair) =>
-                !catalog.items.some(
-                  (item) => item.symbol === pair && item.supported,
-                ),
-            )
-          )
-            throw new ApiError(
-              400,
-              "UNSUPPORTED_INSTRUMENT",
-              "คู่เทรดนี้ไม่พร้อมให้ติดตามบนกระดานและตลาดที่เลือก",
-            );
-          // The monitor loads candles and records readiness independently. Activation
-          // validates instruments without waiting for historical data for every pair.
-        }
+      else await validateTargets(spec);
     }
     return transaction(db, async (c) => {
       await c.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [
