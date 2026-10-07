@@ -584,7 +584,7 @@ function resizeChatInputs() {
     if(!field?.getClientRects().length)continue;
     const style=getComputedStyle(field);
     const minimum=parseFloat(style.minHeight)||76;
-    let maximum=240;
+    let maximum=parseFloat(style.maxHeight)||240;
     if(field===followupText){
       const conversation=$('#conversation');
       const paneStyle=getComputedStyle(conversation);
@@ -689,6 +689,35 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !accountMenu.hidden) {
     event.preventDefault();
     closeAccountMenu(true);
+  }
+});
+const sidebar = $("#sidebar");
+const menuButton = $('[data-action="menu"]');
+const sidebarBackdrop = $(".sidebar-backdrop");
+menuButton.setAttribute("aria-controls", "sidebar");
+menuButton.setAttribute("aria-expanded", "false");
+function setSidebarOpen(open, restoreFocus = true) {
+  const wasOpen = sidebar.classList.contains("is-open");
+  sidebar.classList.toggle("is-open", open);
+  sidebarBackdrop.hidden = !open;
+  $(".main-shell").inert = open;
+  menuButton.setAttribute("aria-expanded", String(open));
+  if (open) sidebar.querySelector(".nav-item").focus();
+  else if (wasOpen && restoreFocus) menuButton.focus();
+}
+matchMedia("(max-width: 899px)").addEventListener("change", () => setSidebarOpen(false, false));
+document.addEventListener("keydown", (event) => {
+  if (event.defaultPrevented || !sidebar.classList.contains("is-open") || document.querySelector("dialog[open]")) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setSidebarOpen(false);
+  } else if (event.key === "Tab") {
+    const items = [...sidebar.querySelectorAll('a[href],button:not(:disabled),input,select,[tabindex="0"]')].filter(el => el.getClientRects().length);
+    const first = items[0], last = items.at(-1);
+    if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    }
   }
 });
 async function api(url, method = "GET", body, options = {}) {
@@ -821,7 +850,7 @@ function navigate(view, load = true) {
     notifications: "การแจ้งเตือน",
     billing: "บัญชีและแพ็กเกจ",
   }[view];
-  $("#sidebar").classList.remove("is-open");
+  setSidebarOpen(false);
   requestAnimationFrame(alignToast);
   if (!load || !state.workspaceId) return;
   if (view === "watch") renderWatch();
@@ -2207,9 +2236,13 @@ document.addEventListener("click", async (e) => {
   document.querySelectorAll(".watch-channel-picker[open]").forEach(menu => {
     if (!menu.contains(e.target)) menu.open = false;
   });
+  if (sidebar.classList.contains("is-open") && !document.querySelector("dialog[open]") && !sidebar.contains(e.target) && !e.target.closest('[data-action="menu"]')) {
+    setSidebarOpen(false);
+    return;
+  }
   const t = e.target.closest("button,a");
   if (!t) return;
-  if (t.classList.contains("nav-item")) $("#sidebar").classList.remove("is-open");
+  if (t.classList.contains("nav-item")) setSidebarOpen(false);
   try {
     if (t.classList.contains("nav-item") && t.dataset.view !== "home" && window.SnaapRouter.current() === t.dataset.view) {
       e.preventDefault();
@@ -2232,7 +2265,8 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (t.dataset.action === "menu")
-      return $("#sidebar").classList.toggle("is-open");
+      return setSidebarOpen(!sidebar.classList.contains("is-open"));
+    if (t.dataset.action === "close-menu") return setSidebarOpen(false);
     if (t.dataset.action === "account-menu") {
       const opening = accountMenu.hidden;
       accountMenu.hidden = !opening;

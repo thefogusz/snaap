@@ -1,3 +1,13 @@
+.sidebar-close { display: none; position: absolute; top: 18px; right: 8px; }
+.sidebar-backdrop { position: fixed; inset: 0; z-index: 19; background: #0005; }
+@media (max-width: 899px) {
+  .app .sidebar { transform: translateX(-100%); visibility: hidden; width: 252px; overflow-y: auto; }
+  .app .sidebar.is-open { transform: translateX(0); visibility: visible; }
+  .app .main-shell { margin-left: 0; width: 100%; }
+  .topbar .mobile-menu, .sidebar .sidebar-close { display: grid !important; width: 44px; height: 44px; }
+  .topbar .theme-toggle { min-height: 44px; }
+  body:has(.sidebar.is-open) { overflow: hidden; }
+}
 .runtime-status {
   font-size: 13px;
   padding: 12px 18px;

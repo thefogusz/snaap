@@ -26,10 +26,10 @@
   const tabsBar = document.createElement("nav");
   tabsBar.className = "studio-inspector-tabs";
   tabsBar.setAttribute("aria-label", "พื้นที่ทำงานเซ็ตอัพ");
-  tabsBar.innerHTML = ["agent", "conditions", "evidence"]
+  tabsBar.innerHTML = ["agent", "conditions", "evidence", "chart"]
     .map(
       (name, i) =>
-        `<button type="button" data-studio-tab="${name}" aria-pressed="${i === 1}">${["Agent", "เงื่อนไข", "เหตุผล"][i]}</button>`,
+        `<button type="button" data-studio-tab="${name}" aria-pressed="${i === 1}">${["Agent", "เงื่อนไข", "เหตุผล", "กราฟ"][i]}</button>`,
     )
     .join("");
   workbench.before(tabsBar);
@@ -859,12 +859,15 @@
   const viewport = () => {
     const height = window.visualViewport?.height ?? innerHeight;
     workbench.dataset.keyboardOpen = String(innerHeight - height > 140);
+    workbench.dataset.compact = String(innerWidth < 900 && height <= 740);
+    if (workbench.dataset.compact === "false" && workbench.dataset.inspector === "chart") selectTab("conditions");
     document.documentElement.style.setProperty(
       "--studio-viewport-height",
       height + "px",
     );
   };
   window.visualViewport?.addEventListener("resize", viewport);
+  window.addEventListener("resize", viewport);
   viewport();
   if (state.draft) decorate();
   else header.hidden = tabsBar.hidden = draftStatus.hidden = true;
