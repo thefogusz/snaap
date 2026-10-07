@@ -54,6 +54,7 @@ export async function migrate(db: pg.Pool) {
     ALTER TABLE conversations ALTER COLUMN setup_status_known SET DEFAULT true;
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS ui_card jsonb;
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS setup_changes jsonb NOT NULL DEFAULT '[]';
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS artifacts jsonb NOT NULL DEFAULT '[]';
     ALTER TABLE billing_grants ADD COLUMN IF NOT EXISTS starts_at timestamptz;
     ALTER TABLE billing_grants ADD COLUMN IF NOT EXISTS ends_at timestamptz;
     ALTER TABLE billing_grants ADD COLUMN IF NOT EXISTS received_at timestamptz;

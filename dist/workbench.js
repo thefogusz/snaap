@@ -24,6 +24,7 @@ const assetToolsReady = import('./asset-catalog.js').then(module => assetTools =
 let entryFlexUI;
 const entryFlexReady = import('./entry-flexibility-ui.js').then(module => entryFlexUI = module);
 const assistantTextReady = import('./assistant-text.js');
+const chatArtifactsReady = import('./chat-artifacts.js');
 let healthReady = Promise.resolve();
 let indicatorCatalog;
 const indicatorCatalogReady=import('./indicator-catalog.js').then(m=>indicatorCatalog=m);
@@ -478,6 +479,7 @@ messagePane.tabIndex=0;
 messagePane.setAttribute('aria-label','ประวัติการสนทนา');
 let followingChat=true;
 function scrollChatToLatest(){messagePane.scrollTop=messagePane.scrollHeight;followingChat=true;latestMessages.hidden=true;}
+function focusChatArtifact(card){if(!card?.isConnected)return;followingChat=false;messagePane.scrollTop+=card.getBoundingClientRect().top-messagePane.getBoundingClientRect().top-8;}
 latestMessages.onclick=scrollChatToLatest;
 messagePane.addEventListener('scroll',()=>{
   followingChat=messagePane.scrollHeight-messagePane.scrollTop-messagePane.clientHeight<80;
@@ -781,6 +783,7 @@ function message(text, user = false) {
     el.append(body);
   }
   $("#messages").append(el);
+  return el;
 }
 async function showSetupChanges(before, after, historicalChanges = null) {
   const {diffSetup,describeSetupValue}=await setupChangesReady;
@@ -1666,7 +1669,12 @@ async function chat(text) {
     if(streamedBody){
       const {renderAssistantText}=await assistantTextReady;
       renderAssistantText(streamedBody,result.text);
-    }else message(result.text);
+    }else streamedMessage=message(result.text);
+    if(result.artifacts?.length){
+      const conversation=state.conversation;
+      (await chatArtifactsReady).renderArtifacts(streamedMessage,result.artifacts,{refresh:artifactId=>api(`/conversations/${conversation}/messages/${result.messageId}/artifacts/${artifactId}/refresh`,'POST',{})});
+      if(followingChat&&!result.draft)requestAnimationFrame(()=>focusChatArtifact(streamedMessage.querySelector('.chat-artifact')));
+    }
     if (result.draft) {
       if (JSON.stringify(state.draft) !== submittedDraft) {
         message('คุณแก้เซ็ตอัพระหว่างรอคำตอบ ลองเทียบข้อเสนอก่อนใช้');
@@ -2143,7 +2151,10 @@ async function loadChatHistory(){
     if(!current())return;
     const paintPage = async (rows) => { for (const m of rows) {
       if(!current())return;
-      if(!['preset','setup'].includes(m.ui_card?.type))message(m.content, m.role === "user");
+      if(!['preset','setup'].includes(m.ui_card?.type)){
+        const node=message(m.content, m.role === "user");
+        if(m.role==='assistant' && m.artifacts?.length)(await chatArtifactsReady).renderArtifacts(node,m.artifacts,{refresh:artifactId=>api(`/conversations/${conversation}/messages/${m.id}/artifacts/${artifactId}/refresh`,'POST',{})});
+      }
       if(['preset','setup'].includes(m.ui_card?.type))(await presetsReady).renderCard(m);
       if (m.setup_changes?.length) await showSetupChanges(null, null, m.setup_changes);
       if (m.sources?.some((s) => !s.available))
@@ -2154,7 +2165,7 @@ async function loadChatHistory(){
     if(!current())return;
     const stored=state.conversationRows.find(row=>row.id===conversation);
     if(stored?.draft&&!chatPage.some(m=>['preset','setup'].includes(m.ui_card?.type))&&chatPage.some(m=>m.setup_changes?.length))await showChatSetupCard();
-    requestAnimationFrame(()=>{if(current())scrollChatToLatest();});
+    requestAnimationFrame(()=>{if(current()){scrollChatToLatest();focusChatArtifact(messagePane.lastElementChild?.querySelector('.chat-artifact'));}});
     if (chatPage.length === 200) {
       const older = document.createElement("button");
       older.className="text-button"; older.textContent="โหลดข้อความก่อนหน้า";

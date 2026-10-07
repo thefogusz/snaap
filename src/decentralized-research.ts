@@ -17,7 +17,7 @@ export const dexQuerySchema = z
     chain: segment.nullable(),
     tokenAddress: address.nullable(),
     sort: z.enum(["volume", "liquidity", "gainers", "losers"]),
-    limit: z.number().int().min(1).max(20),
+    limit: z.number().int().min(1).max(20).describe('Number of pools requested by the user. A request for 3 pools means limit 3; use 10 only when no count is specified.'),
     minLiquidityUSD: dollars,
   })
   .strict();

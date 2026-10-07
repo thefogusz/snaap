@@ -23,6 +23,7 @@ import { strategySeries, instruments, assetCatalog, marketTickers, candles } fro
 import { screenAssets, analyzeAssets, screenQuerySchema, analysisQuerySchema } from '../market-research.js';
 import { readMarketNews, readChainActivity, newsQuerySchema, chainQuerySchema } from '../research-evidence.js';
 import { readDexPools, readDefiContext, readEvmTransfers, dexQuerySchema, defiQuerySchema, evmQuerySchema } from '../decentralized-research.js';
+import { readMarketVisual, visualQuerySchema, marketArtifact, artifactReceipt, type MarketArtifact } from '../market-artifacts.js';
 import { strategyTargets, exchanges, categories, mergeCatalogs } from '../../dist/asset-catalog.js';
 import { validateTargets } from '../markets.js';
 import { pricing, outputLimit } from "./budget.js";
@@ -43,6 +44,7 @@ const specialistSkills = {
   "research-validation": "research-validation.md",
 } as const;
 const marketTools = [
+  { name:'read_market_visual',description:'Render an in-chat native venue price comparison (up to 5 exact pairs) or closed-candle history chart (up to 3 pairs). history requires timeframe; default bars 100, allowed 20–300. comparison uses timeframe null. Data goes directly to the artifact, not model-generated HTML. Multiple histories compare prices indexed to 100 at their first common timestamp. No draft changes.',schema:visualQuerySchema },
   { name: 'screen_assets', description: 'Rank supported native USDT instruments by 24h quote turnover, gainers, losers or recent contract launches/first observations. Filter asset category and provider-confirmed meme theme. Stocks are exchange tokens/perpetual contracts, not cash-stock market rankings. No draft edits.', schema: screenQuerySchema },
   { name: 'analyze_assets', description: 'Observe EMA20/50, RSI14, ATR14 and volume ratio on closed candles for at most ten exact exchange/pair targets. No future prediction or draft edits.', schema: analysisQuerySchema },
   { name:'read_market_news',description:'Read timestamped publisher headlines and original links: NVIDIA/Apple/Microsoft company feeds and Gate announcements. Bounded source coverage, not full articles or all market news. symbols:[] means all sources in topic; query empty means no headline filter. No draft edits.',schema:newsQuerySchema },
@@ -80,6 +82,28 @@ export function registerHarness(
 ) {
   const readInstruments = dependencies.instruments ?? instruments;
   const readSeries = dependencies.strategySeries ?? strategySeries;
+  const researchReaders = {
+    screen_assets:(q:unknown)=>screenAssets(db,q,{instruments:readInstruments,tickers:dependencies.marketTickers??marketTickers}),
+    analyze_assets:(q:unknown)=>analyzeAssets(q,dependencies.candles??candles),
+    read_market_news:dependencies.readMarketNews??readMarketNews,
+    read_chain_activity:dependencies.readChainActivity??readChainActivity,
+    read_dex_pools:dependencies.readDexPools??readDexPools,
+    read_defi_context:dependencies.readDefiContext??readDefiContext,
+    read_evm_transfers:dependencies.readEvmTransfers??readEvmTransfers,
+    read_market_visual:(q:unknown)=>readMarketVisual(q,{instruments:readInstruments,candles:dependencies.candles??candles,marketTickers:dependencies.marketTickers??marketTickers}),
+  };
+  app.post('/api/v1/conversations/:id/messages/:messageId/artifacts/:artifactId/refresh',async req=>{
+    await assertAccess(db,req.userId,'ai');
+    const {id,messageId,artifactId}=z.object({id:z.string().uuid(),messageId:z.string().uuid(),artifactId:z.string().uuid()}).parse(req.params);
+    const row=(await db.query('SELECT m.artifacts FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.id=$1 AND m.id=$2 AND c.owner_id=$3 AND ($4::uuid IS NULL OR c.workspace_id=$4)',[id,messageId,req.userId,req.workspaceId??null])).rows[0];
+    const stored=row?.artifacts?.find((a:MarketArtifact)=>a.id===artifactId);
+    if(!stored || !Object.hasOwn(researchReaders,stored.tool)) throw new ApiError(404,'NOT_FOUND','ไม่พบภาพข้อมูล');
+    const data=await researchReaders[stored.tool as keyof typeof researchReaders](stored.query);
+    const artifact=marketArtifact(stored.tool,stored.query,data);
+    if(!artifact) throw new ApiError(502,'ARTIFACT_UNAVAILABLE','ยังอัปเดตข้อมูลไม่ได้');
+    // Refresh the view without rewriting the original chat evidence or calling the model.
+    return {...artifact,id:artifactId};
+  });
   app.post("/api/v1/context", async (req) =>
     contextBundle(
       db,
@@ -264,6 +288,7 @@ export function registerHarness(
       );
     });
     const trace: unknown[] = [];
+    const artifacts:MarketArtifact[]=[];
     const deadline = AbortSignal.timeout(90000);
     const streaming = req.headers.accept === 'application/x-ndjson';
     const emit = (event: unknown) => {
@@ -315,7 +340,7 @@ export function registerHarness(
           );
       const history = (
         await db.query(
-          "SELECT role,content,sources FROM messages WHERE conversation_id=$1 AND id<>$2 AND COALESCE(ui_card->>'type','')<>'setup' ORDER BY created_at DESC,id DESC LIMIT 10",
+          "SELECT role,content,sources,artifacts FROM messages WHERE conversation_id=$1 AND id<>$2 AND COALESCE(ui_card->>'type','')<>'setup' ORDER BY created_at DESC,id DESC LIMIT 10",
           [id, userMessageId],
         )
       ).rows
@@ -375,7 +400,7 @@ export function registerHarness(
       const messages: any[] = [
         ...history.map((m) => ({
           role: m.role,
-          content: m.content.slice(0, 4000),
+          content: m.content.slice(0, 4000)+(m.artifacts?.length?'\nPreviously displayed research selections (historical snapshot context, not current evidence): '+JSON.stringify(m.artifacts.map((a:MarketArtifact)=>({tool:a.tool,query:a.query,createdAt:a.createdAt,items:artifactReceipt(a).items}))):''),
         })),
         { role: "user", content },
       ];
@@ -433,6 +458,7 @@ export function registerHarness(
       instructions += '\nEVM research: read_evm_transfers supports ethereum/base/arbitrum with exact contractAddress and optionally walletAddress supplied by the user; defaults blocks 20, limit 10, minRawAmount "0". Never invent an address, contract, decimals or wallet-owner label. Ambiguous DEX name searches do not confirm the intended token; ask for chain/contract or use the exact explicitly selected evidence. Preserve contract/chain and cite explorer transaction URLs. Amounts are exact raw strings and contract-reported decimals, never guessed USD value. The latest finalized window is delayed relative to the head; report endBlockTime/status and block range. Individual timestamp null cannot be replaced by window end time. Net flow covers inspected events before threshold/limit, not all wallet holdings, profit or purchases. These are ERC20-shaped events (custom/NFT contracts can mimic them), not native ETH/internal transfers. BTC-only limitations apply to read_chain_activity, not this separate EVM tool. No all-chain whale ranking, secret accumulation claims, continuous monitoring or strategy changes.';
       instructions += '\nResearch evidence precision: amountRaw/amountTokens on EVM transfers are unsigned, never describe them as negative. Only netWalletRaw/netWalletTokens for a supplied wallet can be signed. Always report the EVM window endBlockTime, source and block range, never turn it into each transaction timestamp. For DEX/DeFi, asOf is request time and responses may be cached up to cacheMaxAgeSeconds; providerTime null means actual source freshness is unknown. Do not claim newly fetched/live data solely from asOf.';
       const maxOutputTokens = outputLimit(input.mode);
+      instructions += '\nVISUAL DELIVERY overrides earlier prose/table/citation formatting rules for research. Successful research tools display complete source data, links, timestamps and limitations in a chat artifact automatically. Reply with at most TWO short sentences total, no table, bullet list, repeated rows or extra confirmation of unchanged draft. Values omitted from model receipts remain present in the UI: never describe them as missing from the source or invent them. Use read_market_visual for price comparison/history; it verifies catalog and reads tickers, so no screen_assets call is needed for the same comparison. Set limits to the user-requested count, default only when absent. Never invent chart data/HTML. Research never changes setups. Expand/export/refresh are UI controls with zero model calls.';
       let completed = false;
       let requireProposal = false;
       for (let round = 0; round < 7; round++) {
@@ -659,16 +685,9 @@ export function registerHarness(
           if (marketTools.some(tool=>tool.name===call.name)) {
             try {
               const query = JSON.parse(call.arguments);
-              const readers = {
-                screen_assets:(q:unknown)=>screenAssets(db,q,{instruments:readInstruments,tickers:dependencies.marketTickers??marketTickers}),
-                analyze_assets:(q:unknown)=>analyzeAssets(q,dependencies.candles??candles),
-                read_market_news:dependencies.readMarketNews??readMarketNews,
-                read_chain_activity:dependencies.readChainActivity??readChainActivity,
-                read_dex_pools:dependencies.readDexPools??readDexPools,
-                read_defi_context:dependencies.readDefiContext??readDefiContext,
-                read_evm_transfers:dependencies.readEvmTransfers??readEvmTransfers,
-              };
-              result = await readers[call.name as keyof typeof readers](query);
+              result = await researchReaders[call.name as keyof typeof researchReaders](query);
+              const artifact=marketArtifact(call.name,query,result);
+              if(artifact){artifacts.push(artifact);result=artifactReceipt(artifact);}
             } catch {
               result = { error: 'Market research unavailable or invalid request. Do not invent results, switch sources silently, or edit the draft. Ask or retry later.' };
             }
@@ -844,16 +863,18 @@ export function registerHarness(
           asOf: new Date().toISOString(),
         })),
       ];
+      const assistantMessageId=randomUUID();
       await transaction(db, async (c) => {
         await c.query(
-          "INSERT INTO messages(id,conversation_id,role,content,sources,setup_changes) VALUES($1,$2,$3,$4,$5,$6)",
+          "INSERT INTO messages(id,conversation_id,role,content,sources,setup_changes,artifacts) VALUES($1,$2,$3,$4,$5,$6,$7)",
           [
-            randomUUID(),
+            assistantMessageId,
             id,
             "assistant",
             text,
             JSON.stringify(references),
             JSON.stringify(draft ? diffSetup(input.draft, draft) : []),
+            JSON.stringify(artifacts),
           ],
         );
         await c.query(
@@ -871,6 +892,8 @@ export function registerHarness(
         changes: draft ? diffSetup(input.draft, draft) : [],
         sources: references,
         runId,
+        messageId:assistantMessageId,
+        artifacts,
       };
       if (streaming) { emit({ type: 'done', result }); reply.raw.end(); return; }
       return result;
