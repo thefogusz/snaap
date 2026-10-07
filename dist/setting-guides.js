@@ -86,6 +86,9 @@
     }
     if(target.tagName==='LEGEND' && !target.parentElement.hasAttribute('aria-label'))target.parentElement.setAttribute('aria-label',target.textContent.trim());
     if(target.tagName==='LABEL' && control) {
+      // Keep label clicks associated with the field, not the first help button.
+      control.id ||= `guide-control-${crypto.randomUUID()}`;
+      target.htmlFor=control.id;
       const caption=document.createElement('span');caption.className='guide-label';
       const textNodes=[...target.childNodes].filter(node=>node.nodeType===3 && node.textContent.trim());
       target.prepend(caption);textNodes.forEach(node=>caption.append(node));caption.append(button);
