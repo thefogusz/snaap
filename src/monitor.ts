@@ -9,7 +9,6 @@ import { transaction } from "./data/db.js";
 import {
   advance,
   emptyLifecycle,
-  frames,
   strategySchema,
   type Series,
   type Strategy,
@@ -289,7 +288,7 @@ export async function startMonitor(
     maxWaitMs: 0,
     maxDurationMs: 0,
   };
-  boss.on("error", () => console.error("Queue operation failed"));
+  boss.on("error", (error) => console.error("Queue operation failed", error?.name, (error as any)?.code));
   await boss.start();
   const queueWait = createHistogram(), batchDuration = createHistogram();
   const eventLoop = monitorEventLoopDelay({ resolution: 20 });
@@ -367,10 +366,13 @@ export async function startMonitor(
         Number(c.last_time),
       ]),
     );
-    const { groups, total } = monitorBatches(
-      rows.map((row) => ({ ...row, spec: strategySchema.parse(row.spec) })),
-      checkpoints,
-    );
+    // A rule saved under older validation must not stop scheduling for every other rule.
+    const valid = rows.flatMap((row) => {
+      const parsed = strategySchema.safeParse(row.spec);
+      if (!parsed.success) console.error("monitor skipped invalid rule spec", row.id);
+      return parsed.success ? [{ ...row, spec: parsed.data }] : [];
+    });
+    const { groups, total } = monitorBatches(valid, checkpoints);
     let dueTargets = 0,
       queuedBatches = 0;
     const plannedJobs: Parameters<PgBoss["insert"]>[1] = [];
@@ -439,10 +441,19 @@ export async function startMonitor(
     async (jobs) => {
       for (const job of jobs) {
         const started = Date.now();
+        // Evaluate every target before failing the job; the retry skips targets whose
+        // checkpoint already advanced, so one bad target cannot starve the rest.
+        let failure: unknown;
         for (const target of job.data.targets) {
-          const ids = await evaluateTarget(db, target);
-          await enqueueDeliveries(ids ?? []);
+          try {
+            const ids = await evaluateTarget(db, target);
+            await enqueueDeliveries(ids ?? []);
+          } catch (error) {
+            failure ??= error;
+            console.error("monitor target failed", target.ruleId, target.exchange, target.pair, (error as Error)?.name);
+          }
         }
+        if (failure) throw failure;
         measurements.batches++;
         queueWait.record(Math.max(1, Math.round((started - job.data.queuedAt) * 1e6)));
         batchDuration.record(Math.max(1, Math.round((Date.now() - started) * 1e6)));

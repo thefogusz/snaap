@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
 import rateLimit from "@fastify/rate-limit";
-import { randomUUID, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
 import type pg from "pg";
@@ -153,6 +153,10 @@ export async function buildApp(
     } catch {
       throw new ApiError(400, "INVALID_URL", "รูปแบบ URL ไม่ถูกต้อง");
     }
+    // Access decisions use the route the router matched (it decodes the path and
+    // accepts absolute-form targets), never the raw req.url, so "/api/v1/%61dmin"
+    // cannot reach an admin route while skipping its gate.
+    const routePath = req.routeOptions.url ?? pagePath;
     if (
       ["/home", "/notifications", "/history", "/watch", "/billing", "/index.html", "/login.html"].includes(pagePath) ||
       pagePath === "/admin" || pagePath.startsWith("/admin/") ||
@@ -172,7 +176,7 @@ export async function buildApp(
       !!process.env.RAILWAY_PROJECT_ID &&
       req.headers.host === "healthcheck.railway.app" &&
       req.method === "GET" &&
-      req.url === "/api/v1/health";
+      routePath === "/api/v1/health";
     if (req.headers.host !== allowedHost && !railwayHealthcheck)
       throw new ApiError(403, "HOST", "ไม่อนุญาต host นี้");
     if (req.headers.origin && req.headers.origin !== origin)
@@ -181,16 +185,16 @@ export async function buildApp(
       req.method === "GET" &&
       req.headers["sec-fetch-mode"] === "navigate" &&
       req.headers["sec-fetch-dest"] === "document" &&
-      !req.url.startsWith("/api/");
+      !pagePath.startsWith("/api/");
     if (
       req.headers["sec-fetch-site"] === "cross-site" &&
       !publicPageNavigation &&
-      !req.url.startsWith("/api/v1/auth/google/callback")
+      !routePath.startsWith("/api/v1/auth/google/callback")
     )
       throw new ApiError(403, "ORIGIN", "ไม่อนุญาตคำขอข้ามเว็บไซต์");
     if (
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
-      !req.url.startsWith("/api/v1/hooks/") &&
+      !routePath.startsWith("/api/v1/hooks/") &&
       req.headers["x-snaap-client"] !== "web"
     )
       throw new ApiError(403, "CSRF", "คำขอไม่มี client header");
@@ -213,10 +217,10 @@ export async function buildApp(
       if (pagePath !== "/admin") return reply.redirect("/admin");
     }
     if (
-      !req.url.startsWith("/api/v1/") ||
-      req.url.startsWith("/api/v1/auth/") ||
-      req.url.startsWith("/api/v1/hooks/") ||
-      req.url === "/api/v1/health"
+      !routePath.startsWith("/api/v1/") ||
+      routePath.startsWith("/api/v1/auth/") ||
+      routePath.startsWith("/api/v1/hooks/") ||
+      routePath === "/api/v1/health"
     )
       return;
     const token = req.cookies.snaap_session;

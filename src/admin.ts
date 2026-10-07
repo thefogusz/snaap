@@ -78,7 +78,7 @@ export function registerAdmin(
 ) {
   // Pre-handler hook to authenticate admin access for all /api/v1/admin/* routes
   app.addHook("preHandler", async (req: FastifyRequest) => {
-    if (req.url.startsWith("/api/v1/admin")) {
+    if (req.routeOptions.url?.startsWith("/api/v1/admin")) {
       if (!req.userId) {
         throw new ApiError(401, "UNAUTHENTICATED", "กรุณาเข้าสู่ระบบ");
       }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  exchangeSchema,
   frames,
   timeframe,
   type Strategy,
@@ -14,7 +15,7 @@ import { strategyTargets } from '../../dist/asset-catalog.js';
 export const editorContextSchema = z
   .object({
     pair: z.string().min(1).max(81),
-    exchange: z.enum(['Binance', 'Bybit', 'OKX', 'Bitget', 'MEXC', 'Gate']).optional(),
+    exchange: exchangeSchema.optional(),
     chartTimeframe: timeframe,
     conditionPath: z.string().max(240).optional(),
     selectedBarTime: z.number().int().nonnegative().optional(),

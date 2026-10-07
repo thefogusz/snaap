@@ -10,24 +10,27 @@ export const telegramRecipient = z
   .trim()
   .regex(/^(?:-?[1-9]\d{0,19}|@[A-Za-z][A-Za-z0-9_]{4,31})$/);
 
+const chatTypes = ["private", "group", "supergroup", "channel"];
+
+// Callers map every failure to their own ApiError so the token never reaches a response.
+async function telegramCall(token: string, method: string, body: object) {
+  const response = await fetch(
+    `https://api.telegram.org/bot${token}/${method}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  const data: any = await response.json();
+  if (!response.ok || data.ok !== true) throw new Error("PROVIDER_REJECTED");
+  return data.result;
+}
+
 export async function discoverTelegramChats(token: string) {
   try {
-    const call = async (method: string, body: object) => {
-      const response = await fetch(
-        `https://api.telegram.org/bot${token}/${method}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(10000),
-        },
-      );
-      const data: any = await response.json();
-      if (!response.ok || data.ok !== true)
-        throw new Error("PROVIDER_REJECTED");
-      return data.result;
-    };
-    const webhook = await call("getWebhookInfo", {});
+    const webhook = await telegramCall(token, "getWebhookInfo", {});
     if (webhook?.url)
       throw new ApiError(
         409,
@@ -35,7 +38,7 @@ export async function discoverTelegramChats(token: string) {
         "บอตนี้เชื่อมกับระบบอื่นอยู่ ให้กรอก Chat ID เอง หรือใช้ @ชื่อช่องสาธารณะ ระบบจะไม่เปลี่ยนการเชื่อมต่อเดิมของบอต",
       );
     // No offset or allowed_updates: do not acknowledge or reconfigure the bot's updates.
-    const updates = await call("getUpdates", { timeout: 0, limit: 100 });
+    const updates = await telegramCall(token, "getUpdates", { timeout: 0, limit: 100 });
     if (!Array.isArray(updates)) throw new Error("INVALID_UPDATES");
     const chats = new Map<
       string,
@@ -49,7 +52,7 @@ export async function discoverTelegramChats(token: string) {
       )?.chat;
       if (
         !Number.isSafeInteger(chat?.id) ||
-        !["private", "group", "supergroup", "channel"].includes(chat.type)
+        !chatTypes.includes(chat.type)
       )
         continue;
       const id = String(chat.id);
@@ -78,28 +81,13 @@ export async function verifyTelegramDestination(
   recipient: string,
 ) {
   try {
-    const call = async (method: string, body: object) => {
-      const response = await fetch(
-        `https://api.telegram.org/bot${token}/${method}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(10000),
-        },
-      );
-      const data: any = await response.json();
-      if (!response.ok || data.ok !== true)
-        throw new Error("PROVIDER_REJECTED");
-      return data.result;
-    };
-    const bot = await call("getMe", {});
+    const bot = await telegramCall(token, "getMe", {});
     if (!bot?.is_bot || typeof bot.username !== "string")
       throw new Error("INVALID_BOT");
-    const chat = await call("getChat", { chat_id: recipient });
+    const chat = await telegramCall(token, "getChat", { chat_id: recipient });
     if (
       !Number.isSafeInteger(chat?.id) ||
-      !["private", "group", "supergroup", "channel"].includes(chat.type)
+      !chatTypes.includes(chat.type)
     )
       throw new Error("INVALID_CHAT");
     return { username: bot.username, recipient: String(chat.id) };

@@ -2,6 +2,7 @@ import ccxt from "ccxt";
 import { strategyTargets } from '../dist/asset-catalog.js';
 import { lastClosedBoundary } from "../dist/timeframes.js";
 import {
+  ccxtIds as ids,
   frames,
   strategySchema,
   type Strategy,
@@ -38,14 +39,6 @@ type Group = {
   alive: boolean;
   subscriptions: Map<string, Subscription>;
 };
-const ids = {
-  Binance: "binance",
-  Bybit: "bybit",
-  OKX: "okx",
-  Bitget: "bitget",
-  MEXC: "mexc",
-  Gate: "gate",
-} as const;
 
 /** A following candle is evidence that an earlier candle finished. Wall clock alone is not. */
 export function closedStreamCandles(

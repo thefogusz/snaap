@@ -36,7 +36,6 @@ import { chartPng, registerSignalCharts, demoChart } from "./signal-chart.js";
 import {
   bindRecipient,
   registerTelegramPolling,
-  telegramMode,
 } from "./telegram-polling.js";
 
 export const equalSecret = (a: string, b: string) =>
@@ -451,7 +450,9 @@ export async function deliver(db: pg.Pool, id: string) {
     }
     const { notifications } = await userLimits(c,row.owner_id);
     if (notifications !== null) {
-      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[row.owner_id]);
+      // NO KEY UPDATE still serializes this owner's deliveries but, unlike FOR UPDATE, does not
+      // block the separate reserveLine transaction's notification_quota FK check on this row.
+      await c.query('SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE',[row.owner_id]);
       const sent = Number((await c.query("SELECT count(*) AS n FROM deliveries d JOIN signals s ON s.id=d.signal_id WHERE s.owner_id=$1 AND d.status IN ('SENT','DELIVERED') AND COALESCE(d.sent_at,s.created_at)>=(date_trunc('month',now() AT TIME ZONE 'Asia/Bangkok') AT TIME ZONE 'Asia/Bangkok')",[row.owner_id])).rows[0].n);
       if (sent >= notifications) {
         await c.query("UPDATE deliveries SET status='USAGE_LIMIT',detail='ถึงเพดานแจ้งเตือนรายเดือนที่ผู้ดูแลกำหนด',usage_retry_at=now()+interval '1 minute' WHERE id=$1",[id]);

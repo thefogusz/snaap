@@ -2,11 +2,11 @@ import { z } from 'zod';
 import type pg from 'pg';
 import { candles, instruments, marketTickers, observeCatalog, type TickerSnapshot } from './markets.js';
 import { ApiError } from './errors.js';
-import { frames, indicator, timeframe, type Candle } from './domain/engine.js';
+import { exchangeSchema, frames, indicator, timeframe, type Candle } from './domain/engine.js';
 import { freshness } from './domain/insights.js';
 import { lastClosedBoundary } from '../dist/timeframes.js';
 
-export const researchExchange = z.enum(['Binance', 'Bybit', 'OKX', 'Bitget', 'MEXC', 'Gate']);
+export const researchExchange = exchangeSchema;
 export const screenQuerySchema = z.object({
   exchange: z.enum(['all', ...researchExchange.options]), market: z.enum(['Spot', 'Perpetual Futures']),
   category: z.enum(['crypto','stocks','forex','metals','commodities','indices','other']).nullable(),

@@ -13,12 +13,10 @@ import { freshness, usedFrames as neededFrames } from "./domain/insights.js";
 import { indicatorByName } from "../dist/indicator-catalog.js";
 import { availableTimeframes, lastClosedBoundary } from "../dist/timeframes.js";
 import {
+  ccxtIds as ids,
+  exchangeSchema,
   frames,
   timeframe,
-  replay,
-  evaluate,
-  advance,
-  emptyLifecycle,
   strategySchema,
   strategyOperands,
   type Candle,
@@ -26,14 +24,6 @@ import {
   operand,
   type Strategy,
 } from "./domain/engine.js";
-const ids = {
-  Binance: "binance",
-  Bybit: "bybit",
-  OKX: "okx",
-  Bitget: "bitget",
-  MEXC: "mexc",
-  Gate: "gate",
-} as const;
 const clients = new Map<string, any>(),
   cache = new Map<string, { at: number; data: Candle[] }>(),
   pending = new Map<string, Promise<Candle[]>>();
@@ -468,7 +458,7 @@ export function registerMarkets(
   app.get("/api/v1/instruments", async (req) => {
     const query = z
       .object({
-        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
+        exchange: exchangeSchema,
         market: z.enum(["Spot", "Perpetual Futures"]),
         refresh: z.enum(["true", "false"]).optional(),
       })
@@ -560,7 +550,7 @@ export function registerMarkets(
     const input = z
       .object({
         spec: strategySchema,
-        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
+        exchange: exchangeSchema,
         pair: z
           .string()
           .regex(/^[A-Z0-9][A-Z0-9._-]{0,39}\/[A-Z0-9][A-Z0-9._-]{0,19}$/),
