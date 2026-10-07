@@ -673,8 +673,7 @@
   border-radius: 50%;
   background: var(--pale);
 }
-.conversation-dialog input,
-.asset-dialog select {
+.conversation-dialog input {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 14px;

@@ -31,26 +31,3 @@ test('preset API accepts ten supported pairs, rejects duplicates, eleven pairs a
   assert.equal(writes,before,'invalid selection must not modify the draft');
  }finally{await app.close();}
 });
-
-test('preset saves venue-specific pairs without inventing a target on another exchange', async () => {
- const conversation='00000000-0000-4000-8000-000000000002';
- const targets=[{exchange:'Binance',pair:'BTC/USDT'},{exchange:'MEXC',pair:'RARE/USDT'}];
- let stored:any;
- const client={query:async(sql:string,params:any[])=>{
-  if(sql.startsWith('UPDATE conversations')){stored=params[0];return {rows:[{draft_revision:1}],rowCount:1};}
-  if(sql.startsWith('INSERT INTO messages'))return {rows:[{id:'fixture',ui_card:params[3]}],rowCount:1};
-  return {rows:[],rowCount:0};
- },release:()=>{}};
- const app=Fastify();app.decorateRequest('userId','owner');
- app.setErrorHandler((err,_req,reply)=>reply.code(err instanceof ZodError?400:(err as any).statusCode??500).send({error:'fixture'}));
- registerPresets(app,{query:async()=>({rows:[{id:conversation}],rowCount:1}),connect:async()=>client} as any,{instruments:async exchange=>({at:Date.now(),items:[{symbol:exchange==='Binance'?'BTC/USDT':'RARE/USDT',supported:true}]})});
- try{
-  const payload={presetId:'trend',exchange:'Binance',market:'Spot',side:'SPOT',pairs:['BTC/USDT','RARE/USDT'],timeframe:'1h',targets,expectedRevision:0};
-  const accepted=await app.inject({method:'POST',url:`/api/v1/conversations/${conversation}/preset`,payload});
-  assert.equal(accepted.statusCode,200,accepted.body);assert.deepEqual(stored.targets,targets);assert.deepEqual(stored.exchange,['Binance','MEXC']);
-  assert.deepEqual(accepted.json().message.ui_card.spec.targets,targets);
-  const previous=stored;
-  assert.equal((await app.inject({method:'POST',url:`/api/v1/conversations/${conversation}/preset`,payload:{...payload,targets:[...targets,{exchange:'Binance',pair:'RARE/USDT'}]}})).statusCode,400);
-  assert.equal(stored,previous);
- }finally{await app.close();}
-});

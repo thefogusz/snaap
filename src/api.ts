@@ -166,7 +166,7 @@ export async function buildApp(
     )
       reply.header(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src https://www.tradingview-widget.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
       );
     const railwayHealthcheck =
       !!process.env.RAILWAY_PROJECT_ID &&

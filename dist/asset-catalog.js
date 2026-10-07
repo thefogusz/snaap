@@ -4,8 +4,7 @@ export const categories = [
   ['crypto', 'คริปโต'], ['stocks', 'หุ้น'], ['etf', 'ETF'], ['forex', 'Forex'],
   ['commodities', 'ทองและสินค้าโภคภัณฑ์'], ['indices', 'ดัชนี'], ['futures', 'Futures'],
 ];
-// ponytail: stable preference among native feeds; add liquidity ranking when comparable metrics exist.
-// Never silently switch saved targets.
+// Stable preference among available native feeds; never silently switch saved targets.
 export function mergeCatalogs(catalogs, market) {
   const items = new Map();
   for (const exchange of exchanges) {

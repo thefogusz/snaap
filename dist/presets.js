@@ -1,4 +1,3 @@
-import { pickAssets } from './asset-picker.js';
 import {availableTimeframes} from "./timeframes.js";
 import {setupCardMarkup,setupCardError} from './setup-card.js';
 import {presets,buildPreset,describePreset} from './preset-catalog.js';
@@ -55,58 +54,66 @@ export function initPresets(ctx){
   const p=presets.find(p=>p.id===id),origin={conversation:state.conversation,workspace:state.workspaceId};
   const node=document.createElement('section');node.className='preset-chat-card preset-wizard';
   document.querySelector('#messages').append(node);
-  const config={exchange:'Binance',market:'Spot',side:'SPOT',pairs:[],timeframe:p.frame};
-  let step=1,picking=false;
+  const config={exchange:state.draft?.exchange?.[0]??'Binance',market:'Spot',side:'SPOT',pairs:[],timeframe:p.frame};
+  let step=1,items=[],loading=false,request=0,visiblePairs=100,catalogAt=0;
+  const maxPairs=10;
   const current=()=>state.conversation===origin.conversation&&state.workspaceId===origin.workspace&&node.isConnected;
-  const sourceExchanges=()=>[...new Set(config.targets?.map(t=>t.exchange)??[config.exchange])];
-  const initial=()=>({...config,exchange:sourceExchanges()});
-  const error=text=>{const el=node.querySelector('.preset-error');if(el){el.hidden=false;el.textContent=text;}};
-  async function choose(){
-   if(picking)return;picking=true;
-   try{
-    const selected=await pickAssets({api,esc,initial:initial(),frames:[config.timeframe],current});
-    if(!selected||!current())return;
-    const previous=config.market;
-    Object.assign(config,selected,{exchange:selected.exchange[0]});
-    if(previous!==config.market)config.side=config.market==='Spot'?'SPOT':'LONG';
-    paint();
-   }catch(e){error(e.message);}finally{picking=false;}
-  }
+  const stale=()=>{if(!current()){toast('บทสนทนาเปลี่ยนแล้ว กรุณาเลือกพรีเซ็ตอีกครั้ง');return true;}return false;};
+  const option=(v,label=v)=>`<option value="${esc(v)}">${esc(label)}</option>`;
   function paint(){
    if(!current())return;
-   const option=v=>'<option>'+esc(v)+'</option>';
-   const description=esc(config.pairs.join(', '));
-   node.innerHTML=
-    '<header><span class="preset-tag">PRESET · '+step+'/3</span><button class="text-button" data-cancel type="button">ยกเลิก</button></header><h3>'+esc(p.title)+'</h3>'+
-    (step===1?'<p class="preset-profile-intro">เหมาะกับ'+esc(p.audience)+'</p><div class="preset-asset-choice"><p>หมวดและสินทรัพย์</p><button type="button" class="secondary" data-assets>'+ (description||'เลือกหมวด · ค้นหาชื่อย่อ')+'</button></div><p class="field-note">รวมคริปโตจากทุกกระดาน · ตลาดอื่นเปิดดูกราฟฟรีได้</p>'+(config.market==='Spot'?'<p>Spot · ซื้อ</p>':'<fieldset class="preset-side"><legend>ฝั่งสัญญาณ</legend>'+ (id==='break-retest'?['LONG','SHORT']:['LONG','SHORT','BOTH']).map(v=>'<label><input type="radio" name="preset-side" value="'+v+'" '+(config.side===v?'checked':'')+'>'+({LONG:'Long · มองขึ้น',SHORT:'Short · มองลง',BOTH:'ทั้งสองฝั่ง'}[v])+'</label>').join('')+'</fieldset>')+'<details class="preset-method"><summary>พรีเซ็ตนี้จับจังหวะอย่างไร?</summary><p>'+esc(p.description)+'</p></details>':step===2?
-     '<p>'+description+' · '+esc(config.market)+'</p><button type="button" class="text-button" data-assets>เปลี่ยนสินทรัพย์และแหล่งราคา</button><p class="field-note">แหล่งสัญญาณ: '+esc(sourceExchanges().join(' · '))+'</p>'+(id==='break-retest'?'<label>ระดับราคาที่รอทะลุ<input type="number" min="0.00000001" step="any" data-level value="'+esc(config.level??'')+'" required></label>':'')+'<label>รอบตรวจแท่งปิด<select data-frame>'+availableTimeframes(sourceExchanges(),config.market).map(option).join('')+'</select></label>':
-     '<p class="preset-market-line">'+description+' · '+esc(config.market)+' · '+esc(config.timeframe)+'</p><div class="preset-review-text">'+esc(describePreset(buildPreset(id,config)))+'</div><p class="preset-inline-note">'+esc(p.note)+'</p><p class="field-note">ใช้แม่แบบนี้จะเปลี่ยนร่างในบทสนทนาปัจจุบัน · ยังไม่เปิดแจ้งเตือน</p>')+
-    '<p class="preset-error" role="alert" hidden></p><footer>'+(step>1?'<button type="button" class="secondary" data-back>ย้อนกลับ</button>':'<button type="button" class="text-button" data-other>เลือกสไตล์อื่น</button>')+'<button type="button" class="primary" data-next '+(!config.pairs.length?'disabled':'')+'>'+(step===3?'ใช้พรีเซ็ตนี้':'ถัดไป')+'</button></footer>';
+   node.innerHTML=`<header><span class="preset-tag">PRESET · ${step}/3</span><button class="text-button" data-cancel type="button">ยกเลิก</button></header><h3>${esc(p.title)}</h3>${step===1?`<p class="preset-profile-intro">เหมาะกับ${esc(p.audience)}</p><div class="preset-fields"><label>ราคาจากกระดาน<select data-field="exchange">${['Binance','Bybit','OKX','Bitget','MEXC'].map(v=>option(v)).join('')}</select></label><label>ตลาดที่เล่น<select data-field="market">${option('Spot','Spot · ซื้อ')}${option('Perpetual Futures','Futures · Long / Short')}</select></label></div>${config.market==='Spot'?'<p class="preset-inline-note">Spot · ซื้อเมื่อเข้าเงื่อนไข แล้วรอสัญญาณออกจากรอบ</p>':`<fieldset class="preset-side"><legend>ฝั่งสัญญาณ</legend>${(id==='break-retest'?['LONG','SHORT']:['LONG','SHORT','BOTH']).map(v=>`<label><input type="radio" name="preset-side" value="${v}" ${config.side===v?'checked':''}>${v==='BOTH'?'ทั้งสองฝั่ง':v==='LONG'?'Long · มองขึ้น':'Short · มองลง'}</label>`).join('')}</fieldset><p class="preset-inline-note">Futures · leverage และ Stop loss ตั้งที่กระดาน สัญญาณไม่ป้องกัน liquidation</p>`}<details class="preset-method"><summary>พรีเซ็ตนี้จับจังหวะอย่างไร?</summary><p>${esc(p.description)}</p></details>`:step===2?`<p>${esc(config.exchange)} · ${config.market==='Spot'?'Spot':config.side==='BOTH'?'Futures · Long + Short':'Futures · '+esc(config.side)} — เลือกคู่ที่มีบนตลาดนี้</p><label>ค้นหาคู่เทรด<input type="search" data-search placeholder="เช่น BTC, ETH หรือ USDT" autocomplete="off"></label><div class="preset-pair-summary"><span data-pair-count role="status"></span><button type="button" class="text-button" data-clear-pairs>ล้างที่เลือก</button></div><div class="preset-selected-pairs" aria-label="คู่เทรดที่เลือก"></div><div class="preset-pairs" role="group" aria-label="คู่เทรด">${loading?skeletonUI('rows', 'กำลังโหลดคู่เทรด…'):''}</div><div class="preset-catalog-footer"><small data-catalog-count></small><button type="button" class="text-button" data-more-pairs hidden>แสดงเพิ่มเติม</button></div>${id==='break-retest'?`<label>ระดับราคาที่รอทะลุ<input type="number" min="0.00000001" step="any" data-level value="${esc(config.level??'')}" required></label>`:''}<label>รอบตรวจแท่งปิด<select data-field="timeframe">${availableTimeframes([config.exchange],config.market).map(v=>option(v)).join('')}</select></label>`:`<p class="preset-market-line">${esc(config.exchange)} · ${esc(config.pairs.join(', '))} · ${config.market==='Spot'?'Spot':config.side==='BOTH'?'Futures · Long + Short':'Futures · '+esc(config.side)} · ${config.timeframe}</p><div class="preset-review-text">${esc(describePreset(buildPreset(id,config)))}</div><p class="preset-inline-note">${esc(p.note)}</p>${config.market!=="Spot"?`<p class="preset-inline-note">รอแท่งปิด ${config.timeframe} · ${esc(p.leverageNote)}</p>`:""}<p class="preset-inline-note">ใช้แม่แบบนี้จะเปลี่ยนร่างในบทสนทนาปัจจุบัน</p>`}<p class="preset-error" role="alert" hidden></p><footer>${step>1?'<button type="button" class="secondary" data-back>ย้อนกลับ</button>':'<button type="button" class="text-button" data-other>เลือกสไตล์อื่น</button>'}<button type="button" class="primary" data-next ${loading||(step===2&&!config.pairs.length)?'disabled':''}>${step===3?'ใช้พรีเซ็ตนี้':'ถัดไป'}</button></footer>`;
+   node.querySelector('[data-level]')?.addEventListener('input',e=>{config.level=Number(e.target.value);});
    const cancel=()=>{node.remove();chatEmpty();};
    node.querySelector('[data-cancel]').onclick=cancel;
    node.querySelector('[data-other]')?.addEventListener('click',()=>{cancel();openPicker();});
    node.querySelector('[data-back]')?.addEventListener('click',()=>{step--;paint();});
-   node.querySelector('[data-assets]')?.addEventListener('click',choose);
+   node.querySelectorAll('[data-field]').forEach(s=>{s.value=config[s.dataset.field];s.onchange=()=>{config[s.dataset.field]=s.value;if(s.dataset.field==='market'){config.side=s.value==='Spot'?'SPOT':'LONG';config.pairs=[];paint();}if(s.dataset.field==='exchange')config.pairs=[];};});
    node.querySelectorAll('[name="preset-side"]').forEach(r=>r.onchange=()=>config.side=r.value);
-   node.querySelector('[data-level]')?.addEventListener('input',e=>config.level=Number(e.target.value));
-   const frame=node.querySelector('[data-frame]');if(frame){frame.value=config.timeframe;frame.onchange=()=>config.timeframe=frame.value;}
+   if(step===2){node.querySelector('[data-search]').oninput=e=>{visiblePairs=100;paintPairs(e.target.value);};node.querySelector('[data-clear-pairs]').onclick=()=>{config.pairs=[];syncSelection();};node.querySelector('[data-more-pairs]').onclick=()=>{visiblePairs+=100;paintPairs(node.querySelector('[data-search]').value);};paintPairs('');syncSelection();}
    node.querySelector('[data-next]').onclick=async()=>{
-    if(!current()||working||picking)return;
-    if(step<3){if(step===2&&id==='break-retest'&&(!Number.isFinite(config.level)||config.level<=0)){error('ระบุระดับราคามากกว่า 0');return;}step++;paint();return;}
+    if(stale()||working)return;
+    if(step===1){step=2;config.pairs=[];loading=true;paint();const rev=++request;try{const catalog=await api('/instruments?'+new URLSearchParams({exchange:config.exchange,market:config.market,refresh:'true'}));if(stale()||rev!==request||step!==2)return;items=catalog.items.filter(p=>p.supported).map(p=>p.symbol);catalogAt=catalog.at;loading=false;paint();}catch(e){if(!current())return;loading=false;paint();error(e.message);node.querySelector('[data-next]').textContent='ลองโหลดอีกครั้ง';node.querySelector('[data-next]').disabled=false;node.querySelector('[data-next]').onclick=()=>{step=1;paint();};}return;}
+    if(step===2){if(id==='break-retest'&&(!Number.isFinite(config.level)||config.level<=0)){error('ระบุระดับราคามากกว่า 0');return;}step=3;paint();return;}
     working=true;const b=node.querySelector('[data-next]');b.disabled=true;
     try{
      if(state.busy)throw new Error('รอ Snaap ตอบให้เสร็จก่อน');state.busy=true;document.querySelector('.setup-pane').inert=true;
      if(state.conversation)await saveDraft();
-     if(!current())return;
+     if(stale())return;
      const conversation=await ensureConversation(p.title);origin.conversation=conversation;
-     const result=await api('/conversations/'+conversation+'/preset','POST',{presetId:id,...config,expectedRevision:state.draftRevision});
-     if(!current())return;
+     const result=await api(`/conversations/${conversation}/preset`,'POST',{presetId:id,...config,expectedRevision:state.draftRevision});
+     if(stale())return;
      state.draft=result.spec;state.saved=null;state.undo=[];state.draftRevision=result.draft_revision;state.persistedDraft=JSON.stringify(result.spec);persistRecovery();renderDesigner();
      const row=state.conversationRows.find(r=>r.id===conversation);if(row)Object.assign(row,{draft:result.spec,draft_revision:result.draft_revision});
      node.remove();renderCard(result.message);scrollChatToLatest();
     }catch(e){error(e.message);}finally{working=false;state.busy=false;document.querySelector('.setup-pane').inert=false;if(b.isConnected)b.disabled=false;}
    };
    scrollChatToLatest();
+  }
+  function error(text){const el=node.querySelector('.preset-error');if(el){el.hidden=false;el.textContent=text;}}
+  function syncSelection(){
+   const count=node.querySelector('[data-pair-count]');if(!count)return;
+   count.textContent=`เลือกแล้ว ${config.pairs.length}/${maxPairs} คู่`;
+   node.querySelector('[data-clear-pairs]').disabled=!config.pairs.length;
+   node.querySelector('[data-next]').disabled=loading||!config.pairs.length;
+   node.querySelectorAll('[data-pair]').forEach(b=>b.setAttribute('aria-pressed',String(config.pairs.includes(b.dataset.pair))));
+   const selected=node.querySelector('.preset-selected-pairs');
+   selected.innerHTML=config.pairs.map(pair=>`<button type="button" class="preset-selected-pair" data-remove-pair="${esc(pair)}" aria-label="นำ ${esc(pair)} ออก">${esc(pair)} <span aria-hidden="true">×</span></button>`).join('');
+   selected.querySelectorAll('[data-remove-pair]').forEach(b=>b.onclick=()=>{config.pairs=config.pairs.filter(pair=>pair!==b.dataset.removePair);syncSelection();});
+  }
+  function paintPairs(q){
+   const box=node.querySelector('.preset-pairs');if(!box||loading)return;
+   const filtered=items.filter(s=>s.toLowerCase().includes(q.trim().toLowerCase()));
+   filtered.sort((a,b)=>Number(['BTC/USDT','ETH/USDT','SOL/USDT'].includes(b))-Number(['BTC/USDT','ETH/USDT','SOL/USDT'].includes(a)));
+   box.innerHTML=filtered.slice(0,visiblePairs).map(s=>`<button type="button" class="preset-pair" aria-pressed="${config.pairs.includes(s)}" data-pair="${esc(s)}">${esc(s)}</button>`).join('')||'<p>ไม่พบคู่เทรด ลองค้นหาใหม่</p>';
+   node.querySelector('[data-catalog-count]').textContent=`แสดง ${Math.min(visiblePairs,filtered.length)} จาก ${filtered.length} คู่${catalogAt?' · อัปเดต '+new Date(catalogAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):''}`;
+   node.querySelector('[data-more-pairs]').hidden=visiblePairs>=filtered.length;
+   box.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    const pair=b.dataset.pair;
+    if(config.pairs.includes(pair))config.pairs=config.pairs.filter(p=>p!==pair);
+    else {if(config.pairs.length>=maxPairs){toast(`เลือกได้สูงสุด ${maxPairs} คู่`);return;}config.pairs.push(pair);}
+    syncSelection();
+   });
   }
   paint();
  }
