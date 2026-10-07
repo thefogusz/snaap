@@ -61,3 +61,27 @@ test("UI reads engine evidence rather than interpreting missing values as FALSE"
   );
   assert.equal(evidenceAtPath(bar, "entry.children.9", spec), undefined);
 });
+
+test("UI condition rows retain frame order, section paths and separate Short branches", () => {
+  const hour = { ...leaf, left: { ...leaf.left, timeframe: "1h" } };
+  const input = strategySchema.parse({
+    ...spec, market: "Perpetual Futures", side: "BOTH",
+    entry: { kind: "GROUP", op: "AND", children: [leaf, { kind: "HOLD", bars: 2, condition: hour }, leaf] },
+    stages: [{ withinBars: 2, condition: hour }], exit: leaf,
+    short: { entry: hour, stages: [], cancel: leaf, cooldownBars: 0 },
+  });
+  const original = structuredClone(input);
+  assert.deepEqual(conditionRows(input).map(({ path, section, side, frames }) => ({ path, section, side, frames })), [
+    { path: "entry", section: "เข้า", side: "Long", frames: ["5m", "1h"] },
+    { path: "entry.children.0", section: "เข้า", side: "Long", frames: ["5m"] },
+    { path: "entry.children.1", section: "เข้า", side: "Long", frames: ["1h"] },
+    { path: "entry.children.1.condition", section: "เข้า", side: "Long", frames: ["1h"] },
+    { path: "entry.children.2", section: "เข้า", side: "Long", frames: ["5m"] },
+    { path: "stages.0.condition", section: "รอยืนยัน 1", side: "Long", frames: ["1h"] },
+    { path: "exit", section: "ออก", side: "Long", frames: ["5m"] },
+    { path: "short.entry", section: "เข้า", side: "Short", frames: ["1h"] },
+    { path: "short.cancel", section: "ยกเลิก", side: "Short", frames: ["5m"] },
+  ]);
+  assert.deepEqual(conditionRows({ ...spec, entry: { kind: "GROUP", op: "AND", children: [] } })[0].frames, []);
+  assert.deepEqual(input, original);
+});

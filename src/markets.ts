@@ -5,7 +5,7 @@ import type pg from "pg";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "./errors.js";
 import { preview } from "./domain/preview.js";
-import { freshness } from "./domain/insights.js";
+import { freshness, usedFrames as neededFrames } from "./domain/insights.js";
 import { indicatorByName } from "../dist/indicator-catalog.js";
 import { availableTimeframes, lastClosedBoundary } from "../dist/timeframes.js";
 import {
@@ -16,10 +16,9 @@ import {
   advance,
   emptyLifecycle,
   strategySchema,
-  strategyConditions,
+  strategyOperands,
   type Candle,
   type Series,
-  type Condition,
   operand,
   type Strategy,
 } from "./domain/engine.js";
@@ -277,20 +276,7 @@ export async function candles(
     pending.delete(key);
   }
 }
-export function neededFrames(spec: Strategy) {
-  const result = new Set<keyof typeof frames>([spec.timeframe]);
-  const walk = (c: Condition) => {
-    if (c.kind === "GROUP") c.children.forEach(walk);
-    else if (c.kind === "HOLD") walk(c.condition);
-    else
-      for (const o of [c.left, c.right])
-        if ("timeframe" in o) result.add(o.timeframe);
-  };
-  strategyConditions(spec)
-    .filter(Boolean)
-    .forEach((c) => walk(c!));
-  return [...result];
-}
+export { neededFrames };
 export async function strategySeries(
   spec: Strategy,
   exchange: keyof typeof ids,
@@ -328,15 +314,7 @@ export async function strategySeries(
       );
     }
   };
-  const walk = (c: Condition) => {
-    if (c.kind === "GROUP") c.children.forEach(walk);
-    else if (c.kind === "HOLD") walk(c.condition);
-    else {
-      collect(c.left);
-      collect(c.right);
-    }
-  };
-  strategyConditions(spec).forEach(walk);
+  strategyOperands(spec).forEach(collect);
   extra.forEach(collect);
   const requestedFrames = new Set(neededFrames(spec));
   for (const o of extra) if (o.kind === "INDICATOR" || o.kind === "PRICE") requestedFrames.add(o.timeframe);

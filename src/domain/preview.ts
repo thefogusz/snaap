@@ -9,7 +9,7 @@ import {
   advance,
   emptyLifecycle,
   replay,
-  strategyConditions,
+  strategyOperands,
   strategyBranches,
   signalSide,
   frames,
@@ -27,16 +27,12 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = [], c
   extra.forEach((o) => {
     if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
   });
-  const walk = (c: Condition) => {
-    if (c.kind === "GROUP") c.children.forEach(walk);
-    else if (c.kind === "HOLD") walk(c.condition);
-    else
-      for (const o of [c.left, c.right]) {
-        if (o.kind === "INDICATOR" || o.kind === "PRICE") evaluationFrames.add(o.timeframe);
-        if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
-      }
-  };
-  if (!chartOnly) strategyConditions(spec).forEach(walk);
+  if (!chartOnly) {
+    for (const o of strategyOperands(spec)) {
+      if (o.kind === "INDICATOR" || o.kind === "PRICE") evaluationFrames.add(o.timeframe);
+      if (o.kind === "INDICATOR") operands.set(JSON.stringify(o), o);
+    }
+  }
   const chartOperands = [...operands.values()].filter(o => !chartTimeframe || (o.kind === "INDICATOR" && o.timeframe === frame));
   const studies: {operand: Operand; chartOperand?: Operand}[] = chartOperands.map(operand => ({operand}));
   // Complete the familiar MACD chart without adding strategy operands or conditions.
@@ -79,21 +75,23 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = [], c
           prior.entryPrice,
           signalSide(branch),
         );
+      const entry = evaluateEntry(branch, series, bar.time);
+      const stages = branch.stages.map((s) => check(s.condition));
+      const exit = branch.exit ? check(branch.exit) : null;
+      const cancel = branch.cancel ? check(branch.cancel) : null;
       return {
         side: signalSide(branch),
-        entry: evaluateEntry(branch, series, bar.time),
-        stages: branch.stages.map((s) => check(s.condition)),
-        exit: branch.exit ? check(branch.exit) : null,
-        cancel: branch.cancel ? check(branch.cancel) : null,
+        entry,
+        stages,
+        exit,
+        cancel,
         explanations: {
-          entry: explainEntry(branch, evaluateEntry(branch, series, bar.time)),
-          stages: branch.stages.map((s) =>
-            explain(s.condition, check(s.condition)),
+          entry: explainEntry(branch, entry),
+          stages: branch.stages.map((s, index) =>
+            explain(s.condition, stages[index]),
           ),
-          exit: branch.exit ? explain(branch.exit, check(branch.exit)) : [],
-          cancel: branch.cancel
-            ? explain(branch.cancel, check(branch.cancel))
-            : [],
+          exit: branch.exit && exit ? explain(branch.exit, exit) : [],
+          cancel: branch.cancel && cancel ? explain(branch.cancel, cancel) : [],
         },
       };
     });
@@ -151,7 +149,7 @@ export function preview(spec: Strategy, series: Series, extra: Operand[] = [], c
           timeframes: usedFrames(branchSpec).map((frame) => ({
             frame,
             latestClose:
-              series[frame]?.filter((c) => c.time <= bar.time).at(-1)?.time ??
+              series[frame]?.findLast((c) => c.time <= bar.time)?.time ??
               null,
             conditions: lines.filter(
               (e) =>

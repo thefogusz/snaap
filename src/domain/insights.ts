@@ -1,7 +1,7 @@
 import { lastClosedBoundary } from "../../dist/timeframes.js";
 import {
   frames,
-  strategyConditions,
+  strategyOperands,
   type Candle,
   type Condition,
   type Evidence,
@@ -46,14 +46,8 @@ export function freshness(
 }
 export function usedFrames(spec: Strategy) {
   const result = new Set<keyof typeof frames>([spec.timeframe]);
-  const visit = (c: Condition) => {
-    if (c.kind === "GROUP") c.children.forEach(visit);
-    else if (c.kind === "HOLD") visit(c.condition);
-    else
-      for (const o of [c.left, c.right])
-        if ("timeframe" in o) result.add(o.timeframe);
-  };
-  strategyConditions(spec).forEach(visit);
+  for (const operand of strategyOperands(spec))
+    if ("timeframe" in operand) result.add(operand.timeframe);
   return [...result];
 }
 export function seriesFreshness(
