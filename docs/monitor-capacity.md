@@ -69,6 +69,41 @@ Before measurements used monitor/cache code from commit `153fcb5`, with only the
 
 Instrumentation uses bounded native [Node performance histograms](https://nodejs.org/api/perf_hooks.html). If database wait or latency remains the bottleneck under real traffic, inspect slow statements with [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html) before increasing worker concurrency.
 
+## API responsiveness under monitoring (2026-10-07)
+
+`--api-load` exercises authenticated `/me`, `/rules` and conversation-summary reads through the real Fastify handlers while evaluation jobs run. The API and monitor share one Node process and the production-sized eight-client database pool. Up to 100 fixture users each issue three sequential reads per burst, then wait three seconds before the next burst. Routes are warmed before one idle baseline burst. Every response must succeed and contain only the expected owner's data. The benchmark fails if it collects no samples during monitoring.
+
+At 1,000 monitoring users / 60,000 targets with three evaluation workers:
+
+| API route | Idle p95 (100 samples/route) | Under monitoring p95 (3,200 samples/route) | Under monitoring maximum |
+| --- | ---: | ---: | ---: |
+| Account (`/me`) | 117 ms | 153 ms | 188 ms |
+| Setup list (`/rules`) | 100 ms | 118 ms | 143 ms |
+| Conversation summary | 109 ms | 118 ms | 136 ms |
+
+All 9,600 overlapping API reads and 60,000 signals passed ownership/count checks. Monitoring drained in 103.9 s; event-loop p95 was 20.9 ms. The pool had up to 95 pending acquisitions during bursts, which is expected with 100 readers and eight clients and does not alone justify a larger pool. This shows API response times can rise during monitoring; the earlier 180-to-101-second result described draining the signal queue, not a wait imposed on every UI action. This is idle-versus-busy on current code, not a before/after regression comparison.
+
+An exploratory six-worker run drained the same target count in 60.5 s, with all 5,700 overlapping API reads and signals passing checks. Account/setup/conversation p95 under load was 162/140/137 ms (max 191/170/175 ms); its idle baseline was 40/40/44 ms. The substantial baseline variation between runs prevents attributing the full drain-time difference to concurrency alone. This is a promising candidate for repeated controlled tests with representative indicators, not evidence of an optimal production setting. Production remains at three evaluation workers.
+
+Fastify injection excludes HTTP transport, browser rendering, Internet latency and LLM responses. Prices use the same simple one-candle fixture as above; conversations are empty and each owner has six rules. This does not certify responsiveness for expensive indicators, large chat histories, chart replay or all-five-source bursts. Application SQL totals include API work in this mode and are not reported as evaluation-only queries/target.
+
+```powershell
+$env:SNAAP_LOCAL_DB_PORT='55913'
+node --import tsx scripts/monitor-load-check.ts 1000 1 3 300000 --api-load
+node --import tsx scripts/monitor-load-check.ts 1000 1 6 300000 --api-load
+```
+
+Research priorities below are engineering judgement about benefit versus implementation/operating cost, not measured speedups:
+
+| Candidate | Worth investigating | Condition / tradeoff |
+| --- | --- | --- |
+| Fewer SQL round trips in account reads and monitoring transactions | 5/5 | Profile statements first; retain owner, revision, deduplication and commit-time permission checks. No additional infrastructure. |
+| Tune bounded evaluation concurrency | 4/5 | Compare API p95 and signal queue age together; a faster queue can consume API/database headroom. No new dependency. |
+| Separate API and monitoring resource budgets | 3/5 | Reserve a bounded connection budget or split processes if real API latency rises. Separate pools still share database capacity; separate processes add RAM and feed ownership concerns. |
+| Offload expensive indicator computation | 2/5 for this fixture | Useful when CPU profiles show long computation blocking API work. Worker communication/history copying adds overhead; this simple fixture does not justify it. |
+
+The [node-postgres pool-sizing guide](https://node-postgres.com/guides/pool-sizing) advises considering total connections across instances and improving queries when connections are scarce. [Pool waitingCount](https://node-postgres.com/apis/pool) measures pending client acquisitions. [Node's event-loop guidance](https://nodejs.org/learn/asynchronous-work/dont-block-the-event-loop) describes partitioning/offloading CPU work and the serialization cost of offloading. No new pools, threads, services or production concurrency settings were added for this research.
+
 ## Deployment and future scaling
 
 Keep one application/feed instance initially. Legacy `evaluate` workers remain to drain jobs queued by the previous version; new work uses `evaluate-market`.

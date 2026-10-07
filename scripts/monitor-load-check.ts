@@ -6,6 +6,7 @@ import { PgBoss } from "pg-boss";
 import { localDatabase } from "./postgres.js";
 import { migrate } from "../src/data/db.js";
 import { evaluateTarget } from "../src/monitor.js";
+import { buildApp, hash } from "../src/api.js";
 import {
   monitorBatches,
   splitMonitorTargets,
@@ -17,10 +18,12 @@ const sourceMode = process.argv[3] ?? '1';
 const sourceCount = sourceMode === '5' ? 5 : 1;
 const concurrency = Number(process.argv[4] ?? 3);
 const budgetMs = Number(process.argv[5] ?? 300000);
+const withApi = process.argv[6] === '--api-load';
 assert.ok(Number.isInteger(users) && users >= 1 && users <= 1000, 'users: 1..1000');
 assert.ok(['1','5','spread'].includes(sourceMode), 'sources: 1, 5 or spread');
 assert.ok(Number.isInteger(concurrency) && concurrency >= 1 && concurrency <= 8, 'concurrency: 1..8');
 assert.ok(Number.isInteger(budgetMs) && budgetMs >= 1000 && budgetMs <= 600000, 'budget: 1000..600000 ms');
+assert.ok(process.argv[6] === undefined || withApi, 'optional flag: --api-load');
 const exchanges = ['Binance','Bybit','OKX','Bitget','MEXC'];
 const postgres = await localDatabase();
 const admin = new pg.Pool({ connectionString: postgres.url });
@@ -44,6 +47,7 @@ const boss = new PgBoss({
 let started = false;
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 let sampler: ReturnType<typeof setInterval> | undefined;
+let app: Awaited<ReturnType<typeof buildApp>>['app'] | undefined;
 try {
   await migrate(db);
   const close = Math.floor(Date.now() / 300000) * 300000;
@@ -78,6 +82,35 @@ try {
     "INSERT INTO rules(id,owner_id,spec,active,activated_at) SELECT unnest($1::uuid[]),unnest($2::uuid[]),unnest($3::jsonb[]),true,to_timestamp(0)",
     [rows.map((r) => r.id), rows.map((r) => r.owner), rows.map(r=>JSON.stringify(r.spec))],
   );
+  const readers = owners.slice(0,100).map(owner => ({owner, token:randomUUID()}));
+  const paths = ['/api/v1/me','/api/v1/rules','/api/v1/conversations?view=summary'];
+  const idle = paths.map(()=>[] as number[]), loaded = paths.map(()=>[] as number[]);
+  async function apiBurst(samples: number[][]) {
+    await Promise.all(readers.map(async reader => {
+      for (const [index,url] of paths.entries()) {
+        const start = performance.now();
+        const response = await app!.inject({url,headers:{host:'127.0.0.1:4173',cookie:'snaap_session='+reader.token}});
+        samples[index]!.push(performance.now()-start);
+        assert.equal(response.statusCode,200,`${url}: ${response.statusCode}`);
+        const body=response.json();
+        if(index===0)assert.equal(body.id,reader.owner);
+        else if(index===1)assert.ok(body.length===6 && body.every((rule:any)=>rule.owner_id===reader.owner));
+        else assert.deepEqual(body,[]);
+      }
+    }));
+  }
+  function apiStats(samples:number[][]) {
+    return paths.map((path,index)=>{
+      const values=samples[index]!.toSorted((a,b)=>a-b);
+      return {path,requests:values.length,p95Ms:Math.round(values[Math.ceil(values.length*.95)-1]??0),maxMs:Math.round(values.at(-1)??0)};
+    });
+  }
+  if(withApi){
+    await db.query("INSERT INTO sessions(token_hash,user_id,expires_at) SELECT unnest($1::text[]),unnest($2::uuid[]),now()+interval '1 hour'",[readers.map(r=>hash(r.token)),readers.map(r=>r.owner)]);
+    app=(await buildApp(db,{local:true})).app;
+    await apiBurst(paths.map(()=>[])); // Warm up routes before the idle comparison.
+    await apiBurst(idle);
+  }
   const { groups, total } = monitorBatches(rows, new Map(), close);
   const jobs = [...groups.values()].flatMap((targets) =>
     splitMonitorTargets(targets).map((chunk) => ({
@@ -130,10 +163,12 @@ try {
   const cpu = process.cpuUsage();
   eventLoop.enable();
   let peakRss = process.memoryUsage().rss;
-  sampler = setInterval(() => { peakRss = Math.max(peakRss, process.memoryUsage().rss); }, 100).unref();
+  let maxDbWaiting = 0;
+  sampler = setInterval(() => { peakRss = Math.max(peakRss, process.memoryUsage().rss); maxDbWaiting=Math.max(maxDbWaiting,db.waitingCount); }, 100).unref();
   await boss.insert("load", jobs);
   const deadline = Date.now() + budgetMs;
   let lastProgress = Date.now();
+  let nextApiBurst = 0;
   let finished = false;
   while (Date.now() < deadline) {
     const counts = await admin.query(
@@ -145,6 +180,10 @@ try {
       finished = true;
       break;
     }
+    if(withApi && processed>0 && processed<total && Date.now()>=nextApiBurst){
+      await apiBurst(loaded);
+      nextApiBurst=Date.now()+3000; // Think time stays below the real per-user rate limit.
+    }
     if(Date.now()-lastProgress>=30000){console.log(JSON.stringify({progress:processed,total,elapsedMs:Math.round(performance.now()-begin)}));lastProgress=Date.now();}
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
@@ -154,7 +193,8 @@ try {
     const partial=(await db.query('SELECT count(*)::int AS n FROM signals')).rows[0].n;
     console.log(JSON.stringify({scenario:`${users} users, ${sourceMode} sources`,completed:false,budgetMs,
       elapsedMs:Math.round(performance.now()-begin),concurrency,
-      targets:total,processed,signals:partial,evaluationQueries,maxQueueWaitMs:maxWaitMs,
+      targets:total,processed,signals:partial,applicationQueries:evaluationQueries,maxQueueWaitMs:maxWaitMs,
+      api:withApi?{readers:readers.length,idle:apiStats(idle),loaded:apiStats(loaded),maxDbWaiting}:undefined,
       peakNodeRssMB:Math.round(peakRss/1024/1024),eventLoopP95Ms:eventLoop.percentile(95)/1e6}));
     assert.fail('capacity budget exceeded; this workload is not certified');
   }
@@ -162,6 +202,7 @@ try {
   eventLoop.disable();
   const evaluationQueries = queries;
   const usedCpu = process.cpuUsage(cpu);
+  if(withApi)assert.ok(loaded[0]!.length>0,'no API samples overlapped monitoring; increase users');
   assert.equal(processed, total);
   assert.equal(fetches, total);
   const signals = await db.query(
@@ -206,8 +247,10 @@ try {
       firstCloseMs: Math.round(firstElapsed),
       duplicatePassMs: Math.round(performance.now() - duplicateBegin),
       duplicateTargets,
-      evaluationQueries,
-      queriesPerTarget: Number((evaluationQueries / total).toFixed(2)),
+      applicationQueries: evaluationQueries,
+      evaluationQueries: withApi ? undefined : evaluationQueries,
+      queriesPerTarget: withApi ? undefined : Number((evaluationQueries / total).toFixed(2)),
+      api:withApi?{mode:'Fastify injection, same process and pool; excludes network/browser/AI',readers:readers.length,idle:apiStats(idle),loaded:apiStats(loaded),maxDbWaiting}:undefined,
       nodeCpuMs: Math.round((usedCpu.user + usedCpu.system) / 1000),
       eventLoopP95Ms: Number((eventLoop.percentile(95) / 1e6).toFixed(2)),
       peakNodeRssMB: Math.round(peakRss / 1024 / 1024),
@@ -221,6 +264,7 @@ try {
   if (sampler) clearInterval(sampler);
   eventLoop.disable();
   if (started) await boss.stop();
+  await app?.close();
   await db.end();
   await admin.query(`DROP SCHEMA IF EXISTS ${queueSchema} CASCADE`);
   await admin.query(`DROP SCHEMA ${schema} CASCADE`);
