@@ -58,7 +58,7 @@ export async function screenAssets(db: pg.Pool, raw: unknown, reads = { instrume
     sources: results.map((result, i) => ({ exchange: exchanges[i], status: result.status === 'fulfilled' ? 'READY' : 'UNAVAILABLE', fetchedAt: result.status === 'fulfilled' ? new Date(result.value.fetchedAt).toISOString() : null,
       reason: result.status === 'fulfilled' ? null : result.reason instanceof ApiError && result.reason.code === 'TICKER_DATA_INCOMPARABLE' ? 'INCOMPARABLE_DATA' : 'PUBLIC_DATA_UNAVAILABLE',
       volumeCoverage: result.status === 'fulfilled' ? result.value.items.length : 0,
-      changeCoverage: result.status === 'fulfilled' ? result.value.items.filter(item => item.changePercent !== null).length : 0,
+      ...(['gainers','losers'].includes(query.sort) ? {changeCoverage: result.status === 'fulfilled' ? result.value.items.filter(item => item.changePercent !== null).length : 0} : {}),
     })),
     items: rankSnapshots(snapshots, query, newlyObserved), criteria: query,
     ...(query.sort === 'new' ? { listingMeaning: 'PROVIDER_LAUNCH: provider contract launch/onboard time, not token creation. FIRST_OBSERVED: First observed by Snaap after baseline, not an official listing date.' } : {}),

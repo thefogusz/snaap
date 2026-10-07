@@ -9,6 +9,7 @@ import { buildApp, hash } from "../src/api.js";
 import { usagePolicySchema } from '../src/usage-policy.js';
 import { frames, strategySchema } from "../src/domain/engine.js";
 import { instruments, strategySeries } from '../src/markets.js';
+import { newsQuerySchema,chainQuerySchema } from '../src/research-evidence.js';
 const requests: any[] = [];
 let reply: (body: any) => Promise<any> = async () => response("complete");
 function response(text: string, status = "completed") {
@@ -66,6 +67,14 @@ const db = database(fixtureUrl.toString());await migrate(db);
 let nativeCatalogs: Map<string, Awaited<ReturnType<typeof instruments>>['items']> | undefined;
 const seriesReads: string[] = [];
 const { app } = await buildApp(db, { local: true, harnessDependencies: {
+  readMarketNews: async raw => {
+    newsQuerySchema.parse(raw);
+    return {asOf:new Date().toISOString(),windowHours:24,sources:[{name:'NVIDIA Newsroom',symbol:'NVDA',status:'READY',feed:'https://nvidianews.nvidia.com/releases.xml'}],scope:'Publisher titles only',items:[{symbol:'NVDA',title:'Fixture headline',url:'https://nvidianews.nvidia.com/news/fixture',publishedAt:new Date().toISOString(),updatedAt:null,dateBasis:'PUBLISHED' as const,publishedAtBangkok:'2026-10-08T04:00:00+07:00',updatedAtBangkok:null}]};
+  },
+  readChainActivity: async raw => {
+    const q=chainQuerySchema.parse(raw);
+    return {chain:'Bitcoin',asset:'BTC',source:'mempool.space',asOf:new Date().toISOString(),address:q.address,thresholdBTC:q.minBTC,scope:'First 50 per block, sampled by position',samplingMethod:'FIRST_50_PER_BLOCK',samplingRandom:false,maximumBlocks:2,inspectedTransactions:100,totalBlockTransactions:1000,latestObservedAt:new Date().toISOString(),status:'OBSERVED',limitations:'Unknown owners; transfers are not buys',items:[]};
+  },
   candles: async (_exchange, _market, _pair, frame) => {
     const step = frames[frame], end = Math.floor(Date.now()/step)*step;
     return Array.from({length:240}, (_, i) => ({time:end-(239-i)*step,open:100+i,close:100+i,high:102+i,low:99+i,volume:10}));
@@ -584,6 +593,15 @@ try {
   };
   assert.equal((await auditTurn('ลองคัดคู่เทรด')).statusCode, 200);
   console.log('PASS strict market tools return sourced rankings and closed-candle analysis; discovery leaves drafts untouched and explicit batch additions preserve other fields');
+  const newsEvidence=await runTool('read_market_news',{topic:'stocks',symbols:['NVDA'],hours:24,limit:10,query:''},{draft:studioSpec});
+  assert.equal(newsEvidence.output.items[0].url,'https://nvidianews.nvidia.com/news/fixture');
+  assert.equal(newsEvidence.result.draft,null);
+  const chainEvidence=await runTool('read_chain_activity',{address:null,minBTC:100,limit:10},{draft:studioSpec});
+  assert.equal(chainEvidence.output.samplingRandom,false);
+  assert.equal(chainEvidence.result.draft,null);
+  assert.ok((await runTool('read_market_news',{topic:'stocks',symbols:['NVDA'],hours:24,limit:10000,query:''})).output.error);
+  assert.ok((await runTool('read_chain_activity',{address:'http://localhost/secret',minBTC:100,limit:10})).output.error);
+  console.log('PASS news and chain tools preserve cited evidence, bounded scope and unchanged drafts; invalid arguments fail safely');
   reply=async()=>response('ส่งร่างเข้า editor แล้วครับ');
   const beforeUnrequested=requests.length;
   const unrequested=await auditTurn('RSI คืออะไร',{draft:studioSpec});
