@@ -1,10 +1,35 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeCatalogs, selectTargets, strategyTargets } from '../dist/asset-catalog.js';
+import { mergeCatalogs, selectTargets, strategyTargets, instrumentMetadata } from '../dist/asset-catalog.js';
+import { availableTimeframes } from '../dist/timeframes.js';
 import { strategySchema } from '../src/domain/engine.js';
 import { subscriptionsFor } from '../src/realtime.js';
 import { monitorBatches } from '../src/monitor-batches.js';
 import { assetCatalog, validateTargets } from '../src/markets.js';
+
+test('native asset classes preserve stock tokens and do not confuse matching crypto tickers', () => {
+  const meta = (exchange: string, info: any, base = 'TSLA', market = 'Perpetual Futures') => instrumentMetadata(exchange, { base, info }, market);
+  assert.equal(meta('Binance', { underlyingType: 'EQUITY' }).category, 'stocks');
+  assert.equal(meta('Bybit', { symbolType: 'ETF' }).category, 'stocks');
+  assert.equal(meta('Bybit', { symbolType: 'xstocks' }, 'TSLAx', 'Spot').product, 'tokenized_stock');
+  assert.equal(meta('OKX', { instCategory: '4' }, 'XAU').category, 'metals');
+  assert.equal(meta('Bitget', { symbolType: 'stock' }).category, 'stocks');
+  assert.equal(meta('Bitget', {}).category, 'other');
+  assert.equal(meta('Bitget', { symbolType: 'crypto', isRwa: 'YES' }, 'EURUSD').category, 'other');
+  assert.equal(meta('MEXC', { conceptPlate: ['mc-trade-zone-stockindex'] }).category, 'stocks');
+  assert.equal(meta('Gate', { contract_type: 'forex' }, 'EURUSD').category, 'forex');
+  assert.equal(meta('Gate', { contract_type: 'commodities' }, 'WTI').category, 'commodities');
+  const items = mergeCatalogs([
+    { exchange: 'Binance', items: [{ symbol: 'TSLA/USDT', supported: true, ...meta('Binance', { underlyingType: 'COIN' }) }] },
+    { exchange: 'Gate', items: [{ symbol: 'TSLA/USDT', supported: true, ...meta('Gate', { contract_type: 'stocks' }) }] },
+  ], 'Perpetual Futures');
+  assert.equal(items.length, 2);
+  assert.throws(() => selectTargets(items, ['TSLA/USDT']), /หลาย/);
+  assert.deepEqual(selectTargets(items.filter(m => m.category === 'stocks'), ['TSLA/USDT']), [{ exchange: 'Gate', pair: 'TSLA/USDT' }]);
+  assert.ok(availableTimeframes(['Gate'], 'Spot').includes('1w'));
+  assert.ok(!availableTimeframes(['Gate'], 'Perpetual Futures').includes('1w'));
+  assert.ok(!availableTimeframes(['Gate']).includes('6h'));
+});
 
 test('union catalog preserves venue-only coins and selects only actual source/pair combinations', () => {
   const catalogs = [

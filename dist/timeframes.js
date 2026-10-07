@@ -7,10 +7,13 @@ const native = {
   OKX: TIMEFRAMES.filter(t => t !== "8h"),
   Bitget: TIMEFRAMES.filter(t => t !== "8h"),
   MEXC: ["5m", "15m", "30m", "1h", "4h", "8h", "1d", "1w"],
+  Gate: ["5m", "15m", "30m", "1h", "2h", "4h", "8h", "1d", "1w"],
 };
 export function availableTimeframes(exchanges = ["Binance"], market = "Spot") {
   return TIMEFRAMES.filter(frame => exchanges.every(exchange =>
     native[exchange]?.includes(frame) &&
+    // Gate perpetual weekly bars start Thursday; the engine evaluates Monday weeks.
+    !(exchange === "Gate" && market !== "Spot" && frame === "1w") &&
     !(market === "Spot" && ((exchange === "Bitget" && frame === "2h") || (exchange === "MEXC" && frame === "8h")))
   ));
 }

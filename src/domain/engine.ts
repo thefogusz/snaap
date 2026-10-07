@@ -153,12 +153,12 @@ const strategyStructure = z
     schemaVersion: z.literal(2),
     name: z.string().trim().min(1).max(100),
     exchange: z
-      .array(z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]))
+      .array(z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]))
       .min(1)
-      .max(5),
+      .max(6),
     market: z.enum(["Spot", "Perpetual Futures"]),
     targets: z.array(z.object({
-      exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]),
+      exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
       pair: z.string().min(1).max(61),
     }).strict()).min(1).max(50).optional(),
     side: z.enum(["SPOT", "LONG", "SHORT", "BOTH"]).optional(),

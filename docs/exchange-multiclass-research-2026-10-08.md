@@ -23,6 +23,8 @@ Use provider metadata, not a list of invented cash tickers: Binance `underlyingT
 
 Use the already-installed CCXT/CCXT.pro adapters rather than installing separate exchange SDKs. Preserve shared candle/catalog requests, closed-candle evaluation, continuity and freshness guards, REST recovery, durable checkpoints and independent signal deduplication. Classifying an existing native feed is metadata work; it must not create a second market-data stream or invoke an LLM per tick.
 
+Live interval probes found Gate spot weekly bars start Monday, but perpetual weekly bars start Thursday. Gate perpetual `1w` is excluded until the engine supports that boundary; `2h` and `8h` were aligned with the current UTC engine. Do not advertise native intervals merely because the adapter lists them. Bitget stock-token spot products are also excluded pending their separate V3 candle adapter/interval validation.
+
 ## UI direction
 
 One compact asset picker, aggregated across supported venues. Category tabs: crypto, stocks/ETF, FX, metals, commodities, indices and unclassified. Spot/Perpetual is a separate product filter, not an asset class. Search and product filters remain above a bounded scrolling results list; selection count and Apply stay visible below. Show an exact pair, short product label and source count per row. Source choice lives in an optional compact control; retain existing sources by default and assign a supported source only for new selections. Saved source changes require an explicit selection. No TradingView-only instruments enter this picker.

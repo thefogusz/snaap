@@ -15,7 +15,7 @@ import { checkXlsxSize } from "./zip-limit.js";
 const tradeSchema = z
   .object({
     time: z.string().datetime({ offset: true }),
-    exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]),
+    exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
     pair: z
       .string()
       .regex(

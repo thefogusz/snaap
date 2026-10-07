@@ -44,6 +44,7 @@ const ids = {
   OKX: "okx",
   Bitget: "bitget",
   MEXC: "mexc",
+  Gate: "gate",
 } as const;
 
 /** A following candle is evidence that an earlier candle finished. Wall clock alone is not. */

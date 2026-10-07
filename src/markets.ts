@@ -1,6 +1,7 @@
 import ccxt from "ccxt";
 import { performance } from 'node:perf_hooks';
-import { mergeCatalogs, strategyTargets } from '../dist/asset-catalog.js';
+import { mergeCatalogs, strategyTargets, instrumentMetadata } from '../dist/asset-catalog.js';
+import type { InstrumentMetadata } from '../dist/asset-catalog.js';
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type pg from "pg";
@@ -30,6 +31,7 @@ const ids = {
   OKX: "okx",
   Bitget: "bitget",
   MEXC: "mexc",
+  Gate: "gate",
 } as const;
 const clients = new Map<string, any>(),
   cache = new Map<string, { at: number; data: Candle[] }>(),
@@ -121,11 +123,11 @@ export const marketHealth = new Map<
 >();
 const catalogs = new Map<
   string,
-  { at: number; items: { symbol: string; supported: boolean }[] }
+  { at: number; items: ({ symbol: string; supported: boolean } & Partial<InstrumentMetadata>)[] }
 >();
 const catalogPending = new Map<
   string,
-  Promise<{ at: number; items: { symbol: string; supported: boolean }[] }>
+  Promise<{ at: number; items: ({ symbol: string; supported: boolean } & Partial<InstrumentMetadata>)[] }>
 >();
 export async function instruments(
   exchange: keyof typeof ids,
@@ -141,6 +143,16 @@ export async function instruments(
   const work = (async () => {
     try {
       const markets = await client.loadMarkets(true);
+      // V2 omits TradFi taxonomy. Enrich once per catalog refresh, sharing the request.
+      let bitget = new Map<string, any>();
+      if (exchange === 'Bitget') {
+        try {
+          const response = await fetch(`https://api.bitget.com/api/v3/market/instruments?category=${market === 'Spot' ? 'SPOT' : 'USDT-FUTURES'}`, { signal: AbortSignal.timeout(12000) });
+          const data: any = await response.json();
+          if (response.ok && data.code === '00000' && Array.isArray(data.data))
+            bitget = new Map(data.data.filter((m: any) => typeof m?.symbol === 'string').map((m: any) => [m.symbol, m]));
+        } catch { /* Keep usable prices, with unknown taxonomy visible as Other. */ }
+      }
       const items = Object.values(markets)
         .filter(
           (m: any) =>
@@ -148,8 +160,11 @@ export async function instruments(
         )
         .map((m: any) => ({
           symbol: m.symbol.split(":")[0],
+          ...instrumentMetadata(exchange, { ...m, info: { ...m.info, ...bitget.get(m.id) } }, market),
           supported:
             !!client.has.fetchOHLCV &&
+            // Stock-token spot intervals differ from V2; validate that adapter first.
+            !(exchange === 'Bitget' && market === 'Spot' && bitget.get(m.id)?.isReality === 'yes') &&
             (market === "Spot" || (m.linear && m.settle === "USDT")),
         }))
         .sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -295,6 +310,7 @@ export async function candles(
     pending.delete(key);
   }
 }
+const mergedCatalogs = new Map<string, { inputs: unknown[]; items: ReturnType<typeof mergeCatalogs> }>();
 export async function assetCatalog(market: string, refresh = false, read = instruments) {
   const exchanges = Object.keys(ids) as (keyof typeof ids)[];
   const results = await Promise.allSettled(exchanges.map(async exchange => ({
@@ -302,7 +318,11 @@ export async function assetCatalog(market: string, refresh = false, read = instr
   })));
   const catalogs = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
   if (!catalogs.length) throw new ApiError(502, 'CATALOG_UNAVAILABLE', 'โหลดรายชื่อสินทรัพย์ไม่สำเร็จ ลองซิงก์อีกครั้ง');
-  return { at: Math.min(...catalogs.map(c => c.at)), market, items: mergeCatalogs(catalogs, market),
+  const inputs = results.map(r => r.status === 'fulfilled' ? r.value.items : null);
+  const hit = read === instruments ? mergedCatalogs.get(market) : undefined;
+  const items = hit && inputs.every((input, i) => input === hit.inputs[i]) ? hit.items : mergeCatalogs(catalogs, market);
+  if (read === instruments) mergedCatalogs.set(market, { inputs, items });
+  return { at: Math.min(...catalogs.map(c => c.at)), market, items,
     sources: results.map((result, i) => ({ exchange: exchanges[i], status: result.status === 'fulfilled' ? 'READY' : 'UNAVAILABLE' })),
   };
 }
@@ -384,7 +404,7 @@ export function registerMarkets(
   app.get("/api/v1/instruments", async (req) => {
     const query = z
       .object({
-        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]),
+        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
         market: z.enum(["Spot", "Perpetual Futures"]),
         refresh: z.enum(["true", "false"]).optional(),
       })
@@ -470,7 +490,7 @@ export function registerMarkets(
     const input = z
       .object({
         spec: strategySchema,
-        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC"]),
+        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
         pair: z
           .string()
           .regex(/^[A-Z0-9][A-Z0-9._-]{0,39}\/[A-Z0-9][A-Z0-9._-]{0,19}$/),
