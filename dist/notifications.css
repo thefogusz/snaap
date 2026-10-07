@@ -481,6 +481,21 @@
     font-size: 11px;
     gap: 6px;
   }
+  .notification-tabs button:has(.notification-count) {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: center;
+    align-content: center;
+    column-gap: 4px;
+  }
+  .notification-tabs button:has(.notification-count) > span:not(.notification-count) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .notification-tabs .notification-count {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
 .signal-item { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 14px; }
 .signal-details { min-width: 0; }
