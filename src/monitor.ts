@@ -45,8 +45,10 @@ export async function evaluateTarget(
 ) {
   const row = (
     await db.query(
-      "SELECT * FROM rules WHERE id=$1 AND revision=$2 AND active",
-      [target.ruleId, target.revision],
+      `SELECT r.*,c.state AS checkpoint_state FROM rules r
+        LEFT JOIN monitor_checkpoints c ON c.rule_id=r.id AND c.revision=r.revision AND c.exchange=$3 AND c.pair=$4
+        WHERE r.id=$1 AND r.revision=$2 AND r.active`,
+      [target.ruleId, target.revision, target.exchange, target.pair],
     )
   ).rows[0];
   if (!row) return;
@@ -57,15 +59,10 @@ export async function evaluateTarget(
   }
   const spec = strategySchema.parse(row.spec);
   // The durable checkpoint also catches duplicate stream/recovery jobs after restart.
-  const previous = (
-    await db.query(
-      "SELECT state FROM monitor_checkpoints WHERE rule_id=$1 AND revision=$2 AND exchange=$3 AND pair=$4",
-      [row.id, target.revision, target.exchange, target.pair],
-    )
-  ).rows[0];
+  const previous = row.checkpoint_state;
   const expectedClose =
     lastClosedBoundary(now ?? Date.now(), spec.timeframe);
-  if (previous && Number(previous.state.lastTime) >= expectedClose) return;
+  if (previous && Number(previous.lastTime) >= expectedClose) return;
   if (spec.market === "Perpetual Futures" && !spec.side) {
     await db.query(
       "INSERT INTO monitor_status VALUES($1,$2,$3,'DIRECTION_REQUIRED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",

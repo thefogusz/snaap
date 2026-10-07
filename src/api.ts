@@ -1,4 +1,4 @@
-import { userLimits, usagePolicy } from './usage-policy.js';
+import { userLimits, usagePolicy, usagePolicySchema } from './usage-policy.js';
 import { assertAccess } from './access-controls.js';
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
@@ -325,43 +325,26 @@ export async function buildApp(
     return { ok: true };
   });
   app.get("/api/v1/me", async (req) => {
-    const user = (
-      await db.query("SELECT id,email,role,google_sub FROM users WHERE id=$1", [
-        req.userId,
-      ])
+    const { policy: settings, active, pro_until, impersonating, usage, ...user } = (
+      await db.query(`SELECT u.id,u.email,u.role,u.google_sub,e.pro_until,
+        EXISTS(SELECT 1 FROM admin_impersonations WHERE session_hash=$2) AS impersonating,
+        coalesce((SELECT policy FROM usage_policy WHERE id=1),'{}'::jsonb) AS policy,
+        (SELECT count(*)::int FROM rules WHERE owner_id=u.id AND active) AS active,
+        coalesce((SELECT jsonb_agg(t) FROM (
+          SELECT mode,count(*)::int AS count FROM usage_ledger
+          WHERE owner_id=u.id AND created_at>=date_trunc('month',now())
+            AND status IN ('RESERVED','COMPLETED') AND NOT quota_waived GROUP BY mode
+        ) t),'[]'::jsonb) AS usage
+        FROM users u LEFT JOIN entitlements e ON e.owner_id=u.id AND e.pro_until>now()
+        WHERE u.id=$1`, [req.userId, hash(req.cookies.snaap_session ?? "")])
     ).rows[0];
-    const impersonating = !!(
-      await db.query(
-        "SELECT 1 FROM admin_impersonations WHERE session_hash=$1",
-        [hash(req.cookies.snaap_session ?? "")],
-      )
-    ).rowCount;
-    const pro = (
-      await db.query(
-        "SELECT pro_until FROM entitlements WHERE owner_id=$1 AND pro_until>now()",
-        [req.userId],
-      )
-    ).rows[0];
-    const usage = (
-      await db.query(
-        "SELECT mode,count(*)::int AS count FROM usage_ledger WHERE owner_id=$1 AND created_at>=date_trunc('month',now()) AND status IN ('RESERVED','COMPLETED') AND NOT quota_waived GROUP BY mode",
-        [req.userId],
-      )
-    ).rows;
-    const active = Number(
-      (
-        await db.query(
-          "SELECT count(*) AS n FROM rules WHERE owner_id=$1 AND active",
-          [req.userId],
-        )
-      ).rows[0].n,
-    );
     const isAdmin = isAdminIdentity(user);
-    const limits = await userLimits(db, req.userId);
+    const policy = usagePolicySchema.parse(settings);
+    const limits = policy.mode === 'unified' ? policy.unified : policy[pro_until ? 'pro' : 'free'];
     return {
       ...user,
-      plan: pro ? "PRO" : "FREE",
-      proUntil: pro?.pro_until ?? null,
+      plan: pro_until ? "PRO" : "FREE",
+      proUntil: pro_until ?? null,
       isAdmin,
       impersonating,
       requiresRuleSelection: limits.activeRules !== null && active > limits.activeRules,

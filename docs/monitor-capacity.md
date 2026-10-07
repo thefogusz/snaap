@@ -104,6 +104,37 @@ Research priorities below are engineering judgement about benefit versus impleme
 
 The [node-postgres pool-sizing guide](https://node-postgres.com/guides/pool-sizing) advises considering total connections across instances and improving queries when connections are scarce. [Pool waitingCount](https://node-postgres.com/apis/pool) measures pending client acquisitions. [Node's event-loop guidance](https://nodejs.org/learn/asynchronous-work/dont-block-the-event-loop) describes partitioning/offloading CPU work and the serialization cost of offloading. No new pools, threads, services or production concurrency settings were added for this research.
 
+## SQL round-trip reduction (2026-10-07–08)
+
+The first research priority fits the current single-process architecture without additional infrastructure:
+
+- `/me` reads account identity, current entitlement, session impersonation, policy, active-rule count and monthly usage in one SQL statement. Existing session, restriction and rate-limit hooks still execute. Without a selected-workspace header, total statements per authenticated request fall from nine (unified policy) or ten (plans) to four. Selecting a workspace adds the existing ownership check: ten/eleven become five. The response shape and owner filters remain unchanged; usage excludes waived, failed and previous-month entries.
+- The monitor's initial rule read includes its exact revision/exchange/pair checkpoint through the existing primary key. Fresh evaluations save one statement; duplicate jobs use two statements instead of three and still check access before returning. The commit transaction keeps the rule lock, permission/quota recheck and a separate checkpoint read **after** obtaining the lock. Combining that read with the locking join could use a snapshot from before another evaluation commits; PostgreSQL's [Read Committed semantics](https://www.postgresql.org/docs/current/transaction-iso.html#XACT-READ-COMMITTED) explain why the second read matters.
+- Account integration checks cover FREE/PRO/unified defaults, expiry, impersonation, owner isolation, usage exclusions, restrictions, session expiry and a four-statement budget. Realtime integration covers concurrent evaluation of the same target, durable checkpoint deduplication, a fourteen-statement budget with delivery creation, and a two-statement duplicate budget. Existing fetch-time restriction/quota races still pass.
+
+No permission caches, extra pools, dependencies or worker-concurrency changes were introduced. Worker concurrency remains three and the application pool remains eight. SQL round-trip counts are reproducible checks; latency and production capacity still require workload measurements.
+
+Two local before/after pairs used the same 1,000-monitoring-user / 60,000-target fixture with 100 API readers. Each run completed all 60,000 owned signals with zero failed responses/jobs and no duplicate signals. The first baseline briefly overlapped integration checks; the repeat comparisons ran without those checks. Idle baseline and processing times varied substantially, so these results do **not** establish a consistent throughput improvement or unchanged latency for every endpoint.
+
+| Run | Close processing | Loaded `/me` p95 | Loaded `/rules` p95 | Loaded conversation p95 | Overlapping API reads |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Before, first | 196.6 s | 180 ms | 151 ms | 135 ms | 17,400 |
+| After, first | 175.1 s | 119 ms | 157 ms | 136 ms | 15,900 |
+| Before, repeat | 82.5 s | 112 ms | 96 ms | 97 ms | 8,100 |
+| After, repeat | 114.3 s | 105 ms | 115 ms | 116 ms | 10,800 |
+
+Account p95 was lower in both comparisons; other routes were similar or slower. Signal drain improved in the first pair and worsened in the repeat. Peak sampled Node RSS was 546/542 MB and 587/544 MB; this is not a memory-saving claim. Duplicate-pass times were 4.0/8.1 s and 4.1/4.1 s despite fewer reads. Retain the deterministic SQL reduction, but do not select higher worker concurrency or claim a capacity/latency guarantee from these variable timings. This is Fastify injection with simulated prices and empty conversations, excluding HTTP/browser/LLM/exchange/notification latency.
+
+An isolated `EXPLAIN (ANALYZE, BUFFERS)` fixture with 1,000 owners, 6,000 rules, 20,000 usage rows and 60,000 checkpoints confirmed existing owner/time indexes and both rule/checkpoint primary keys. Account and checkpoint-join execution measured 0.293/0.050 ms in that local plan; these exclude connection acquisition and are not API latency targets.
+
+```powershell
+$env:SNAAP_LOCAL_DB_PORT='55913'
+node --import tsx scripts/account-read-check.ts
+node --import tsx scripts/realtime-check.ts
+node --import tsx scripts/free-limits-check.ts
+node --import tsx scripts/monitor-load-check.ts 1000 1 3 300000 --api-load
+```
+
 ## Deployment and future scaling
 
 Keep one application/feed instance initially. Legacy `evaluate` workers remain to drain jobs queued by the previous version; new work uses `evaluate-market`.

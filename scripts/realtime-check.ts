@@ -13,6 +13,11 @@ const db = new pg.Pool({
   connectionString: postgres.url,
   options: `-c search_path=${schema}`,
 });
+let queries = 0;
+db.on('connect', client => {
+  const query = client.query.bind(client);
+  client.query = ((...args: any[]) => { queries++; return (query as any)(...args); }) as typeof client.query;
+});
 let boss: Awaited<ReturnType<typeof startMonitor>> | undefined;
 try {
   await migrate(db);
@@ -56,16 +61,29 @@ try {
       { time: 300000, open: 99, high: 101, low: 98, close: 101, volume: 100 },
     ],
   });
+  const before = queries;
   const created = await evaluateTarget(db, target, fixture, 300000);
+  assert.ok(queries - before <= 14, 'fresh evaluation with a delivery uses at most 14 SQL statements');
   assert.equal(created?.length, 1);
   let duplicateFetches=0;
+  const duplicateQueries = queries;
   await evaluateTarget(db,target,async()=>{duplicateFetches++;return fixture();},300000);
   assert.equal(duplicateFetches,0,'a committed candle must not fetch market history again');
+  assert.ok(queries - duplicateQueries <= 2, 'duplicate evaluation reads rule/checkpoint and access only');
   assert.equal(
     (await db.query("SELECT status FROM deliveries WHERE id=$1", [created![0]]))
       .rows[0].status,
     "PENDING",
   );
+  let fetches = 0, release!: () => void;
+  const bothFetched = new Promise<void>(resolve => { release = resolve; });
+  await Promise.all([1, 2].map(() => evaluateTarget(db, target, async () => {
+    if (++fetches === 2) release();
+    await bothFetched;
+    return { '5m': [{ time: 600000, open: 99, high: 101, low: 98, close: 101, volume: 100 }] };
+  }, 600000)));
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM signals WHERE rule_id=$1', [rule])).rows[0].n, 1, 'concurrent evaluation retains one lifecycle/signal');
+  assert.equal((await db.query('SELECT state FROM monitor_checkpoints WHERE rule_id=$1', [rule])).rows[0].state.lastTime, 600000);
   await db.query("UPDATE rules SET spec=$1 WHERE id=$2", [
     {
       ...spec,
@@ -87,7 +105,7 @@ try {
     ).rows[0].status,
     "DELAYED",
   );
-  assert.equal((await db.query('SELECT state FROM monitor_checkpoints WHERE rule_id=$1',[rule])).rows[0].state.lastTime,300000,'lagging higher-frame data must not advance the checkpoint');
+  assert.equal((await db.query('SELECT state FROM monitor_checkpoints WHERE rule_id=$1',[rule])).rows[0].state.lastTime,600000,'lagging higher-frame data must not advance the checkpoint');
   await db.query("UPDATE rules SET active=false");
   boss = await startMonitor(db, postgres.url, queueSchema);
   const scan = await boss.send('scan');
