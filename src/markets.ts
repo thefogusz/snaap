@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type pg from "pg";
 import { randomUUID } from "node:crypto";
+import { transaction } from './data/db.js';
 import { ApiError } from "./errors.js";
 import { preview } from "./domain/preview.js";
 import { freshness, usedFrames as neededFrames } from "./domain/insights.js";
@@ -36,6 +37,48 @@ const ids = {
 const clients = new Map<string, any>(),
   cache = new Map<string, { at: number; data: Candle[] }>(),
   pending = new Map<string, Promise<Candle[]>>();
+export type TickerSnapshot = { exchange: keyof typeof ids; fetchedAt: number; items: ({ pair: string; last: number; quoteVolume: number; changePercent: number | null; providerTime: number | null } & Partial<InstrumentMetadata>)[] };
+const tickerCache = new Map<string, TickerSnapshot>(), tickerPending = new Map<string, Promise<TickerSnapshot>>();
+const tickerFailures = new Map<string, { at: number; error: ApiError }>();
+const publicTicker = z.object({ pair: z.string().min(3).max(80), last: z.number().finite().positive(), quoteVolume: z.number().finite().nonnegative(), changePercent: z.number().finite().nullable(), providerTime: z.number().finite().nonnegative().nullable() });
+export async function marketTickers(exchange: keyof typeof ids, market: string): Promise<TickerSnapshot> {
+  const key = exchange + market, hit = tickerCache.get(key);
+  if (hit && Date.now() - hit.fetchedAt < 60000) return hit;
+  const failure = tickerFailures.get(key);
+  if (failure && Date.now() - failure.at < 15000) throw failure.error;
+  if (tickerPending.has(key)) return tickerPending.get(key)!;
+  const work = (async () => {
+    try {
+      const client = marketClient(exchange, market);
+      await client.loadMarkets();
+      if (!client.has.fetchTickers) throw new Error('TICKERS_UNSUPPORTED');
+      reads.restRequests++;
+      const start = performance.now();
+      const raw = await client.fetchTickers().finally(() => { reads.restMs += performance.now() - start; });
+      const items: TickerSnapshot['items'] = [];
+      for (const [symbol, ticker] of Object.entries(raw) as [string, any][]) {
+        const m = client.markets[ticker?.symbol ?? symbol];
+        if (!m || m.active !== true || (market === 'Spot' ? !m.spot : !m.swap || !m.linear || m.settle !== 'USDT')) continue;
+        // MEXC swap riseFallRate is timezone/session-based; it is not a comparable rolling 24h change.
+        const changePercent = exchange === 'MEXC' && market !== 'Spot' ? null : ticker.percentage ?? null;
+        const parsed = publicTicker.safeParse({ pair: m.symbol.split(':')[0], last: ticker.last, quoteVolume: ticker.quoteVolume, changePercent, providerTime: ticker.timestamp ?? null });
+        if (parsed.success && (parsed.data.providerTime === null || Math.abs(Date.now() - parsed.data.providerTime) <= 300000)) items.push(parsed.data);
+      }
+      if (!items.length) throw new ApiError(502, 'TICKER_DATA_INCOMPARABLE', 'ไม่มีสถิติที่ตรวจสอบได้พร้อมวอลุ่มหน่วยเงินอ้างอิง');
+      const result = { exchange, fetchedAt: Date.now(), items };
+      tickerCache.set(key, result);
+      tickerFailures.delete(key);
+      return result;
+    } catch (error) {
+      const unavailable = error instanceof ApiError ? error : new ApiError(502, 'TICKERS_UNAVAILABLE', `โหลดสถิติ 24 ชั่วโมงจาก ${exchange} ไม่สำเร็จ`);
+      tickerFailures.set(key, { at: Date.now(), error: unavailable });
+      throw unavailable;
+    }
+  })();
+  // ponytail: twelve process-local snapshots; share storage if the API runs in multiple processes.
+  tickerPending.set(key, work);
+  try { return await work; } finally { tickerPending.delete(key); }
+}
 const reads = { cacheHits: 0, coalescedReads: 0, restRequests: 0, restMs: 0, streamUpdates: 0, unchangedStreamUpdates: 0 };
 export function marketStats() {
   return { ...reads, cachedHistories: cache.size, streamHistories: streamCandles.size };
@@ -310,6 +353,27 @@ export async function candles(
     pending.delete(key);
   }
 }
+const catalogObservations = new WeakMap<pg.Pool, Map<string, { at: number; work: Promise<void> }>>();
+export async function observeCatalog(db: pg.Pool, exchange: keyof typeof ids, market: string, catalog: Awaited<ReturnType<typeof instruments>>) {
+  let memo = catalogObservations.get(db);
+  if (!memo) { memo = new Map(); catalogObservations.set(db, memo); }
+  const key = exchange + market, previous = memo.get(key);
+  if (previous && previous.at >= catalog.at) return previous.work;
+  const symbols = catalog.items.filter(m => m.supported).map(m => m.symbol);
+  if (!symbols.length) return;
+  const work = (async () => {
+    await previous?.work;
+    await transaction(db, async client => {
+      const created = await client.query('INSERT INTO market_catalog_sources(exchange,market) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING exchange', [exchange, market]);
+      const scope = (await client.query('SELECT observed_at FROM market_catalog_sources WHERE exchange=$1 AND market=$2 FOR UPDATE', [exchange, market])).rows[0];
+      if (scope.observed_at && new Date(scope.observed_at).getTime() >= catalog.at) return;
+      await client.query('INSERT INTO market_listings(exchange,market,pair,first_observed_at,baseline) SELECT $1,$2,pair,$3,$4 FROM unnest($5::text[]) pair ON CONFLICT DO NOTHING', [exchange, market, new Date(catalog.at), !!created.rowCount, symbols]);
+      await client.query('UPDATE market_catalog_sources SET observed_at=$3 WHERE exchange=$1 AND market=$2', [exchange, market, new Date(catalog.at)]);
+    });
+  })();
+  const entry = { at: catalog.at, work }; memo.set(key, entry);
+  try { await work; } catch (error) { if (memo.get(key) === entry) memo.delete(key); throw error; }
+}
 const mergedCatalogs = new Map<string, { inputs: unknown[]; items: ReturnType<typeof mergeCatalogs> }>();
 export async function assetCatalog(market: string, refresh = false, read = instruments) {
   const exchanges = Object.keys(ids) as (keyof typeof ids)[];
@@ -409,11 +473,17 @@ export function registerMarkets(
         refresh: z.enum(["true", "false"]).optional(),
       })
       .parse(req.query);
-    return instruments(query.exchange, query.market, query.refresh === "true");
+    const catalog = await instruments(query.exchange, query.market, query.refresh === "true");
+    await observeCatalog(db, query.exchange, query.market, catalog);
+    return catalog;
   });
   app.get('/api/v1/assets', async req => {
     const query = z.object({ market: z.enum(['Spot', 'Perpetual Futures']), refresh: z.enum(['true', 'false']).optional() }).strict().parse(req.query);
-    return assetCatalog(query.market, query.refresh === 'true');
+    return assetCatalog(query.market, query.refresh === 'true', async (exchange, market, refresh) => {
+      const catalog = await instruments(exchange, market, refresh);
+      await observeCatalog(db, exchange, market, catalog);
+      return catalog;
+    });
   });
   app.post("/api/v1/preview", async (req) => {
     const input = z

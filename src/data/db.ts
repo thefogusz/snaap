@@ -96,6 +96,15 @@ export async function migrate(db: pg.Pool) {
       freshness jsonb NOT NULL, progress jsonb, PRIMARY KEY(rule_id,exchange,pair)
     );
   `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS market_catalog_sources (
+      exchange text, market text, observed_at timestamptz, PRIMARY KEY(exchange,market)
+    );
+    CREATE TABLE IF NOT EXISTS market_listings (
+      exchange text, market text, pair text, first_observed_at timestamptz NOT NULL, baseline boolean NOT NULL,
+      PRIMARY KEY(exchange,market,pair), FOREIGN KEY(exchange,market) REFERENCES market_catalog_sources
+    );
+  `);
   await migrateAdmin(db);
 }
 export async function transaction<T>(

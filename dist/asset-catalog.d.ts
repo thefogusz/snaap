@@ -1,6 +1,6 @@
 export type Exchange = 'Binance' | 'Bybit' | 'OKX' | 'Bitget' | 'MEXC' | 'Gate';
 export type MarketTarget = { exchange: Exchange; pair: string };
-export type InstrumentMetadata = { category: string; product: string; name: string };
+export type InstrumentMetadata = { category: string; product: string; name: string; meme?: boolean | null; listedAt?: number | null };
 export type Asset = InstrumentMetadata & { id: string; symbol: string; base: string; quote: string; market: string; sources: Exchange[] };
 export function instrumentMetadata(exchange: string, instrument: { base?: string; info?: any }, market: string): InstrumentMetadata;
 export const exchanges: Exchange[];

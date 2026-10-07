@@ -66,6 +66,10 @@ const db = database(fixtureUrl.toString());await migrate(db);
 let nativeCatalogs: Map<string, Awaited<ReturnType<typeof instruments>>['items']> | undefined;
 const seriesReads: string[] = [];
 const { app } = await buildApp(db, { local: true, harnessDependencies: {
+  candles: async (_exchange, _market, _pair, frame) => {
+    const step = frames[frame], end = Math.floor(Date.now()/step)*step;
+    return Array.from({length:240}, (_, i) => ({time:end-(239-i)*step,open:100+i,close:100+i,high:102+i,low:99+i,volume:10}));
+  },
   instruments: async (exchange, market, refresh) => {
     if (!nativeCatalogs) return instruments(exchange, market, refresh);
     const items = nativeCatalogs.get(exchange);
@@ -80,8 +84,9 @@ const { app } = await buildApp(db, { local: true, harnessDependencies: {
   },
 } });
 (ccxt as any).binance=class {
- has={fetchOHLCV:true};markets={'BTC/USDT':{symbol:'BTC/USDT',active:true,spot:true}};
+ has={fetchOHLCV:true,fetchTickers:true};markets={'BTC/USDT':{symbol:'BTC/USDT',active:true,spot:true},'ETH/USDT':{symbol:'ETH/USDT',active:true,spot:true}};
  async loadMarkets(){return this.markets;}
+ async fetchTickers(){return {'BTC/USDT':{symbol:'BTC/USDT',last:100,quoteVolume:1000000,percentage:5,timestamp:Date.now()},'ETH/USDT':{symbol:'ETH/USDT',last:50,quoteVolume:500000,percentage:-3,timestamp:Date.now()}};}
  async fetchOHLCV(_symbol:string,frame:keyof typeof frames,since:number,limit:number){
   const step=frames[frame],end=Math.floor(Date.now()/step)*step;
   return Array.from({length:600},(_,i)=>[end-(600-i)*step,100,102,98,100+i*.01,10]).filter(r=>r[0]>=since).slice(0,limit);
@@ -535,6 +540,50 @@ try {
   assert.equal((await runTool('inspect_setup_bar',{pair:'BTC/USDT',selectedBarTime:selectedTime},{draft:duplicateSpec,editorContext:{pair:'BTC/USDT',exchange:'Gate',chartTimeframe:'5m'}})).output.source.exchange,'Gate');
   nativeCatalogs=undefined;
   console.log('PASS native asset search, partial sources, canonical Gate targets, preserved mixed sources and source-specific inspection');
+  let researchRound = 0;
+  reply = async body => {
+    const tool = body.tools.find((t: any) => t.name === 'screen_assets');
+    assert.equal(tool.strict, true); assert.equal(tool.parameters.additionalProperties, false);
+    if (researchRound++ === 0) return toolResponse('screen_assets', { exchange: 'Binance', market: 'Spot', category:'crypto', theme:null, sort: 'volume', limit: 10, minQuoteVolume: 0, excludeBases: [], newSinceDays: 7 });
+    const output = JSON.parse(body.input.findLast((m: any) => m.type === 'function_call_output').output);
+    assert.equal(output.items[0].pair, 'BTC/USDT'); assert.equal(output.items[0].quoteVolume, 1000000);
+    return response('BTC/USDT จาก Binance มีวอลุ่ม 24 ชั่วโมง 1,000,000 USDT');
+  };
+  const research = await auditTurn('เอาคู่คริปโตวอลุ่มเยอะสุด 10 อันดับ', { draft: studioSpec });
+  assert.equal(research.statusCode, 200, research.body); assert.equal(research.json().draft, null);
+  const researchTrace = (await db.query('SELECT trace FROM agent_runs WHERE id=$1', [research.json().runId])).rows[0].trace;
+  assert.equal(researchTrace.some((t: any) => t.tool === 'propose_strategy'), false);
+  let bulkRound = 0;
+  const bulkSpec = { ...studioSpec, side: 'SPOT', pairs: ['BTC/USDT', 'ETH/USDT'], targets: [{ exchange: 'Binance', pair: 'BTC/USDT' }, { exchange: 'Binance', pair: 'ETH/USDT' }] };
+  reply = async body => {
+    if (bulkRound++ === 0) return toolResponse('screen_assets', { exchange: 'Binance', market: 'Spot', category:'crypto', theme:null, sort: 'volume', limit: 2, minQuoteVolume: 0, excludeBases: [], newSinceDays: 7 });
+    const output = JSON.parse(body.input.findLast((m: any) => m.type === 'function_call_output').output);
+    if (bulkRound === 2) { assert.deepEqual(output.items.map((r: any) => r.pair), bulkSpec.pairs); return toolResponse('propose_strategy', { spec: bulkSpec }); }
+    assert.equal(output.valid, true);
+    return response('เพิ่มคู่ในร่างแล้ว ยังไม่ได้เปิดใช้งาน');
+  };
+  const bulk = await auditTurn('เพิ่มคู่ Spot วอลุ่มสูงสุด 2 คู่จาก Binance ลงร่างนี้ โดยคงเงื่อนไขเดิม', { draft: studioSpec });
+  assert.equal(bulk.statusCode, 200, bulk.body);
+  assert.deepEqual(bulk.json().draft.pairs, bulkSpec.pairs); assert.deepEqual(bulk.json().draft.targets, bulkSpec.targets);
+  for (const key of ['entry', 'timeframe', 'destinations']) assert.deepEqual(bulk.json().draft[key], (studioSpec as any)[key]);
+  assert.equal(bulkRound, 3, 'batch addition needs screening and a validated proposal, not one lookup per pair');
+  let analysisRound = 0;
+  reply = async body => {
+    if (analysisRound++ === 0) return toolResponse('analyze_assets', { market: 'Spot', timeframe: '1h', targets: [{ exchange: 'Binance', pair: 'BTC/USDT' }] });
+    const output = JSON.parse(body.input.findLast((m: any) => m.type === 'function_call_output').output);
+    assert.equal(output.items[0].trend, 'UP'); assert.equal(output.timeframe, '1h');
+    return response('แท่งปิด 1h อยู่เหนือ EMA20 และ EMA50');
+  };
+  const analysis = await auditTurn('วิเคราะห์แนวโน้ม BTC/USDT 1h');
+  assert.equal(analysis.statusCode, 200, analysis.body); assert.equal(analysis.json().draft, null);
+  let unavailableRound = 0;
+  reply = async body => {
+    if (unavailableRound++ === 0) return toolResponse('screen_assets', { exchange: 'unsupported', market: 'Spot', category:'crypto', theme:null, sort: 'volume', limit: 10, minQuoteVolume: 0, excludeBases: [], newSinceDays: 7 });
+    assert.ok(JSON.parse(body.input.findLast((m: any) => m.type === 'function_call_output').output).error);
+    return response('ยังคัดกรองจากแหล่งนี้ไม่ได้');
+  };
+  assert.equal((await auditTurn('ลองคัดคู่เทรด')).statusCode, 200);
+  console.log('PASS strict market tools return sourced rankings and closed-candle analysis; discovery leaves drafts untouched and explicit batch additions preserve other fields');
   reply=async()=>response('ส่งร่างเข้า editor แล้วครับ');
   const beforeUnrequested=requests.length;
   const unrequested=await auditTurn('RSI คืออะไร',{draft:studioSpec});

@@ -19,7 +19,8 @@ import {
   signalSide,
 } from "../domain/engine.js";
 import { extendedIndicators } from "../../dist/indicator-catalog.js";
-import { strategySeries, instruments, assetCatalog } from "../markets.js";
+import { strategySeries, instruments, assetCatalog, marketTickers, candles } from "../markets.js";
+import { screenAssets, analyzeAssets, screenQuerySchema, analysisQuerySchema } from '../market-research.js';
 import { strategyTargets, exchanges, categories, mergeCatalogs } from '../../dist/asset-catalog.js';
 import { validateTargets } from '../markets.js';
 import { pricing, outputLimit } from "./budget.js";
@@ -39,6 +40,13 @@ const specialistSkills = {
   "risk-review": "risk-review.md",
   "research-validation": "research-validation.md",
 } as const;
+const marketTools = [
+  { name: 'screen_assets', description: 'Rank supported native USDT instruments by 24h quote turnover, gainers, losers or recent contract launches/first observations. Filter asset category and provider-confirmed meme theme. Stocks are exchange tokens/perpetual contracts, not cash-stock market rankings. No draft edits.', schema: screenQuerySchema },
+  { name: 'analyze_assets', description: 'Observe EMA20/50, RSI14, ATR14 and volume ratio on closed candles for at most ten exact exchange/pair targets. No future prediction or draft edits.', schema: analysisQuerySchema },
+].map(({ schema, ...tool }) => {
+  const { $schema, ...parameters } = z.toJSONSchema(schema);
+  return { type: 'function' as const, ...tool, parameters, strict: true };
+});
 const selection = z
   .object({
     ruleIds: z.array(z.string().uuid()).max(12).optional(),
@@ -50,6 +58,8 @@ const selection = z
 export type HarnessDependencies = {
   instruments?: typeof instruments;
   strategySeries?: typeof strategySeries;
+  marketTickers?: typeof marketTickers;
+  candles?: typeof candles;
 };
 export function registerHarness(
   app: FastifyInstance,
@@ -404,6 +414,7 @@ export function registerHarness(
         '\nTool execution is real only when you issue a function_call in THIS request. Describing a call in prose does not execute it. For every requested create/edit/remove operation with known fields, call propose_strategy with the complete updated spec before saying it was changed. destinations may be [] (in-app inbox is always available); never invent destination IDs. Minimal valid example: {"schemaVersion":2,"name":"Example","exchange":["Binance"],"market":"Spot","side":"SPOT","pairs":["BTC/USDT"],"timeframe":"1h","entry":{"kind":"COMPARE","op":">","left":{"kind":"PRICE","field":"close","timeframe":"1h"},"right":{"kind":"INDICATOR","name":"EMA","period":200,"timeframe":"1h"}},"stages":[],"cooldownBars":0,"destinations":[]}. GROUP nodes have kind GROUP, op AND/OR, children. Constants have only kind CONSTANT and value. Omit optional exit/cancel keys to remove them.';
       instructions += '\nLegacy MACD, MACD_SIGNAL and MACD_HIST use top-level period (fast), slow and signal; never put these in params. Example operand: {"kind":"INDICATOR","name":"MACD","period":12,"slow":26,"signal":9,"timeframe":"5m"}. EMA and RSI likewise use top-level period and timeframe without params.';
       instructions += '\nMulti-timeframe chart views: spec.timeframe is the signal evaluation clock; each PRICE or INDICATOR operand keeps its own timeframe. Preserve these independently when creating or editing a multi-timeframe setup. The editor offers chart buttons for native exchange timeframes from 5m through 1w above the chart and a ดูกราฟ shortcut inside each comparison; each view shows its own candles and indicators. chartTimeframe (and compatibility alias chartFrame) is a view-only preview request field, never a StrategySpec field or a propose_strategy/replay_strategy argument. A request to view another chart timeframe does not authorize editing spec.timeframe or any condition; explain the matching chart button without proposing a strategy change. replay_strategy always evaluates the current draft on spec.timeframe with all required operand timeframes; selecting a chart view cannot change signals. Do not claim you switched the UI chart because there is no chart-navigation tool.';
+      instructions += '\nMarket discovery: for current volume, movers, meme trading or new-listing questions use screen_assets, never remembered rankings. Defaults: exchange all; category crypto (stocks for equities/ETF); theme null (meme for meme requests); market Spot for crypto, Perpetual Futures for equities or memes unless explicitly specified or an applicable current draft market; sort volume or requested gainers/losers/new; limit 10; minQuoteVolume 0; excludeBases []; newSinceDays 7. Native meme taxonomy currently exists mainly on Binance/MEXC perpetuals: do not assume a Spot label exists or transfer a label by ticker to another venue. Each item retains category/product/exact source. Ranking takes one highest-turnover venue per compatible named pair, never summed worldwide coin or cash-stock turnover. Explain coverage, units, rolling 24h (not local calendar-day/session), retrieval time and unavailable sources briefly. Provider timestamps may be null; retrieval time is not source freshness proof. Unknown/incomparable data is excluded, never guessed. New PROVIDER_LAUNCH is provider contract launch/onboard time; FIRST_OBSERVED is Snaap observation after baseline, never token birth or a confirmed official listing date. Empty lists do not prove no listings or no meme trading. Use analyze_assets for technical observations on a shortlist of at most ten exact targets; ask for timeframe when absent. Preserve DELAYED/INSUFFICIENT/UNAVAILABLE, and do not infer future probability or claim the full catalog was analyzed. Screening does not edit or activate a setup. Successful screen items already verify source/pair support; no redundant find_instruments call is needed for the same targets. Only propose_strategy on an explicit draft edit request, preserving saved targets and other fields. Keep discovery replies concise: a table, short source/coverage note, no unrelated image/history discussion.';
       const maxOutputTokens = outputLimit(input.mode);
       let completed = false;
       let requireProposal = false;
@@ -435,6 +446,7 @@ export function registerHarness(
                 ? { tool_choice: "required" as const }
                 : {}),
             tools: [
+              ...marketTools,
               {
                 type: "function",
                 name: "read_skill",
@@ -625,6 +637,16 @@ export function registerHarness(
                 error:
                   "Instrument lookup unavailable. Do not guess; ask user or retry later.",
               };
+            }
+          }
+          if (call.name === 'screen_assets' || call.name === 'analyze_assets') {
+            try {
+              const query = JSON.parse(call.arguments);
+              result = call.name === 'screen_assets'
+                ? await screenAssets(db, query, { instruments: readInstruments, tickers: dependencies.marketTickers ?? marketTickers })
+                : await analyzeAssets(query, dependencies.candles ?? candles);
+            } catch {
+              result = { error: 'Market research unavailable or invalid request. Do not invent results, switch sources silently, or edit the draft. Ask or retry later.' };
             }
           }
           if (call.name === "propose_strategy") {

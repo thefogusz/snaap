@@ -27,7 +27,11 @@ export function instrumentMetadata(exchange, instrument, market) {
   }
   const product = market === 'Spot' ? (category === 'stocks' ? 'tokenized_stock' : 'spot') : (category === 'crypto' ? 'crypto_perpetual' : 'reference_perpetual');
   const name = info.fullName ?? info.baseCoinName ?? '';
-  return { category, product, name: typeof name === 'string' ? name.slice(0, 100) : '' };
+  const labels = exchange === 'Binance' ? info.underlyingSubType : exchange === 'MEXC' ? info.conceptPlate : null;
+  const meme = Array.isArray(labels) ? labels.some(label => typeof label === 'string' && /(?:^|-)meme$/i.test(label)) : null;
+  const launch = exchange === 'Binance' ? info.onboardDate : exchange === 'Bybit' ? info.launchTime : exchange === 'Gate' && info.launch_time ? Number(info.launch_time) * 1000 : null;
+  const listedAt = launch !== null && Number.isSafeInteger(Number(launch)) && Number(launch) > 0 ? Number(launch) : null;
+  return { category, product, name: typeof name === 'string' ? name.slice(0, 100) : '', meme, listedAt };
 }
 // Stable preference among available native feeds; never silently switch saved targets.
 export function mergeCatalogs(catalogs, market) {
