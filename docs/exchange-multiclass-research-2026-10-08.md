@@ -29,6 +29,14 @@ Live interval probes found Gate spot weekly bars start Monday, but perpetual wee
 
 One compact asset picker, aggregated across supported venues. Category tabs: crypto, stocks/ETF, FX, metals, commodities, indices and unclassified. Spot/Perpetual is a separate product filter, not an asset class. Search and product filters remain above a bounded scrolling results list; selection count and Apply stay visible below. Show an exact pair, short product label and source count per row. Source choice lives in an optional compact control; retain existing sources by default and assign a supported source only for new selections. Saved source changes require an explicit selection. No TradingView-only instruments enter this picker.
 
+## Implemented and checked
+
+Gate joins the five existing signal adapters. Provider-native classes feed `/assets`, with compatible class/product identities only, cached catalog merging and exact saved targets. Bitget V3 sometimes returns `symbolType:crypto` with `isRwa:YES` for EURUSD; such ambiguous entries stay unclassified instead of pretending to be cryptocurrencies. Source failures retain saved selections and block applying unavailable targets rather than silently dropping them.
+
+Snaap's Gate adapter fetched 500 contiguous current closed hourly bars each for BTC, TSLA, NVDA and XAU. Live Gate TSLA and XAU 5m WebSocket updates were received as open candles; the engine still requires a following bar before accepting a stream close. The real-data local browser rendered TSLA 15m and evaluated the existing EMA 200 Long setup, with native signal markers. This is sample integration verification, not an exhaustive audit of every listing or an activated notification test.
+
+Browser checks covered the compact picker, source dropdown, preserved multi-category selection, 320/768/1024/1440 viewport bounds and native stock chart. A 1,000-setup unit scenario retains one shared stream and independent monitor targets. Preview monitoring is disabled; public market prices are real, while harness tests use isolated schemas and mock LLM responses. No account keys, orders, deployment or production notifications are involved.
+
 ## Primary sources
 
 - [CCXT repository and manual](https://github.com/ccxt/ccxt) — installed unified REST/WebSocket adapters and open-source usage.

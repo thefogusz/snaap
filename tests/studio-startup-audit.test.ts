@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
+import { strategyTargets } from '../dist/asset-catalog.js';
 const source=await readFile(new URL('../dist/studio.js',import.meta.url),'utf8');
 const start=source.indexOf('let availabilityGeneration = 0;');
-const end=source.indexOf('document.addEventListener("setup-rendered", checkPairAvailability);',start);
+const end=source.indexOf("document.addEventListener('setup-rendered', checkPairAvailability);",start);
 assert.ok(start>=0&&end>start);
 function checker(draft:unknown,hint:unknown=null) {
   let calls=0;
-  const context=vm.createContext({state:{draft},panel:{querySelector:()=>hint},api:async()=>{calls++;return {items:[{supported:true,symbol:'BTC/USDT'}]};}});
+  const context=vm.createContext({state:{draft},assetToolsReady:Promise.resolve(),assetTools:{strategyTargets},panel:{querySelector:()=>hint},api:async()=>{calls++;return {items:[{supported:true,symbol:'BTC/USDT'}]};}});
   // Run the actual trusted production function in a test-only VM, without a browser or network.
   vm.runInContext(source.slice(start,end)+';globalThis.auditCheck=checkPairAvailability;',context);
   return {check:context.auditCheck as ()=>Promise<void>,calls:()=>calls};

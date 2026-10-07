@@ -4,7 +4,7 @@ import { mergeCatalogs, selectTargets, strategyTargets, instrumentMetadata } fro
 import { availableTimeframes } from '../dist/timeframes.js';
 import { strategySchema } from '../src/domain/engine.js';
 import { subscriptionsFor } from '../src/realtime.js';
-import { monitorBatches } from '../src/monitor-batches.js';
+import { monitorBatches, splitMonitorTargets } from '../src/monitor-batches.js';
 import { assetCatalog, validateTargets } from '../src/markets.js';
 
 test('native asset classes preserve stock tokens and do not confuse matching crypto tickers', () => {
@@ -67,4 +67,16 @@ test('catalog survives an unavailable venue and validation never invents cross-p
   await assert.rejects(validateTargets({ ...spec, targets: undefined }, read), /ไม่พร้อม/);
   await assert.rejects(assetCatalog('Spot', false, async () => { throw new Error('offline'); }), /ไม่สำเร็จ/);
   assert.throws(() => selectTargets(catalog.items, ['RARE/USDT'], 'auto', ['2h']));
+});
+
+test('Gate stock setups share one native stream while keeping independent monitor targets', () => {
+  const spec = strategySchema.parse({ schemaVersion: 2, name: 'Stock perpetual', exchange: ['Gate'], market: 'Perpetual Futures', side: 'LONG', pairs: ['TSLA/USDT'], targets: [{ exchange: 'Gate', pair: 'TSLA/USDT' }], timeframe: '1h', entry: { kind: 'COMPARE', op: '>', left: { kind: 'PRICE', field: 'close', timeframe: '1h' }, right: { kind: 'CONSTANT', value: 100 } }, stages: [], cooldownBars: 0, destinations: [] });
+  const rows = Array.from({ length: 1000 }, (_, i) => ({ id: String(i), revision: 1, spec }));
+  const subscriptions = subscriptionsFor(rows);
+  assert.equal(subscriptions.size, 1);
+  assert.equal([...subscriptions.values()][0].targets.length, 1000);
+  const batches = monitorBatches(rows, new Map());
+  assert.equal(batches.total, 1000);
+  assert.ok([...batches.groups.values()].flatMap(targets => splitMonitorTargets(targets)).every(targets => targets.length <= 32));
+  assert.equal(strategySchema.safeParse({ ...spec, timeframe: '1w' }).success, false);
 });

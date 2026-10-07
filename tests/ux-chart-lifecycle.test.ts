@@ -113,3 +113,21 @@ test('restored chart accepts a recovered multi-pair draft without changing its s
   assert.equal(f.rendered.length, 1);
   assert.deepEqual(f.context.state.draft.targets, targets);
 });
+
+test('mixed-venue chart requests the exact saved source for the selected pair', async () => {
+  const f = fixture();
+  const targets = [{ exchange: 'Binance', pair: 'BTC/USDT' }, { exchange: 'Gate', pair: 'TSLA/USDT' }];
+  f.context.state.draft = { ...f.context.state.draft, schemaVersion: 2, name: 'Mixed sources', market: 'Perpetual Futures', side: 'LONG', exchange: ['Binance', 'Gate'], pairs: ['BTC/USDT', 'TSLA/USDT'], targets,
+    entry: { kind: 'COMPARE', op: '>', left: { kind: 'PRICE', field: 'close', timeframe: '15m' }, right: { kind: 'CONSTANT', value: 100 } }, stages: [], cooldownBars: 0, destinations: [] };
+  f.context.chartPair = 'TSLA/USDT';
+  let called = false;
+  f.context.api = async (_path: string, _method: string, request: { spec: any }) => {
+    called = true;
+    assert.equal(strategySchema.safeParse(request.spec).success, true);
+    assert.deepEqual(Array.from(request.spec.exchange), ['Gate']);
+    return { candles: [] };
+  };
+  await f.context.updateChart();
+  assert.equal(called, true);
+  assert.deepEqual(f.context.state.draft.targets, targets);
+});

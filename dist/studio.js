@@ -284,9 +284,10 @@
     chartPickerWrap.hidden=state.draft.pairs.length<2;
     chartPicker.innerHTML=state.draft.pairs.map(pair=>`<option value="${esc(pair)}">${esc(pair)}</option>`).join("");chartPicker.value=chartPair;
     chartFrame ??= state.draft.timeframe;
+    const chartExchange = state.draft.targets?.find(target => target.pair === chartPair)?.exchange ?? state.draft.exchange[0];
     const chartOnly = !hasEntryCondition();
     // Supply a valid transport spec for market fetching only; never evaluate it.
-    const request = {spec:{...state.draft,pairs:[chartPair],targets:undefined,...(chartOnly ? {entry:{kind:'COMPARE',op:'>',left:{kind:'CONSTANT',value:0},right:{kind:'CONSTANT',value:0}},stages:[],exit:undefined,cancel:undefined,short:undefined,mirrorShort:undefined,side:state.draft.market==='Spot'?'SPOT':'LONG'} : {})},chartOnly,chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]};
+    const request = {spec:{...state.draft,exchange:[chartExchange],pairs:[chartPair],targets:undefined,...(chartOnly ? {entry:{kind:'COMPARE',op:'>',left:{kind:'CONSTANT',value:0},right:{kind:'CONSTANT',value:0}},stages:[],exit:undefined,cancel:undefined,short:undefined,mirrorShort:undefined,side:state.draft.market==='Spot'?'SPOT':'LONG'} : {})},chartOnly,chartTimeframe:chartFrame,indicators:window.SnaapStudio?.chartIndicators(chartFrame)??[]};
     const scope={conversation:state.conversation,workspace:state.workspaceId};
     const next = JSON.stringify({request:{spec:{...state.draft,pairs:[chartPair]},chartTimeframe:chartFrame,indicators:request.indicators},...scope});
     const draftAtRequest=JSON.stringify(state.draft);
@@ -301,8 +302,8 @@
     stop();
     studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
     studio.querySelector("[data-chart-title]").textContent =
-      `${state.draft.exchange.join(", ")} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
-    if (state.draft.exchange.length !== 1 || !state.draft.pairs.length) {
+      `${chartExchange} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
+    if (!chartExchange || !state.draft.pairs.length) {
       pendingKey = "";
       status.textContent = "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ";
       chartLoading(false);canvas.inert=false;canvas.style.opacity='1';
@@ -393,137 +394,33 @@
   async function checkPairAvailability() {
     const token = ++availabilityGeneration;
     if (!state.draft) return;
-    const exchange = state.draft.exchange[0], market = state.draft.market;
-    const pairs = [...state.draft.pairs];
-    const hint = panel.querySelector("[data-pair-availability]");
+    const spec = state.draft, hint = panel.querySelector('[data-pair-availability]');
     if (!hint) return;
-    hint.hidden = false;
-    hint.textContent = `กำลังตรวจคู่เทรดบน ${exchange} · ${market}…`;
+    hint.hidden = true;
     try {
-      const data = await api(`/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(market)}`);
+      await assetToolsReady;
+      const results = await Promise.all(spec.exchange.map(async exchange => ({ exchange, catalog: await api(`/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(spec.market)}`) })));
       if (token !== availabilityGeneration || !hint.isConnected) return;
-      const available = new Set(data.items.filter(m => m.supported).map(m => m.symbol));
-      const missing = pairs.filter(pair => !available.has(pair));
-      hint.textContent = missing.length
-        ? `${missing.join(", ")} ไม่มีหรือยังไม่รองรับบน ${exchange} · ${market} กรุณาเลือกคู่เทรดใหม่`
-        : "";
+      const missing = assetTools.strategyTargets(spec).filter(t => !results.find(r => r.exchange === t.exchange)?.catalog.items.some(m => m.supported && m.symbol === t.pair));
+      hint.textContent = missing.length ? 'คู่เทรดไม่พร้อม: ' + missing.map(t => t.pair + ' · ' + t.exchange).join(', ') : '';
       hint.hidden = !missing.length;
-      hint.style.color = missing.length ? "#f2bb70" : "";
-    } catch (error) {
-      if (token === availabilityGeneration && hint.isConnected) hint.textContent = error.message;
-    }
+    } catch (error) { if (token === availabilityGeneration && hint.isConnected) { hint.hidden = false; hint.textContent = error.message; } }
   }
-  document.addEventListener("setup-rendered", checkPairAvailability);
+  document.addEventListener('setup-rendered', checkPairAvailability);
   checkPairAvailability();
-
-  document.addEventListener("click", async (e) => {
-    if (!e.target.closest("[data-pair-picker]")) return;
-    if (!state.draft) return;
-    const exchange = state.draft.exchange[0], market = state.draft.market;
-    const source = `${exchange} / ${market}`;
-    const sourceMatches = () => state.draft&&state.draft.exchange.length === 1 && state.draft.exchange[0] === exchange && state.draft.market === market;
-    const dialog = document.createElement("dialog");
-    dialog.className = "conversation-dialog instrument-dialog";
-    dialog.setAttribute("aria-labelledby", "instrument-dialog-title");
-    let mode=state.draft.pairs.length>1?'multiple':'single',selected=new Set(state.draft.pairs),catalog=[];
-    let manualSelection=new Set(selected);
-    const maxPairs=state.me?.limits?.pairsPerSetup??10;
-    dialog.innerHTML = `<header><h2 id="instrument-dialog-title">เลือกคู่เทรด</h2><button type="button" aria-label="ปิด">${uiIcon("close")}</button></header><p>${esc(source)} · ใช้เงื่อนไขเดียวกัน แยกสัญญาณแต่ละคู่</p><div class="pair-selection-modes" role="group" aria-label="วิธีเลือกคู่เทรด"><button type="button" data-pair-mode="single">คู่เดียว</button><button type="button" data-pair-mode="multiple">หลายคู่</button><button type="button" data-pair-mode="all">ทั้งหมด</button></div><div class="pair-catalog-tools"><input type="search" aria-label="ค้นหาคู่เทรด" placeholder="ค้นหา BTC, ETH หรือชื่อคู่เทรด"><button type="button" class="secondary" data-refresh-catalog>ซิงก์ล่าสุด</button></div><p data-catalog-status role="status">กำลังโหลดจากกระดาน…</p><div class="instrument-list"></div><footer class="pair-selection-footer"><span data-selection-count></span><button type="button" class="text-button" data-clear-pairs>ล้างที่เลือก</button><button type="button" class="primary" data-apply-pairs disabled>ใช้คู่ที่เลือก</button></footer><p class="pair-selection-note">เลือกได้สูงสุด 10 คู่ต่อเซ็ตอัพ · เลือกทั้งหมดเร็ว ๆ นี้</p>`;
-    document.body.append(dialog);
-    dialog.showModal();
-    dialog.querySelector("header button").onclick = () => dialog.close();
-    dialog.onclose = () => {
-      dialog.remove();
-      panel.querySelector("[data-pair-picker]")?.focus();
-    };
-    const refreshButton = dialog.querySelector("[data-refresh-catalog]");
-    let loading = false,paint=()=>{};
-    const apply=dialog.querySelector('[data-apply-pairs]');
-    function selectionUI(){
-      dialog.querySelectorAll('[data-pair-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pairMode===mode)));
-      dialog.querySelector('[data-selection-count]').textContent=`เลือก ${selected.size.toLocaleString('th-TH')} คู่`;
-      apply.disabled=loading||!catalog.length||!selected.size||selected.size>maxPairs;
+  document.addEventListener('click', async event => {
+    const trigger = event.target.closest('[data-pair-picker]');
+    if (!trigger || !state.draft || document.querySelector('.asset-dialog')) return;
+    const original = JSON.stringify(state.draft), scope = { conversation: state.conversation, workspace: state.workspaceId };
+    const current = () => original === JSON.stringify(state.draft) && scope.conversation === state.conversation && scope.workspace === state.workspaceId;
+    const { pickAssets } = await import('./asset-picker.js');
+    if (!current()) return;
+    const choice = await pickAssets({ spec: structuredClone(state.draft), api, maxPairs: state.me?.limits?.pairsPerSetup ?? 10, current });
+    if (choice && current()) {
+      snapshot();
+      if (choice.market !== state.draft.market) { state.draft.side = choice.market === 'Spot' ? 'SPOT' : undefined; delete state.draft.short; delete state.draft.mirrorShort; }
+      Object.assign(state.draft, choice); state.replay = null; renderDesigner(); queueDraftSave();
     }
-    dialog.querySelectorAll('[data-pair-mode]').forEach(b=>b.onclick=()=>{
-      if(b.dataset.pairMode==='all'){toast('เร็ว ๆ นี้');return;}
-      const previousMode=mode;
-      mode=b.dataset.pairMode;
-      if(mode==='all'&&previousMode!=='all')manualSelection=new Set(selected);
-      if(previousMode==='all'&&mode!=='all')selected=new Set(manualSelection);
-      if(mode==='single')selected=new Set([...selected].slice(0,1));
-      if(mode==='all')selected=new Set(catalog.map(m=>m.symbol));
-      paint();selectionUI();
-    });
-    dialog.querySelector('[data-clear-pairs]').onclick=()=>{selected.clear();mode='multiple';paint();selectionUI();};
-    apply.onclick=()=>{
-      if(!selected.size||loading)return;
-      if(selected.size>maxPairs){toast(`เลือกได้สูงสุด ${maxPairs} คู่`);return;}
-      if(!sourceMatches()){dialog.querySelector('[data-catalog-status]').textContent='ตลาดเปลี่ยนแล้ว กรุณาเลือกใหม่';return;}
-      snapshot();state.draft.pairs=[...selected];delete state.draft.targets;state.replay=null;renderDesigner();queueDraftSave();dialog.close();
-    };
-    selectionUI();
-    refreshButton.onclick = () => load(true);
-    async function load(refresh = false) {
-      if (loading) return;
-      loading = true; refreshButton.disabled = true;selectionUI();
-      dialog.querySelector("input").oninput = null;
-      dialog.querySelector(".instrument-list").innerHTML = skeletonUI('rows', 'กำลังโหลดคู่เทรด…');
-      dialog.querySelector("[data-catalog-status]").textContent = "กำลังซิงก์จากกระดาน…";
-      try {
-        const data = await api(
-          `/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(market)}&refresh=${refresh}`,
-        );
-        if (!dialog.open) return;
-        catalog=data.items.filter(m=>m.supported);
-        const available=new Set(catalog.map(m=>m.symbol));selected=new Set([...selected].filter(pair=>available.has(pair)));
-        manualSelection=new Set([...manualSelection].filter(pair=>available.has(pair)));
-        if(mode==='all')selected=new Set(available);
-        paint = () => {
-          const q = dialog.querySelector("input").value.toUpperCase().trim();
-          const normalize = (value) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-          const matches = data.items.filter((m) => m.supported && normalize(m.symbol).includes(normalize(q)));
-          dialog.querySelector("[data-catalog-status]").textContent =
-            `${matches.length} คู่ · ${source} · ซิงก์ ${new Date(data.at).toLocaleTimeString("th-TH")} · แคชไม่เกิน 5 นาที`;
-          dialog.querySelector(".instrument-list").innerHTML =
-            matches
-              .slice(0, 100)
-              .map(
-                (m) =>
-                  `<button type="button" data-symbol="${esc(m.symbol)}" aria-pressed="${selected.has(m.symbol)}"><strong>${esc(m.symbol)}</strong><span>${selected.has(m.symbol)?"✓ เลือกแล้ว":"เลือก"}</span></button>`,
-              )
-              .join("") +
-            (matches.length > 100
-              ? "<p>แสดง 100 คู่แรก · พิมพ์เพิ่มเพื่อค้นหา</p>"
-              : (matches.length ? "" : "<p>ไม่พบคู่เทรดที่ตรงกับคำค้นในตลาดนี้</p>"));
-        };
-        dialog.querySelector("input").oninput = paint;
-        paint();selectionUI();
-      } catch (err) {
-        dialog.querySelector(".instrument-list").replaceChildren();
-        dialog.querySelector("[data-catalog-status]").textContent = err.message;
-        const retry = document.createElement("button");
-        retry.className = "secondary";
-        retry.textContent = "ลองใหม่";
-        retry.onclick = () => {
-          retry.remove();
-          load();
-        };
-        dialog.querySelector(".instrument-list").append(retry);
-      } finally { loading = false; refreshButton.disabled = false;selectionUI(); }
-    }
-    dialog.querySelector(".instrument-list").onclick = (e) => {
-      const b = e.target.closest("[data-symbol]");
-      if (!b || b.disabled) return;
-      if (!sourceMatches()) {
-        dialog.querySelector(".instrument-list").innerHTML = "";
-        dialog.querySelector("[data-catalog-status]").textContent = "กระดานหรือตลาดเปลี่ยนแล้ว กรุณาปิดและเลือกคู่เทรดใหม่";
-        return;
-      }
-      const pair=b.dataset.symbol;
-      if(mode==='single')selected=new Set([pair]);
-      else {if(mode==='all')mode='multiple';if(selected.has(pair))selected.delete(pair);else {if(selected.size>=maxPairs){toast(`เลือกได้สูงสุด ${maxPairs} คู่`);return;}selected.add(pair);}}
-      paint();selectionUI();
-    };
-    load();
+    panel.querySelector('[data-pair-picker]')?.focus();
   });
 })();
