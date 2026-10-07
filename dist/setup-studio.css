@@ -1048,15 +1048,15 @@ body:has(#view-home:not([hidden]) .workbench[data-tab="split"]:not([hidden]))
   .studio-timeframes button { min-width: 44px; }
   .design-panel .setting-guide-trigger { width: 44px; min-width: 44px; height: 44px !important; min-height: 44px !important; }
   .workbench[data-tab="split"] #conversation:has(#messages .chat-empty):not(:has(#messages .message)) {
-    justify-content: flex-start;
+    justify-content: safe center;
     padding: 12px;
-    gap: 8px;
-    overflow: hidden;
+    gap: 24px;
+    overflow-y: auto;
   }
   .workbench[data-tab="split"] #conversation:has(#messages .chat-empty):not(:has(#messages .message)) #messages {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
+    flex: 0 0 auto;
+    padding: 0;
+    overflow: visible;
   }
   .workbench[data-tab="split"] .chat-composer { max-height: none; flex: none; }
   .workbench .chat-composer #followup-input { min-height: 44px; max-height: 112px; font-size: 16px; }
