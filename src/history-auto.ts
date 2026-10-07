@@ -6,6 +6,27 @@ import { transaction } from "./data/db.js";
 import { mergeTrades } from "./domain/imports.js";
 
 const DAY = 86400000;
+/**
+ * Merge synced trades into the single accumulated API import for a connection. The target is
+ * the largest existing import (the accumulated one; manual snapshots are subsets of it), so
+ * repeated syncs keep writing the same row instead of copying every trade into whichever row
+ * currently has the oldest timestamp.
+ */
+export function accumulateImport<T extends { exchange: string; pair: string; id?: string; time: string }>(
+  prior: { id: string; rows: T[] }[],
+  incoming: T[],
+) {
+  const existing = prior.flatMap((x) => x.rows);
+  const added = mergeTrades(existing, incoming).rows;
+  const target = prior.reduce<(typeof prior)[number] | undefined>(
+    (best, row) => (!best || row.rows.length > best.rows.length ? row : best),
+    undefined,
+  );
+  const rows = mergeTrades([], existing)
+    .rows.concat(added)
+    .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+  return { targetId: target?.id, added, rows };
+}
 /** Durable checkpoints; the UI never needs to choose a symbol or a date. */
 export function automaticHistory(
   app: FastifyInstance,
@@ -46,14 +67,10 @@ export function automaticHistory(
         "SELECT id,rows FROM imports WHERE owner_id=$1 AND account_scope=$2 ORDER BY created_at",
         [row.owner_id, row.id],
       );
-      const existing = prior.rows.flatMap((x) => x.rows);
-      const added = mergeTrades(existing, incoming).rows;
+      const { targetId, added, rows: combined } = accumulateImport(prior.rows, incoming);
       // One accumulated API import avoids filling the context with sync snapshots.
       if (added.length || !prior.rowCount) {
-        const id = prior.rows[0]?.id ?? randomUUID();
-        const combined = mergeTrades([], existing)
-          .rows.concat(added)
-          .sort((a: any, b: any) => Date.parse(a.time) - Date.parse(b.time));
+        const id = targetId ?? randomUUID();
         if (prior.rowCount)
           await c.query(
             "UPDATE imports SET rows=$1,created_at=now() WHERE id=$2",
@@ -77,7 +94,7 @@ export function automaticHistory(
         }
         // Existing snapshots remain for compatibility; no user data is deleted.
       }
-      details.rows = mergeTrades([], existing).rows.length + added.length;
+      details.rows = combined.length;
       await c.query(
         "UPDATE exchange_connections SET status=$2,sync_details=$3,last_sync=CASE WHEN $2 IN ('SYNCED_WINDOW','PARTIAL_SYNC') THEN now() ELSE last_sync END WHERE id=$1",
         [row.id, status, JSON.stringify(details)],
