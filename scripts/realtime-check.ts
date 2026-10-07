@@ -56,9 +56,11 @@ try {
       { time: 300000, open: 99, high: 101, low: 98, close: 101, volume: 100 },
     ],
   });
-  const created = await evaluateTarget(db, target, fixture);
+  const created = await evaluateTarget(db, target, fixture, 300000);
   assert.equal(created?.length, 1);
-  assert.equal((await evaluateTarget(db, target, fixture))?.length, 0);
+  let duplicateFetches=0;
+  await evaluateTarget(db,target,async()=>{duplicateFetches++;return fixture();},300000);
+  assert.equal(duplicateFetches,0,'a committed candle must not fetch market history again');
   assert.equal(
     (await db.query("SELECT status FROM deliveries WHERE id=$1", [created![0]]))
       .rows[0].status,
@@ -76,27 +78,30 @@ try {
       { time: 4500000, open: 99, high: 101, low: 98, close: 101, volume: 100 },
     ],
     "1h": [{ time: 0, open: 99, high: 101, low: 98, close: 101, volume: 100 }],
-  }));
+  }), 4500000);
   assert.equal(
     (
       await db.query("SELECT status FROM monitor_status WHERE rule_id=$1", [
         rule,
       ])
     ).rows[0].status,
-    "DATA_UNAVAILABLE",
+    "DELAYED",
   );
+  assert.equal((await db.query('SELECT state FROM monitor_checkpoints WHERE rule_id=$1',[rule])).rows[0].state.lastTime,300000,'lagging higher-frame data must not advance the checkpoint');
   await db.query("UPDATE rules SET active=false");
   boss = await startMonitor(db, postgres.url, queueSchema);
+  const scan = await boss.send('scan');
   const start = Date.now();
   const id = await boss.send("deliver", { id: randomUUID() });
   while (Date.now() - start < 5000) {
     const job = await boss.getJobById("deliver", id!);
-    if (job?.state === "completed") break;
+    if (job?.state === "completed" && (await boss.getJobById('scan',scan!))?.state === 'completed') break;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert.equal((await boss.getJobById("deliver", id!))?.state, "completed");
+  assert.equal((await boss.getJobById('scan',scan!))?.state,'completed','real scan must emit capacity metrics and release its resources');
   console.log(
-    `PASS: post-commit delivery IDs, duplicate suppression, missing higher-frame guard, LISTEN/NOTIFY worker (${Date.now() - start}ms; not mobile delivery latency)`,
+    `PASS: post-commit delivery IDs, duplicate suppression, lagging higher-frame guard, LISTEN/NOTIFY worker (${Date.now() - start}ms; not mobile delivery latency)`,
   );
 } finally {
   await boss?.stop();

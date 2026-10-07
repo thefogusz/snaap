@@ -33,6 +33,13 @@ test('accepted TEMA 500 retains its requested warmup and yields finite evidence'
  const cached=await candles('Binance','Spot','AUDITTEMA/USDT','5m',2032);
  assert.equal(cached.length,series['5m']!.length,'WebSocket update must preserve REST warmup');
  assert.ok(Number.isFinite(value(spec.entry.kind==='COMPARE'?spec.entry.left:{kind:'CONSTANT',value:0},{'5m':cached},end)));
+ ingestClosedCandles('Binance','Spot','AUDITTEMA/USDT','5m',cached.slice(-1));
+ assert.equal(await candles('Binance','Spot','AUDITTEMA/USDT','5m',2032),cached,'an unchanged closed candle must preserve the shared history and indicator cache');
+ const correction={...cached.at(-1)!,close:cached.at(-1)!.close+.25};
+ ingestClosedCandles('Binance','Spot','AUDITTEMA/USDT','5m',[correction]);
+ const corrected=await candles('Binance','Spot','AUDITTEMA/USDT','5m',2032);
+ assert.notEqual(corrected,cached);
+ assert.equal(corrected.at(-1)!.close,correction.close,'a corrected closed candle must invalidate the shared history');
 });
 
 test('REST labels one full bar behind as DELAYED',async()=>{

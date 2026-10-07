@@ -1,4 +1,5 @@
 import ccxt from "ccxt";
+import { performance } from 'node:perf_hooks';
 import { mergeCatalogs, strategyTargets } from '../dist/asset-catalog.js';
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -33,6 +34,10 @@ const ids = {
 const clients = new Map<string, any>(),
   cache = new Map<string, { at: number; data: Candle[] }>(),
   pending = new Map<string, Promise<Candle[]>>();
+const reads = { cacheHits: 0, coalescedReads: 0, restRequests: 0, restMs: 0, streamUpdates: 0, unchangedStreamUpdates: 0 };
+export function marketStats() {
+  return { ...reads, cachedHistories: cache.size, streamHistories: streamCandles.size };
+}
 function marketClient(exchange: keyof typeof ids, market: string) {
   const key = exchange + market;
   if (clients.has(key)) return clients.get(key);
@@ -89,6 +94,15 @@ export function ingestClosedCandles(
 ) {
   if (!closed.length) return;
   const streamKey = candleKey(exchange, market, pair, frame);
+  reads.streamUpdates++;
+  const previous = streamCandles.get(streamKey);
+  const offset = (previous?.length ?? 0) - closed.length;
+  // Keep shared arrays (and their indicator caches) until a candle actually changes.
+  if (previous && offset >= 0 && closed.every((bar, i) => {
+    const old = previous[offset + i]!;
+    return bar.time === old.time && bar.open === old.open && bar.high === old.high &&
+      bar.low === old.low && bar.close === old.close && bar.volume === old.volume;
+  })) { reads.unchangedStreamUpdates++; return; }
   streamCandles.set(
     streamKey,
     mergeCandles(streamCandles.get(streamKey) ?? [], closed),
@@ -184,9 +198,11 @@ export async function candles(
     (bar, index, bars) =>
       index === 0 || bar.time - bars[index - 1].time === frames[frame],
   );
-  if (hit && completeHistory && hit.data.at(-1)!.time >= expectedClose)
+  if (hit && completeHistory && hit.data.at(-1)!.time >= expectedClose) {
+    reads.cacheHits++;
     return hit.data;
-  if (pending.has(key)) return pending.get(key)!;
+  }
+  if (pending.has(key)) { reads.coalescedReads++; return pending.get(key)!; }
   const work = (async () => {
     const clientKey = exchange + market;
     const client = marketClient(exchange, market);
@@ -217,12 +233,14 @@ export async function candles(
         : lastClosedBoundary(now, frame) -
           requiredBars * frames[frame];
       for (let page = 0; page < 8; page++) {
+        reads.restRequests++;
+        const started = performance.now();
         const batch: number[][] = await client.fetchOHLCV(
           symbol,
           frame,
           since,
           Math.min(300, requiredBars + 1),
-        );
+        ).finally(() => { reads.restMs += performance.now() - started; });
         if (!batch.length) break;
         raw.push(...batch);
         const next = Math.max(...batch.map((r) => r[0])) + frames[frame];

@@ -31,9 +31,23 @@ export async function userLimits(db: Queryable, owner: string) {
   const pro = !!(await db.query('SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()', [owner])).rowCount;
   return policy[pro ? 'pro' : 'free'];
 }
-export async function monitorQuotaBlocked(db: Queryable, owner: string) {
-  const { activeRules } = await userLimits(db, owner);
-  if (activeRules === null) return false;
-  const result = await db.query('SELECT count(*)::int AS n FROM rules WHERE owner_id=$1 AND active AND deleted_at IS NULL', [owner]);
-  return Number(result.rows[0].n) > activeRules;
+/** One policy/access snapshot per target; workers must recheck inside their commit transaction. */
+export async function monitorAccess(db: Queryable, owner: string) {
+  const row = (await db.query(`WITH settings AS (
+    SELECT coalesce((SELECT policy FROM usage_policy WHERE id=1),'{}'::jsonb) AS policy
+  ) SELECT policy,
+    EXISTS(SELECT 1 FROM user_restrictions WHERE owner_id=$1 AND scope IN ('all','automation')
+      AND (until_at IS NULL OR until_at>now())) AS restricted,
+    CASE WHEN policy->>'mode'='plans' THEN
+      EXISTS(SELECT 1 FROM entitlements WHERE owner_id=$1 AND pro_until>now()) ELSE false END AS pro,
+    CASE WHEN coalesce(policy->>'mode','unified')='unified'
+      AND coalesce(policy#>'{unified,activeRules}','null'::jsonb)='null'::jsonb THEN 0
+      ELSE (SELECT count(*)::int FROM rules WHERE owner_id=$1 AND active AND deleted_at IS NULL)
+    END AS active_count FROM settings`, [owner])).rows[0];
+  const policy = usagePolicySchema.parse(row.policy);
+  const limits = policy.mode === 'unified' ? policy.unified : policy[row.pro ? 'pro' : 'free'];
+  return {
+    restricted: row.restricted || !policy.services.automation,
+    quotaBlocked: limits.activeRules !== null && row.active_count > limits.activeRules,
+  };
 }

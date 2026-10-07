@@ -1,10 +1,10 @@
-import { monitorQuotaBlocked } from './usage-policy.js';
+import { monitorAccess } from './usage-policy.js';
 import { strategyTargets } from '../dist/asset-catalog.js';
-import { accessBlocked } from './access-controls.js';
 import { lastClosedBoundary } from "../dist/timeframes.js";
 import { PgBoss } from "pg-boss";
 import type pg from "pg";
 import { randomUUID } from "node:crypto";
+import { createHistogram, monitorEventLoopDelay } from 'node:perf_hooks';
 import { transaction } from "./data/db.js";
 import {
   advance,
@@ -20,7 +20,7 @@ import {
   evaluateEntry,
 } from "./domain/engine.js";
 import { seriesFreshness, progress, explain, explainEntry } from "./domain/insights.js";
-import { strategySeries, invalidateCandles } from "./markets.js";
+import { strategySeries, invalidateCandles, marketStats } from "./markets.js";
 import { deliver } from "./destinations.js";
 import { captureChart } from "./signal-chart.js";
 import { RealtimeMarkets } from "./realtime.js";
@@ -50,7 +50,8 @@ export async function evaluateTarget(
     )
   ).rows[0];
   if (!row) return;
-  if (await accessBlocked(db,row.owner_id,'automation')) {
+  const access = await monitorAccess(db, row.owner_id);
+  if (access.restricted) {
     await db.query("INSERT INTO monitor_status VALUES($1,$2,$3,'ADMIN_PAUSED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",[row.id,target.exchange,target.pair]);
     return;
   }
@@ -63,7 +64,7 @@ export async function evaluateTarget(
     )
   ).rows[0];
   const expectedClose =
-    lastClosedBoundary(Date.now(), spec.timeframe);
+    lastClosedBoundary(now ?? Date.now(), spec.timeframe);
   if (previous && Number(previous.state.lastTime) >= expectedClose) return;
   if (spec.market === "Perpetual Futures" && !spec.side) {
     await db.query(
@@ -76,8 +77,7 @@ export async function evaluateTarget(
     !strategyTargets(spec).some(t => t.exchange === target.exchange && t.pair === target.pair)
   )
     return;
-  const blocked = await monitorQuotaBlocked(db, row.owner_id);
-  if (blocked) {
+  if (access.quotaBlocked) {
     await db.query(
       "INSERT INTO monitor_status VALUES($1,$2,$3,'QUOTA_BLOCKED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
       [row.id, target.exchange, target.pair],
@@ -149,8 +149,9 @@ export async function evaluateTarget(
       )
     ).rows[0];
     if (!current) return;
-    if (await accessBlocked(c,current.owner_id,'automation')) return;
-    if (await monitorQuotaBlocked(c, current.owner_id)) {
+    const access = await monitorAccess(c, current.owner_id);
+    if (access.restricted) return;
+    if (access.quotaBlocked) {
       await c.query(
         "INSERT INTO monitor_status VALUES($1,$2,$3,'QUOTA_BLOCKED',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
         [row.id, target.exchange, target.pair],
@@ -293,6 +294,10 @@ export async function startMonitor(
   };
   boss.on("error", () => console.error("Queue operation failed"));
   await boss.start();
+  const queueWait = createHistogram(), batchDuration = createHistogram();
+  const eventLoop = monitorEventLoopDelay({ resolution: 20 });
+  eventLoop.enable();
+  let previousCpu = process.cpuUsage();
   await db.query("INSERT INTO service_heartbeats(service,checked_at) VALUES('monitor',now()) ON CONFLICT(service) DO UPDATE SET checked_at=now()");
   await boss.createQueue("scan");
   await boss.createQueue("evaluate", {
@@ -399,6 +404,8 @@ export async function startMonitor(
     ).rows;
     await enqueueDeliveries(pendingDeliveries.map((row) => row.id));
     await db.query("INSERT INTO service_heartbeats(service,checked_at) VALUES('monitor',now()) ON CONFLICT(service) DO UPDATE SET checked_at=now()");
+    const cpu = process.cpuUsage(previousCpu);
+    previousCpu = process.cpuUsage();
     console.info(
       JSON.stringify({
         event: "monitor_scan",
@@ -407,8 +414,16 @@ export async function startMonitor(
         queuedBatches,
         durationMs: Date.now() - scanStarted,
         ...measurements,
+        queueWaitP95Ms: queueWait.count ? queueWait.percentile(95) / 1e6 : 0,
+        batchDurationP95Ms: batchDuration.count ? batchDuration.percentile(95) / 1e6 : 0,
+        eventLoopP95Ms: eventLoop.count ? eventLoop.percentile(95) / 1e6 : 0,
+        nodeCpuMs: (cpu.user + cpu.system) / 1000,
+        nodeRssMB: process.memoryUsage().rss / 1024 / 1024,
+        dbPoolWaiting: db.waitingCount,
+        markets: marketStats(),
       }),
     );
+    queueWait.reset(); batchDuration.reset(); eventLoop.reset();
     measurements.batches =
       measurements.targets =
       measurements.maxWaitMs =
@@ -432,6 +447,8 @@ export async function startMonitor(
           await enqueueDeliveries(ids ?? []);
         }
         measurements.batches++;
+        queueWait.record(Math.max(1, Math.round((started - job.data.queuedAt) * 1e6)));
+        batchDuration.record(Math.max(1, Math.round((Date.now() - started) * 1e6)));
         measurements.targets += job.data.targets.length;
         measurements.maxWaitMs = Math.max(
           measurements.maxWaitMs,
@@ -473,6 +490,7 @@ export async function startMonitor(
   await boss.send("scan");
   const stop = boss.stop.bind(boss);
   boss.stop = async (...args: Parameters<typeof stop>) => {
+    eventLoop.disable();
     await realtime.stop();
     return stop(...args);
   };
