@@ -213,7 +213,7 @@
   function stop() {
     playing = false;
     cancelAnimationFrame(frame);
-    play.textContent = "▶";
+    play.querySelector("path").setAttribute("d", "M8 5v14l11-7Z");
     play.setAttribute(
       "aria-label",
       progress >= 0.99 ? "เล่นโฟลว์จำลองอีกครั้ง" : "เล่นโฟลว์จำลอง",
@@ -241,7 +241,7 @@
     if (progress >= 0.99) render(0);
     playing = true;
     previousTime = 0;
-    play.textContent = "Ⅱ";
+    play.querySelector("path").setAttribute("d", "M6 5h4v14H6zM14 5h4v14h-4z");
     play.setAttribute("aria-label", "หยุดโฟลว์จำลองชั่วคราว");
     frame = requestAnimationFrame(tick);
   }

@@ -685,8 +685,10 @@ h1 {
 .button:hover {
   transform: translateY(-3px);
 }
-.button > span {
-  font-size: 18px;
+.landing-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 footer {
   display: flex;
