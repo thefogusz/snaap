@@ -57,7 +57,7 @@ export function inspectSetupBar(
 ) {
   const data = preview(spec, series);
   const bar =
-    data.timeline.filter((b) => b.time <= selectedTime).at(-1) ?? null;
+    data.timeline.findLast((b) => b.time <= selectedTime) ?? null;
   const used = usedFrames(spec);
   return {
     selectedTime,
@@ -67,7 +67,7 @@ export function inspectSetupBar(
     references: used.map((timeframe) => {
       const candles = series[timeframe] ?? [];
       const reference = bar
-        ? candles.filter((c) => c.time <= bar.time).at(-1)
+        ? candles.findLast((c) => c.time <= bar.time)
         : undefined;
       return {
         timeframe,

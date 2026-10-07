@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { preview } from "../src/domain/preview.js";
+import { explain, explainEntry } from "../src/domain/insights.js";
 import {
   strategySchema,
   value,
   replay,
+  strategyBranches,
   type Candle,
 } from "../src/domain/engine.js";
 const spec = strategySchema.parse({
@@ -23,6 +25,31 @@ const spec = strategySchema.parse({
   stages: [],
   cooldownBars: 0,
   destinations: [],
+});
+
+test("preview explanations agree with entry, stage and signal-relative exit evidence", () => {
+  const compare = { kind: "COMPARE", op: ">", left: { kind: "PRICE", field: "close", timeframe: "15m" }, right: { kind: "CONSTANT", value: 99 } };
+  const setup = strategySchema.parse({
+    ...spec, market: "Perpetual Futures", side: "BOTH", mirrorShort: true,
+    entry: { kind: "GROUP", op: "AND", children: [compare, { ...compare, right: { kind: "CONSTANT", value: 101 } }] },
+    entryMatchPercent: 50,
+    stages: [{ withinBars: 3, condition: compare }],
+    exit: { ...compare, left: { kind: "ENTRY_RETURN" }, right: { kind: "CONSTANT", value: 1 } },
+    cancel: { ...compare, op: "<", right: { kind: "CONSTANT", value: 95 } },
+  });
+  const branches = strategyBranches(setup);
+  const result = preview(setup, { "15m": [100, 101, 104, 94].map((close, i) => bar((i + 1) * 900000, close)) });
+  assert.ok(result.events.some(event => event.kind === "ENTRY"));
+  assert.ok(result.events.some(event => event.kind === "EXIT"));
+  for (const row of result.timeline) row.branches.forEach((evidence, index) => {
+    const branch = branches[index];
+    assert.deepEqual(evidence.explanations, {
+      entry: explainEntry(branch, evidence.entry),
+      stages: branch.stages.map((stage, i) => explain(stage.condition, evidence.stages[i])),
+      exit: explain(branch.exit!, evidence.exit!),
+      cancel: explain(branch.cancel!, evidence.cancel!),
+    });
+  });
 });
 const bar = (time: number, close: number): Candle => ({
   time,
