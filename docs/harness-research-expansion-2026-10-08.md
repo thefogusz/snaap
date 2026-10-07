@@ -1,5 +1,7 @@
 # Harness research expansion — 8 October 2026
 
+This report records the state at `beff3d7`. DEX Screener, free DefiLlama TVL and bounded EVM transfers were subsequently connected; see [free connectors and current verification](free-harness-connectors-2026-10-08.md). The research-only decisions and browser limitation below describe the earlier slice.
+
 Implemented on `codex/exchange-market-research` in checkout `C:/Users/Gus/.codex/worktrees/5913/SNAAP`. This continues the native exchange-category implementation at `674936d`; fetched `origin/main` was `0864524` and an ancestor of the task branch. Screening restoration is commit `2bb7bbe`. The earlier discovery audit describes the state before this restoration, not the current capability.
 
 ## Available now

@@ -254,7 +254,8 @@
 .assistant-rich-text hr { margin:18px 0; border:0; border-top:1px solid var(--line); }
 .assistant-table { overflow-x:auto; margin:12px 0; }
 .assistant-table table { border-collapse:collapse; min-width:100%; font-size:13px; }
-.assistant-table :is(th,td) { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); }
+.assistant-table :is(th,td) { text-align:left; vertical-align:top; padding:8px 12px; border-bottom:1px solid var(--line); overflow-wrap:normal; }
+.assistant-table :is(a,code) { overflow-wrap:anywhere; }
 .runtime-error {
   color: var(--ink);
   border-left: 3px solid #bd713a;

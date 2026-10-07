@@ -1,20 +1,37 @@
 import { z } from 'zod';
 
-const hosts = ['nvidia.com','apple.com','microsoft.com','gate.com','api.gateio.ws','mempool.space'];
+const hosts = ['nvidia.com','apple.com','microsoft.com','gate.com','api.gateio.ws','mempool.space','api.dexscreener.com','api.llama.fi','ethereum-rpc.publicnode.com','mainnet.base.org','arb1.arbitrum.io'];
 function allowedURL(value: string, base?: string) {
   const url = new URL(value, base);
   if (url.protocol !== 'https:' || url.username || url.password || url.port || !hosts.some(host => url.hostname === host || url.hostname.endsWith('.'+host))) throw new Error('Unsupported evidence URL');
   return url;
 }
 const cached = new Map<string,{at:number;text:string}>(), pending = new Map<string,Promise<string>>(), failed = new Map<string,number>();
-export async function readPublicText(value: string, ttl: number) {
-  const url = allowedURL(value).href, hit = cached.get(url);
+const budgets = new Map<string,{at:number;count:number}>();
+function reserveRead(url:string) {
+  if(pending.size>=24) throw new Error('Evidence sources busy');
+  const host=new URL(url).hostname, ceiling=host==='api.dexscreener.com'?120:host==='api.llama.fi'?30:['ethereum-rpc.publicnode.com','mainnet.base.org','arb1.arbitrum.io'].includes(host)?60:0;
+  if(!ceiling) return;
+  // ponytail: conservative process-local cold-read budget; use a shared limiter with multiple replicas.
+  const now=Date.now(), previous=budgets.get(host), window=previous&&now-previous.at<60000?previous:{at:now,count:0};
+  if(window.count>=ceiling) throw new Error('Evidence source budget exhausted');
+  window.count++;budgets.set(host,window);
+}
+const rpcRead=z.object({method:z.enum(['eth_chainId','eth_getBlockByNumber','eth_getLogs','eth_call']),params:z.array(z.unknown()).max(3)}).strict();
+export type PublicRPCRead=z.infer<typeof rpcRead>;
+export async function readPublicText(value: string, ttl: number, rpc?:PublicRPCRead) {
+  const url = allowedURL(value).href;
+  const payload=rpc?{jsonrpc:'2.0',id:1,...rpcRead.parse(rpc)}:null;
+  if(payload&&!['https://ethereum-rpc.publicnode.com/','https://mainnet.base.org/','https://arb1.arbitrum.io/rpc'].includes(url)) throw new Error('Unsupported RPC endpoint');
+  const key=url+(payload?JSON.stringify(payload):''), hit = cached.get(key);
   if (hit && Date.now()-hit.at < ttl) return hit.text;
-  if (Date.now()-(failed.get(url)??0)<15000) throw new Error('Evidence source retry cooldown');
-  if (pending.has(url)) return pending.get(url)!;
+  if (Date.now()-(failed.get(key)??0)<15000) throw new Error('Evidence source retry cooldown');
+  if (pending.has(key)) return pending.get(key)!;
+  reserveRead(url);
   const work = (async () => {
     const gate = url === 'https://api.gateio.ws/api/v4/ann/list_article';
-    const response = await fetch(url, { signal:AbortSignal.timeout(12000), redirect:'error', ...(gate ? {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({page:'1',size:'50',language:'en'})} : {}) });
+    const body=payload??(gate?{page:'1',size:'50',language:'en'}:null);
+    const response = await fetch(url, { signal:AbortSignal.timeout(12000), redirect:'error', ...(body ? {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)} : {}) });
     if (!response.ok || !response.body) throw new Error('Evidence HTTP unavailable');
     const reader = response.body.getReader(), chunks:Uint8Array[]=[];
     let size = 0;
@@ -22,13 +39,14 @@ export async function readPublicText(value: string, ttl: number) {
       for (;;) {const {done,value}=await reader.read(); if(done) break; size+=value.length; if(size>1_500_000) throw new Error('Evidence response too large'); chunks.push(value);}
     } finally {await reader.cancel().catch(()=>{});}
     const text = Buffer.concat(chunks).toString('utf8');
+    if(payload){const packet=JSON.parse(text);if(packet?.jsonrpc!=='2.0'||packet.id!==1||packet.error||!Object.hasOwn(packet,'result')) throw new Error('Public RPC unavailable');}
     // ponytail: bounded process-local evidence cache; share storage when deploying multiple API processes.
     if (cached.size>=64) cached.delete(cached.keys().next().value!);
-    cached.set(url,{at:Date.now(),text}); failed.delete(url);
+    cached.set(key,{at:Date.now(),text}); failed.delete(key);
     return text;
   })();
-  pending.set(url,work);
-  try {return await work;} catch(error) {if(failed.size>=64) failed.delete(failed.keys().next().value!); failed.set(url,Date.now()); throw error;} finally {pending.delete(url);}
+  pending.set(key,work);
+  try {return await work;} catch(error) {if(failed.size>=64) failed.delete(failed.keys().next().value!); failed.set(key,Date.now()); throw error;} finally {pending.delete(key);}
 }
 function plain(value: string) {
   return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/&#(x[0-9a-f]+|\d+);/gi,(_,n)=>{const code=parseInt(n[0].toLowerCase()==='x'?n.slice(1):n,n[0].toLowerCase()==='x'?16:10);return code>0&&code<=0x10ffff?String.fromCodePoint(code):'';})

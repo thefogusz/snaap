@@ -4,6 +4,8 @@ Restored independently of the old cash-market UI. The existing authenticated Har
 
 Publisher news and bounded Bitcoin transfer tools are also available; see [research expansion, source coverage and real-model verification](harness-research-expansion-2026-10-08.md). These are research context, not new continuous signal operands.
 
+DEX pool research, free DeFi TVL and bounded Ethereum/Base/Arbitrum transfers are now connected too; see [free connectors, limits and verification](free-harness-connectors-2026-10-08.md). They do not expand supported signal targets.
+
 Screen query: exchange is all or Binance/Bybit/OKX/Bitget/MEXC/Gate; market is Spot or Perpetual Futures; category is crypto/stocks/forex/metals/commodities/indices/other or null; theme is meme or null; sort is volume/gainers/losers/new; limit 1–20; minQuoteVolume is nonnegative; excludeBases has at most 20 tickers; newSinceDays is 1–90. All fields are required by the model tool contract.
 
 Ranking covers supported USDT products and preserves one actual highest-turnover venue per compatible category/product/pair. Volumes are not summed and are not worldwide coin or NASDAQ cash-stock turnover. Similar tickers do not establish identical contracts or token addresses. Results carry partial-source statuses, filtered volume/change coverage, units and retrieval times. Missing or incomparable turnover and invalid/stale records are excluded. Source time can be null; retrieval time alone does not prove freshness. MEXC perpetual session changes remain withheld from rolling 24h movers; OKX perpetuals without quote turnover cannot participate.

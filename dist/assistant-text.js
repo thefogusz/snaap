@@ -1,19 +1,30 @@
 // Render the chat's common Markdown using DOM text nodes. Model output is never
 // interpreted as HTML, and images cannot trigger external requests.
-function inline(parent,text,depth=0) {
+function inline(parent,text,depth=0,allowLinks=true) {
   if(depth>5){parent.append(document.createTextNode(text));return;}
-  const pattern=/(`+)([^\n]*?)\1|\*\*([^\n]+?)\*\*|__([^\n]+?)__|\*([^*\n]+?)\*|(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}])|(!?)\[([^\]\n]+)\]\(([^\s)]+)\)/gu;
+  const pattern=/(`+)([^\n]*?)\1|\*\*([^\n]+?)\*\*|__([^\n]+?)__|\*([^*\n]+?)\*|(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}])|(!?)\[([^\]\n]+)\]\(([^\s)]+)\)|(https?:\/\/[^\s<>"'`]+)/gu;
   let offset=0;
   for(const match of text.matchAll(pattern)) {
     parent.append(document.createTextNode(text.slice(offset,match.index)));
     let node;
     if(match[1]){node=document.createElement('code');node.textContent=match[2];}
-    else if(match[3]||match[4]){node=document.createElement('strong');inline(node,match[3]??match[4],depth+1);}
-    else if(match[5]||match[6]){node=document.createElement('em');inline(node,match[5]??match[6],depth+1);}
+    else if(match[3]||match[4]){node=document.createElement('strong');inline(node,match[3]??match[4],depth+1,allowLinks);}
+    else if(match[5]||match[6]){node=document.createElement('em');inline(node,match[5]??match[6],depth+1,allowLinks);}
+    else if(match[10]){
+      const raw=match[10];let end=raw.length;
+      // Trim prose punctuation while preserving balanced parentheses in URL paths.
+      const unmatched=Object.fromEntries(['()', '[]', '{}'].map(([open,close])=>[close,raw.split(close).length-raw.split(open).length]));
+      while(end&&(/[.,;:!?]/.test(raw[end-1])||unmatched[raw[end-1]]>0)){if(unmatched[raw[end-1]]>0)unmatched[raw[end-1]]--;end--;}
+      const target=raw.slice(0,end),tail=raw.slice(end);
+      let url;try{url=new URL(target);}catch{}
+      node=document.createElement(allowLinks&&url&&!url.username&&!url.password?'a':'span');node.textContent=target;
+      if(node.tagName.toLowerCase()==='a'){node.href=url.href;node.target='_blank';node.rel='noopener noreferrer';}
+      parent.append(node,document.createTextNode(tail));offset=match.index+match[0].length;continue;
+    }
     else {
       let url;try{url=new URL(match[9]);}catch{}
-      if(!match[7]&&url&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password){
-        node=document.createElement('a');node.href=url.href;node.target='_blank';node.rel='noopener noreferrer';inline(node,match[8],depth+1);
+      if(allowLinks&&!match[7]&&url&&['http:','https:'].includes(url.protocol)&&!url.username&&!url.password){
+        node=document.createElement('a');node.href=url.href;node.target='_blank';node.rel='noopener noreferrer';inline(node,match[8],depth+1,false);
       }else{node=document.createElement('span');node.textContent=match[8];}
     }
     parent.append(node);offset=match.index+match[0].length;

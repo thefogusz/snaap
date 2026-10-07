@@ -45,6 +45,33 @@ test('public evidence reads coalesce, reject redirects/oversized bodies and do n
  } finally {globalThis.fetch=original;}
 });
 
+test('public RPC only permits read methods, isolates bodies in cache and rejects HTTP 200 RPC errors', async () => {
+ const original=globalThis.fetch;let calls=0;
+ try {
+  globalThis.fetch=async(_url,options)=>{calls++;const request=JSON.parse(options!.body as string);assert.equal(request.method,'eth_chainId');return Response.json({jsonrpc:'2.0',id:1,result:'0x1'});};
+  const reads=await Promise.all(Array.from({length:1000},()=>readPublicText('https://ethereum-rpc.publicnode.com/',60000,{method:'eth_chainId',params:[]})));
+  assert.equal(calls,1);assert.ok(reads.every(r=>JSON.parse(r).result==='0x1'));
+  await assert.rejects(readPublicText('https://ethereum-rpc.publicnode.com/',60000,{method:'eth_sendRawTransaction' as any,params:['secret']}));
+  await assert.rejects(readPublicText('https://www.apple.com/',60000,{method:'eth_chainId',params:[]}));
+  globalThis.fetch=async()=>{calls++;return Response.json({jsonrpc:'2.0',id:1,error:{code:-32000,message:'busy'}});};
+  await assert.rejects(readPublicText('https://ethereum-rpc.publicnode.com/',60000,{method:'eth_getBlockByNumber',params:['finalized',false]}));
+  assert.equal(calls,2);
+  await assert.rejects(readPublicText('https://ethereum-rpc.publicnode.com/',60000,{method:'eth_getBlockByNumber',params:['finalized',false]}));
+  assert.equal(calls,2,'failed RPC gets cooldown, not fabricated cached success');
+ } finally {globalThis.fetch=original;}
+});
+
+test('distinct DeFi queries stop at the conservative free-source cold-read budget', async () => {
+ const original=globalThis.fetch;let calls=0;
+ try {
+  globalThis.fetch=async()=>{calls++;return new Response('1');};
+  for(let i=0;i<30;i++) await readPublicText('https://api.llama.fi/tvl/budget-test-'+i,600000);
+  await assert.rejects(readPublicText('https://api.llama.fi/tvl/budget-overflow',600000));
+  assert.equal(calls,30);
+  assert.equal(await readPublicText('https://api.llama.fi/tvl/budget-test-0',600000),'1','cached data remains available when cold budget is exhausted');
+ } finally {globalThis.fetch=original;}
+});
+
 test('news returns original announcement links, partial coverage and unsupported symbols honestly', async () => {
  const now=Date.now();
  const query={topic:'all',symbols:[],hours:24,limit:10,query:''};

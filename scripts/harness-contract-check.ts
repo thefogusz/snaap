@@ -10,6 +10,7 @@ import { usagePolicySchema } from '../src/usage-policy.js';
 import { frames, strategySchema } from "../src/domain/engine.js";
 import { instruments, strategySeries } from '../src/markets.js';
 import { newsQuerySchema,chainQuerySchema } from '../src/research-evidence.js';
+import { readDexPools, readDefiContext, readEvmTransfers } from '../src/decentralized-research.js';
 const requests: any[] = [];
 let reply: (body: any) => Promise<any> = async () => response("complete");
 function response(text: string, status = "completed") {
@@ -67,6 +68,9 @@ const db = database(fixtureUrl.toString());await migrate(db);
 let nativeCatalogs: Map<string, Awaited<ReturnType<typeof instruments>>['items']> | undefined;
 const seriesReads: string[] = [];
 const { app } = await buildApp(db, { local: true, harnessDependencies: {
+  readDexPools:raw=>readDexPools(raw,async()=>JSON.stringify({pairs:[{chainId:'ethereum',dexId:'uniswap',pairAddress:'0x'+'a'.repeat(40),baseToken:{address:'0x'+'b'.repeat(40),name:'Token',symbol:'TOKEN'},quoteToken:{address:'0x'+'c'.repeat(40),name:'USD',symbol:'USD'},volume:{h24:200},liquidity:{usd:1000}}]})),
+  readDefiContext:raw=>readDefiContext(raw,async()=>JSON.stringify([{name:'Ethereum',tvl:1234}])),
+  readEvmTransfers:raw=>readEvmTransfers(raw,async(_chain,method)=>method==='eth_chainId'?'0x1':method==='eth_getBlockByNumber'?{number:'0x64',hash:'0x'+'d'.repeat(64),timestamp:'0x'+Math.floor(Date.now()/1000).toString(16)}:method==='eth_call'?'0x'+(6).toString(16).padStart(64,'0'):[]),
   readMarketNews: async raw => {
     newsQuerySchema.parse(raw);
     return {asOf:new Date().toISOString(),windowHours:24,sources:[{name:'NVIDIA Newsroom',symbol:'NVDA',status:'READY',feed:'https://nvidianews.nvidia.com/releases.xml'}],scope:'Publisher titles only',items:[{symbol:'NVDA',title:'Fixture headline',url:'https://nvidianews.nvidia.com/news/fixture',publishedAt:new Date().toISOString(),updatedAt:null,dateBasis:'PUBLISHED' as const,publishedAtBangkok:'2026-10-08T04:00:00+07:00',updatedAtBangkok:null}]};
@@ -601,7 +605,16 @@ try {
   assert.equal(chainEvidence.result.draft,null);
   assert.ok((await runTool('read_market_news',{topic:'stocks',symbols:['NVDA'],hours:24,limit:10000,query:''})).output.error);
   assert.ok((await runTool('read_chain_activity',{address:'http://localhost/secret',minBTC:100,limit:10})).output.error);
-  console.log('PASS news and chain tools preserve cited evidence, bounded scope and unchanged drafts; invalid arguments fail safely');
+  const dexEvidence=await runTool('read_dex_pools',{mode:'search',query:'TOKEN',chain:null,tokenAddress:null,sort:'volume',limit:10,minLiquidityUSD:0},{draft:studioSpec});
+  assert.equal(dexEvidence.output.items[0].signalSupported,false);assert.equal(dexEvidence.output.items[0].volume24hUSD,200);
+  assert.equal(dexEvidence.result.draft,null);
+  const defiEvidence=await runTool('read_defi_context',{protocolSlug:null,limit:10},{draft:studioSpec});
+  assert.equal(defiEvidence.output.items[0].tvlUSD,1234);assert.equal(defiEvidence.result.draft,null);
+  assert.ok((await runTool('read_defi_context',{protocolSlug:'../secret',limit:10})).output.error);
+  const evmEvidence=await runTool('read_evm_transfers',{chain:'ethereum',contractAddress:'0x'+'a'.repeat(40),walletAddress:null,blocks:20,limit:10,minRawAmount:'0'},{draft:studioSpec});
+  assert.equal(evmEvidence.output.window.finality,'finalized');assert.equal(evmEvidence.output.owner,'UNKNOWN');assert.equal(evmEvidence.result.draft,null);
+  assert.ok((await runTool('read_evm_transfers',{chain:'ethereum',contractAddress:'http://localhost',walletAddress:null,blocks:20,limit:10,minRawAmount:'0'})).output.error);
+  console.log('PASS news, BTC, DEX, DeFi and EVM tools preserve bounded evidence and unchanged drafts; invalid arguments fail safely');
   reply=async()=>response('ส่งร่างเข้า editor แล้วครับ');
   const beforeUnrequested=requests.length;
   const unrequested=await auditTurn('RSI คืออะไร',{draft:studioSpec});
