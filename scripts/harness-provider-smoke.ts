@@ -1,4 +1,4 @@
-// Real provider, isolated database schema, synthetic public candles. Never live monitoring.
+// Real provider, isolated database schema; native mode uses real public feeds. Never live monitoring.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -14,7 +14,8 @@ if (process.env.RUN_PAID_EVALS !== "true" || !process.env.AI_API_KEY)
   throw new Error(
     "Real provider smoke requires configured AI and RUN_PAID_EVALS=true (four standard turns maximum).",
   );
-(ccxt as any).binance = class {
+const native = process.env.HARNESS_SMOKE_NATIVE === 'true';
+if (!native) (ccxt as any).binance = class {
   has = { fetchOHLCV: true };
   markets = { "BTC/USDT": { symbol: "BTC/USDT", active: true, spot: true } };
   async loadMarkets() {
@@ -130,11 +131,11 @@ const run = async (
   };
   results.push(record);
   await writeFile(
-    process.env.HARNESS_SMOKE_READ_ONLY === "true"
+    native ? '.local/audit/harness-provider-native.json' : process.env.HARNESS_SMOKE_READ_ONLY === "true"
       ? ".local/audit/harness-provider-read-only.json"
       : ".local/audit/harness-provider-smoke.json",
     JSON.stringify(
-      { provider: "real", marketData: "synthetic fixtures", cases: results },
+      { provider: "real", model:process.env.AI_STANDARD_MODEL, marketData: native ? "real public exchange feeds" : "synthetic fixtures", cases: results },
       null,
       2,
     ),
@@ -149,6 +150,29 @@ try {
     hash(token),
     owner,
   ]);
+  if (native) {
+    await db.query("INSERT INTO entitlements(owner_id,pro_until) VALUES($1,now()+interval '1 day')",[owner]);
+    const gate = await run('Gate instrument lookup','ค้นหา TSLA/USDT บน Gate ในตลาด Perpetual Futures ด้วย find_instruments แล้วบอกหมวดและประเภทสัญญาจากข้อมูลจริง ไม่ต้องสร้างหรือแก้ร่าง');
+    assert.equal(gate.status,200);
+    assert.equal(gate.result.draft,null);
+    assert.ok(gate.trace.some((t:any)=>t.tool==='find_instruments'&&t.result.exchange==='Gate'&&t.result.items?.some((m:any)=>m.symbol==='TSLA/USDT'&&m.category==='stocks'&&m.sources.includes('Gate'))));
+    const stocks = await run('Asset category lookup','ค้นหา TSLA ในหมวดหุ้น / ETF ตลาด Perpetual Futures จากทุกแหล่งที่รองรับ ฉันไม่เลือกกระดาน ใช้ find_instruments แบบค้นหารวม แล้วสรุปแหล่งข้อมูลที่พบ ไม่ต้องสร้างหรือแก้ร่าง');
+    assert.equal(stocks.status,200);
+    assert.equal(stocks.result.draft,null);
+    assert.ok(stocks.trace.some((t:any)=>t.tool==='find_instruments'&&t.result.exchange===null&&t.result.category==='stocks'&&t.result.items?.some((m:any)=>m.symbol==='TSLA/USDT'&&m.sources.includes('Gate'))));
+    const mixed = {...draft, name:'Native sources', market:'Perpetual Futures',side:'LONG',exchange:['Binance','Gate'],pairs:['BTC/USDT','TSLA/USDT'],targets:[{exchange:'Binance',pair:'BTC/USDT'},{exchange:'Gate',pair:'TSLA/USDT'}]};
+    const edit = await run('Mixed-source name edit','เปลี่ยนชื่อเซ็ตอัพเป็น Native verified เท่านั้น คงเงื่อนไข คู่เทรดและแหล่งราคาของแต่ละคู่เดิมทั้งหมด ส่งร่างเข้า editor ไม่ต้อง replay',{draft:mixed});
+    assert.equal(edit.status,200);
+    assert.deepEqual(edit.result.draft,{...mixed,name:'Native verified'});
+    assert.deepEqual(edit.result.changes.map((change:any)=>change.path),['name']);
+    const selectedBarTime = Math.floor(Date.now()/frames['5m'])*frames['5m']-1;
+    const inspect = await run('Gate closed-bar inspection','ใช้ inspect_setup_bar ตรวจเงื่อนไข TSLA/USDT จาก Gate ณ แท่งที่เลือก แล้วสรุปค่าที่ใช้และเวลาแท่งปิด UTC จากหลักฐาน ห้ามแก้ร่าง',{draft:mixed,editorContext:{pair:'TSLA/USDT',exchange:'Gate',chartTimeframe:'1h',conditionPath:'entry',selectedBarTime}});
+    assert.equal(inspect.status,200);
+    assert.equal(inspect.result.draft,null);
+    assert.ok(inspect.trace.some((t:any)=>t.tool==='inspect_setup_bar'&&t.result.source?.exchange==='Gate'&&t.result.source.pair==='TSLA/USDT'&&t.result.bar?.time<=selectedBarTime));
+    assert.equal((await db.query('SELECT count(*) n FROM rules')).rows[0].n,'0');
+    console.log('PASS four real-model native turns: Gate search, asset categories, exact saved sources and Gate closed-bar evidence; no rule writes');
+  } else {
   const explain = await run(
     "read-only",
     "อธิบายว่าร่างนี้ใช้แท่ง 1H ร่วมกับรอบตรวจ 5m อย่างไร ไม่ต้องแก้เซ็ตอัพ",
@@ -234,6 +258,7 @@ try {
     console.log(
       "PASS four real-provider turns: read-only, MACD edit, MTF inspection, image reading; no saved or activated rules. Market evidence is fixture data.",
     );
+  }
   }
 } finally {
   await app.close();

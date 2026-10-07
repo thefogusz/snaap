@@ -36,3 +36,23 @@ test('studio context carries the same saved source as the visible native chart',
   assert.equal(sandbox.result.pair,'TSLA/USDT');
   assert.equal(sandbox.result.selectedBarTime,123);
 });
+
+test('unchanged draft saves keep chart evidence, while edits and conversation changes invalidate it', async () => {
+  const workbench = await readFile(new URL('../dist/workbench.js', import.meta.url), 'utf8');
+  const start=workbench.indexOf('function queueDraftSave() {'), end=workbench.indexOf('async function leaveDraft()',start);
+  let events=0;
+  const sandbox=vm.createContext({state:{draft:{name:'Native',pairs:['TSLA/USDT']},undo:[]},lastNotifiedDraft:'',conversationScope:()=>sandbox.scope,scope:'chat-one',persistRecovery:()=>{},document:{dispatchEvent:()=>events++},Event,panel:{querySelector:()=>null},hasEntryCondition:()=>true,draftDirty:()=>false,clearTimeout:()=>{},draftTimer:null,draftFlight:null,showDraftStatus:()=>{}});
+  vm.runInContext(workbench.slice(start,end)+';globalThis.save=queueDraftSave;',sandbox);
+  sandbox.save();assert.equal(events,1);
+  sandbox.save();assert.equal(events,1,'read-only chat must retain its selected closed-bar evidence');
+  sandbox.state.draft.name='Renamed';sandbox.save();assert.equal(events,2);
+  sandbox.scope='chat-two';sandbox.save();assert.equal(events,3,'never reuse another conversation evidence');
+});
+
+test('pair guidance uses canonical asset metadata rather than the multi-pair button label', async () => {
+  const guide=await readFile(new URL('../dist/guide-scenes.js',import.meta.url),'utf8');
+  const sandbox=vm.createContext({window:{},document:{querySelector:()=>({dataset:{pairExample:'TSLA/USDT'},textContent:'2 คู่เทรด เปลี่ยน ▾'})}});
+  vm.runInContext(guide,sandbox);
+  const markup=sandbox.window.SnaapGuideScenes.render('pair');
+  assert.match(markup,/TSLA/);assert.match(markup,/USDT/);assert.doesNotMatch(markup,/undefined|2 คู่เทรด/);
+});

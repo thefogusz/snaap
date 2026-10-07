@@ -92,7 +92,7 @@ window.SnaapGuideScenes = (() => {
       return scene(steps([row([...new Set([chosen,'Binance','Bybit'])].map(name=>`<div class="${name===chosen?'guide-value-selected':''}">${card('แหล่งข้อมูล',name)}</div>`)),card('แหล่งที่เลือก',chosen),card('ข้อมูลที่ใช้ตรวจ',`คู่เทรด + ราคา + แท่งจาก ${chosen}`)]),'แต่ละกระดานมีสมุดคำสั่งและข้อมูลราคาของตัวเอง');
     }
     if(key==='market')return scene(row([card('Spot','สินทรัพย์จริง ↔ เงินอ้างอิง'),card('Perpetual Futures','สัญญา · Long / Short')]),'ใน SNAAP ทั้งสองตลาดใช้ตั้งเงื่อนไขแจ้งเตือน');
-    if(key==='pair') {const pair=document.querySelector('[data-pair-picker]')?.textContent.replace('▾','').trim()||'BTC/USDT';const [base,quote]=pair.split('/');return scene(row([card('สินทรัพย์ที่ตรวจ',base),card('หน่วยของราคา',quote)]),`${base}/${quote}: ราคาของ ${base} ในหน่วย ${quote}`);}
+    if(key==='pair') {const pair=document.querySelector('[data-pair-picker]')?.dataset.pairExample||'BTC/USDT';const [base,quote]=pair.split('/');return scene(row([card('สินทรัพย์ตัวอย่าง',base),card('หน่วยของราคา',quote)]),`ตัวอย่าง ${base}/${quote}: ราคาของ ${base} ในหน่วย ${quote}`);}
     if(key==='timeframe'||key==='operandFrame')return timeframe(key,value||'15m');
     if(key==='field')return ohlc(value);
     if(key==='source') {
