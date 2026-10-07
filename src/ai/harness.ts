@@ -19,8 +19,8 @@ import {
   signalSide,
 } from "../domain/engine.js";
 import { extendedIndicators } from "../../dist/indicator-catalog.js";
-import { strategySeries, instruments } from "../markets.js";
-import { strategyTargets } from '../../dist/asset-catalog.js';
+import { strategySeries, instruments, assetCatalog } from "../markets.js";
+import { strategyTargets, exchanges, categories, mergeCatalogs } from '../../dist/asset-catalog.js';
 import { validateTargets } from '../markets.js';
 import { pricing, outputLimit } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
@@ -363,7 +363,7 @@ export function registerHarness(
         maxRetries: 0,
         timeout: 45000,
       });
-      let draft: unknown = null,
+      let draft: z.infer<typeof strategySchema> | null = null,
         text = "",
         toolCount = 0,
         cost = 0,
@@ -384,7 +384,7 @@ export function registerHarness(
       let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use one or more supported pairs (at most 10) from the supported exchanges. Preserve existing exact exchange/pair targets and all pairs unless the user asks to change them. For mixed venues, targets contains only verified exchange/pair combinations; exchange and pairs are their unique unions. Never invent a cross-product of venues and pairs or silently switch a saved price source. Stocks/ETF, FX, metals and commodities here are exchange-listed tokens or perpetual reference contracts, not cash-market exchange quotes. Use provider asset metadata; do not classify an unfamiliar ticker from its name. A setup has at most ${MAX_SETUP_CONDITIONS} leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than ${MAX_SETUP_CONDITIONS}; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
       instructions += '\nEntry flexibility: entryMatchPercent is the single optional integer 1..100 setting. Omit it or use 100 for the original strict entry. Lower values require at least ceil(entryUnitCount * entryMatchPercent / 100) matching units, with equal weight for every unit. Flatten AND entry groups; each OR or HOLD group stays one indivisible unit. The same percentage applies independently to Long and Short, including an independent short branch; do not combine matches from opposite sides. Preserve entryMatchPercent unless asked to change it. Waiting stages, exits, cancels and crossing timing remain strict. There are no required-condition flags, per-condition weights or crossing-window settings. Matching percent is not win probability. Tool proposals change a draft only; saving is separate.';
       const loadedSpecialists = new Set<string>();
-      instructions += "\nNative timeframes (minimum 5m, maximum 1w; no monthly or custom intervals): " + JSON.stringify(Object.fromEntries(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"].map(exchange => [exchange, {Spot: availableTimeframes([exchange], "Spot"), Futures: availableTimeframes([exchange], "Perpetual Futures")}])));
+      instructions += "\nNative timeframes (minimum 5m, maximum 1w; no monthly or custom intervals): " + JSON.stringify(Object.fromEntries(exchanges.map(exchange => [exchange, {Spot: availableTimeframes([exchange], "Spot"), Futures: availableTimeframes([exchange], "Perpetual Futures")}])));
       instructions +=
         "\nEditor focus (navigation only, not market evidence): " + JSON.stringify(input.editorContext ?? null) +
         ". Changing the visible chart timeframe does not change the strategy evaluation timeframe. Use inspect_setup_bar for evidence at a selected candle. Do not infer TRUE/FALSE or prices from the editor focus. Preserve all unrequested fields and never activate a setup.";
@@ -457,21 +457,22 @@ export function registerHarness(
                 type: "function",
                 name: "find_instruments",
                 description:
-                  "Find real supported exchange instruments before choosing a pair. Never invent symbols.",
+                  "Find supported native instruments by ticker or name, filtered by asset category. Use exchange:null to search all sources when the user has no venue preference, category:null for all categories. Use only returned sources; products are exchange tokens/contracts, not cash-market quotes. Never invent symbols.",
                 parameters: {
                   type: "object",
                   properties: {
                     exchange: {
-                      type: "string",
-                      enum: ["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"],
+                      type: ["string", "null"],
+                      enum: [...exchanges, null],
                     },
                     market: {
                       type: "string",
                       enum: ["Spot", "Perpetual Futures"],
                     },
                     query: { type: "string" },
+                    category: { type: ["string", "null"], enum: [...categories.map(([id]) => id), null] },
                   },
-                  required: ["exchange", "market", "query"],
+                  required: ["exchange", "market", "query", "category"],
                   additionalProperties: false,
                 },
                 strict: true,
@@ -596,29 +597,26 @@ export function registerHarness(
             try {
               const q = z
                 .object({
-                  exchange: z.enum([
-                    "Binance",
-                    "Bybit",
-                    "OKX",
-                    "Bitget",
-                    "MEXC",
-                  ]),
+                  exchange: z.enum(exchanges).nullish(),
+                  category: z.enum(categories.map(([id]) => id)).nullish(),
                   market: z.enum(["Spot", "Perpetual Futures"]),
                   query: z.string().max(60),
                 })
                 .parse(JSON.parse(call.arguments));
-              const catalog = await readInstruments(q.exchange, q.market);
+              const catalog = q.exchange
+                ? await readInstruments(q.exchange, q.market).then(c => ({ at:c.at, items:mergeCatalogs([{exchange:q.exchange!,items:c.items}],q.market), sources:[{exchange:q.exchange,status:'READY'}] }))
+                : await assetCatalog(q.market, false, readInstruments);
               result = {
-                exchange: q.exchange,
+                exchange: q.exchange ?? null,
+                category: q.category ?? null,
                 market: q.market,
                 asOf: new Date(catalog.at).toISOString(),
+                sources: catalog.sources,
                 items: catalog.items
                   .filter(
                     (m) =>
-                      m.supported &&
-                      instrumentSearch(m.symbol).includes(
-                        instrumentSearch(q.query),
-                      ),
+                      (!q.category || m.category === q.category) &&
+                      [m.symbol, m.name].some(value => instrumentSearch(value).includes(instrumentSearch(q.query))),
                   )
                   .slice(0, 30),
               };
@@ -630,9 +628,10 @@ export function registerHarness(
             }
           }
           if (call.name === "propose_strategy") {
+            const previous = draft ?? input.draft;
             draft = null;
             try {
-              const candidate = toolSpec(call.arguments),
+              const candidate = toolSpec(call.arguments, previous),
                 checked = strategySchema.safeParse(candidate);
               if (checked.success) {
                 draft = null;
@@ -680,12 +679,13 @@ export function registerHarness(
             try {
               const args = z.object({ pair: z.string(), selectedBarTime: z.number().int().nonnegative() }).strict().parse(JSON.parse(call.arguments));
               const spec = strategySchema.parse(draft ?? input.draft);
-              const target = strategyTargets(spec).find(t => t.pair === args.pair && (!input.editorContext?.exchange || t.exchange === input.editorContext.exchange));
-              if (!target) throw new Error('Invalid target');
-              const series = await strategySeries(spec, target.exchange, args.pair);
+              const targets = strategyTargets(spec).filter(t => t.pair === args.pair && (!input.editorContext?.exchange || t.exchange === input.editorContext.exchange));
+              if (targets.length !== 1) throw new Error('Specify one saved price source');
+              const target = targets[0];
+              const series = await readSeries(spec, target.exchange, args.pair);
               result = { source: { exchange: target.exchange, market: spec.market, pair: args.pair, asOf: new Date().toISOString() }, ...inspectSetupBar(spec, series, args.selectedBarTime) };
             } catch {
-              result = { error: "Cannot inspect selected bar; current draft, supported pair and closed market history are required. Do not invent evidence." };
+              result = { error: "Cannot inspect selected bar; current draft, one explicit saved price source for duplicate pairs, and closed market history are required. Do not invent evidence." };
             }
           }
           if (call.name === "replay_strategy") {

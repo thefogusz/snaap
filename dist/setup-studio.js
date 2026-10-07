@@ -4,6 +4,7 @@
     await import("./studio-model.js");
   await indicatorCatalogReady;
   await timeframeToolsReady;
+  await assetToolsReady;
   const { basicIndicators, basicByName } = await import('./basic-indicators.js');
   const chartPane = setupPane.querySelector(".setup-studio");
   const sessions = new Map();
@@ -289,6 +290,7 @@
       focusPath = null;
     return {
       pair,
+      exchange: assetTools.strategyTargets(state.draft).find(target => target.pair === pair)?.exchange,
       chartTimeframe: view.frame,
       ...(focusPath ? { conditionPath: focusPath } : {}),
       ...(window.SnaapChart.selectedTime != null

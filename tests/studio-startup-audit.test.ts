@@ -25,3 +25,14 @@ test('visible designer resolves pair availability using the selected draft',asyn
   const fixture=checker({exchange:['Binance'],market:'Spot',pairs:['BTC/USDT']},hint);
   await fixture.check();assert.equal(fixture.calls(),1);assert.equal(hint.textContent,'');assert.equal(hint.hidden,true);
 });
+
+test('studio context carries the same saved source as the visible native chart', async () => {
+  const studio = await readFile(new URL('../dist/setup-studio.js', import.meta.url), 'utf8');
+  const start = studio.indexOf('  function context() {'), end = studio.indexOf('  window.SnaapStudio =', start);
+  const draft = { exchange:['Binance','Gate'], pairs:['BTC/USDT','TSLA/USDT'], targets:[{exchange:'Binance',pair:'BTC/USDT'},{exchange:'Gate',pair:'TSLA/USDT'}] };
+  const sandbox = vm.createContext({ state:{draft}, window:{SnaapChart:{pair:'TSLA/USDT',selectedTime:123}}, hasEntryCondition:()=>true, session:()=>{}, view:{frame:'5m'}, focusPath:null, assetTools:{strategyTargets} });
+  vm.runInContext(studio.slice(start,end)+';globalThis.result=context();',sandbox);
+  assert.equal(sandbox.result.exchange,'Gate');
+  assert.equal(sandbox.result.pair,'TSLA/USDT');
+  assert.equal(sandbox.result.selectedBarTime,123);
+});

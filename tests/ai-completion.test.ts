@@ -29,3 +29,21 @@ test('compatible provider spec wrapper is normalized without inventing fields',(
 test('configured reasoning/output limit remains independent of request cost',()=>{
   assert.equal(outputLimit('standard'),6000);
 });
+
+test('Gate search and native perpetual targets use the same canonical pair identity', () => {
+  assert.equal(instrumentSearch('Gate TSLA/USDT perpetual'), 'TSLAUSDT');
+  const spec = toolSpec(JSON.stringify({ spec: { market: 'Perpetual Futures', pairs: ['TSLA/USDT:USDT'], targets: [{ exchange: 'Gate', pair: 'TSLA/USDT:USDT' }] } }));
+  assert.deepEqual(spec.pairs, ['TSLA/USDT']);
+  assert.deepEqual(spec.targets, [{ exchange: 'Gate', pair: 'TSLA/USDT' }]);
+});
+
+test('condition-only proposals retain exact sources when the model omits targets', () => {
+  const previous = { market: 'Perpetual Futures', exchange: ['Binance', 'Gate'], pairs: ['BTC/USDT', 'TSLA/USDT'], targets: [{ exchange: 'Binance', pair: 'BTC/USDT' }, { exchange: 'Gate', pair: 'TSLA/USDT' }] };
+  const { targets, ...withoutTargets } = previous;
+  const revised = { ...withoutTargets, pairs: [...previous.pairs].reverse(), name: 'Renamed' };
+  assert.deepEqual(toolSpec(JSON.stringify({spec:revised}), previous).targets, targets);
+  assert.equal(toolSpec(JSON.stringify({spec:{...revised,market:'Spot'}}), previous).targets, undefined);
+  assert.equal(toolSpec(JSON.stringify({spec:{...revised,pairs:['BTC/USDT']}}), previous).targets, undefined);
+  const explicit = [{ exchange: 'Gate', pair: 'BTC/USDT' }, { exchange: 'Gate', pair: 'TSLA/USDT' }];
+  assert.deepEqual(toolSpec(JSON.stringify({spec:{...revised,targets:explicit}}), previous).targets, explicit);
+});

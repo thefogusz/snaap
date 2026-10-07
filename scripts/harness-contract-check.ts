@@ -8,6 +8,7 @@ import { database, migrate } from "../src/data/db.js";
 import { buildApp, hash } from "../src/api.js";
 import { usagePolicySchema } from '../src/usage-policy.js';
 import { frames, strategySchema } from "../src/domain/engine.js";
+import { instruments, strategySeries } from '../src/markets.js';
 const requests: any[] = [];
 let reply: (body: any) => Promise<any> = async () => response("complete");
 function response(text: string, status = "completed") {
@@ -62,7 +63,22 @@ const admin = database(pg.url), schema = "harness_contract_" + Date.now();
 await admin.query(`CREATE SCHEMA "${schema}"`);
 const fixtureUrl = new URL(pg.url);fixtureUrl.searchParams.set('options','-c search_path='+schema);
 const db = database(fixtureUrl.toString());await migrate(db);
-const { app } = await buildApp(db, { local: true });
+let nativeCatalogs: Map<string, Awaited<ReturnType<typeof instruments>>['items']> | undefined;
+const seriesReads: string[] = [];
+const { app } = await buildApp(db, { local: true, harnessDependencies: {
+  instruments: async (exchange, market, refresh) => {
+    if (!nativeCatalogs) return instruments(exchange, market, refresh);
+    const items = nativeCatalogs.get(exchange);
+    if (!items) throw new Error('fixture source offline');
+    return { at: Date.now(), items };
+  },
+  strategySeries: async (spec, exchange, pair, extra) => {
+    if (!nativeCatalogs) return strategySeries(spec, exchange, pair, extra);
+    seriesReads.push(`${exchange}:${pair}`);
+    const step = frames[spec.timeframe], end = Math.floor(Date.now()/step)*step;
+    return { [spec.timeframe]: Array.from({length:40}, (_, i) => ({time:end-(40-i)*step, open:300, high:302, low:298, close:301, volume:10})) };
+  },
+} });
 (ccxt as any).binance=class {
  has={fetchOHLCV:true};markets={'BTC/USDT':{symbol:'BTC/USDT',active:true,spot:true}};
  async loadMarkets(){return this.markets;}
@@ -474,6 +490,51 @@ try {
   const toolResponse=(name:string,args:unknown)=>{
     const r=response('');r.output=[{id:'fc_'+randomUUID(),type:'function_call',call_id:'call_'+randomUUID(),name,arguments:JSON.stringify(args)}] as any;return r;
   };
+  nativeCatalogs = new Map([
+    ['Binance', [{symbol:'BTC/USDT',supported:true,category:'crypto',product:'crypto_perpetual',name:'Bitcoin'}]],
+    ['Gate', [{symbol:'TSLA/USDT',supported:true,category:'stocks',product:'reference_perpetual',name:'Tesla'}, {symbol:'BTC/USDT',supported:true,category:'crypto',product:'crypto_perpetual',name:'Bitcoin'}]],
+    ['MEXC', [{symbol:'FAKE/USDT',supported:false,category:'stocks',product:'reference_perpetual',name:'Tesla'}]],
+  ]);
+  const runTool = async (name:string, args:unknown, extra:any={}) => {
+    let output:any;
+    reply=async body=>{
+      assert.ok(!body.instructions.includes('Use one exchange and one or more supported pairs (maximum 5000)'));
+      const message=body.input.findLast((m:any)=>m.type==='function_call_output');
+      if (!message) return toolResponse(name,args);
+      output=JSON.parse(message.output);return response('ตรวจสอบข้อมูลแล้ว');
+    };
+    const result=await auditTurn('ตรวจสอบข้อมูล',extra);
+    assert.equal(result.statusCode,200,result.body);
+    return { output, result:result.json() };
+  };
+  const gateLookup=await runTool('find_instruments',{exchange:'Gate',market:'Perpetual Futures',query:'Gate TSLA',category:'stocks'});
+  assert.equal(gateLookup.output.items[0].symbol,'TSLA/USDT');
+  const globalLookup=await runTool('find_instruments',{exchange:null,market:'Perpetual Futures',query:'Tesla',category:'stocks'});
+  assert.equal(globalLookup.output.items.length,1);
+  assert.deepEqual(globalLookup.output.items[0].sources,['Gate']);
+  assert.equal(globalLookup.output.items[0].product,'reference_perpetual');
+  assert.equal(globalLookup.output.sources.find((s:any)=>s.exchange==='OKX').status,'UNAVAILABLE');
+  const mixedSpec={...studioSpec,market:'Perpetual Futures',side:'LONG',exchange:['Binance','Gate'],pairs:['BTC/USDT','TSLA/USDT'],targets:[{exchange:'Binance',pair:'BTC/USDT'},{exchange:'Gate',pair:'TSLA/USDT'}]};
+  const {targets:exactTargets,...omittedTargets}=mixedSpec;
+  const preserved=await runTool('propose_strategy',{spec:{...omittedTargets,name:'Renamed'}},{draft:mixedSpec});
+  assert.equal(preserved.output.valid,true);
+  assert.deepEqual(preserved.result.draft.targets,exactTargets);
+  assert.deepEqual(preserved.result.changes.map((change:any)=>change.path),['name']);
+  const canonical=await runTool('propose_strategy',{spec:{...mixedSpec,exchange:['Gate'],pairs:['TSLA/USDT:USDT'],targets:[{exchange:'Gate',pair:'TSLA/USDT:USDT'}]}},{draft:mixedSpec});
+  assert.equal(canonical.output.valid,true);
+  assert.deepEqual(canonical.result.draft.targets,[{exchange:'Gate',pair:'TSLA/USDT'}]);
+  const weekly=await runTool('propose_strategy',{spec:{...mixedSpec,timeframe:'1w'}},{draft:mixedSpec});
+  assert.equal(weekly.output.valid,false,'Gate weekly boundary is incompatible with the evaluation clock');
+  const gateInspect=await runTool('inspect_setup_bar',{pair:'TSLA/USDT',selectedBarTime:selectedTime},{draft:mixedSpec,editorContext:{pair:'TSLA/USDT',exchange:'Gate',chartTimeframe:'5m'}});
+  assert.equal(gateInspect.output.source.exchange,'Gate');
+  assert.equal(seriesReads.at(-1),'Gate:TSLA/USDT');
+  const duplicateSpec={...mixedSpec,pairs:['BTC/USDT'],targets:[{exchange:'Binance',pair:'BTC/USDT'},{exchange:'Gate',pair:'BTC/USDT'}]};
+  const readsBefore=seriesReads.length;
+  assert.ok((await runTool('inspect_setup_bar',{pair:'BTC/USDT',selectedBarTime:selectedTime},{draft:duplicateSpec})).output.error);
+  assert.equal(seriesReads.length,readsBefore,'ambiguous source must not fetch or fabricate evidence');
+  assert.equal((await runTool('inspect_setup_bar',{pair:'BTC/USDT',selectedBarTime:selectedTime},{draft:duplicateSpec,editorContext:{pair:'BTC/USDT',exchange:'Gate',chartTimeframe:'5m'}})).output.source.exchange,'Gate');
+  nativeCatalogs=undefined;
+  console.log('PASS native asset search, partial sources, canonical Gate targets, preserved mixed sources and source-specific inspection');
   reply=async()=>response('ส่งร่างเข้า editor แล้วครับ');
   const beforeUnrequested=requests.length;
   const unrequested=await auditTurn('RSI คืออะไร',{draft:studioSpec});
