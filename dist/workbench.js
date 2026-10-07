@@ -462,6 +462,7 @@ const chatSendButton=$('#followup-form button[type="submit"]');
 chatSendButton.classList.add('chat-send-button');
 chatSendButton.setAttribute('form','followup-form');
 chatSendButton.setAttribute('aria-label','ส่งข้อความ');
+delete chatSendButton.dataset.tooltip;
 chatSendButton.innerHTML=uiIcon('arrowUp');
 chatTools.append(chatSendButton);
 const latestMessages = document.createElement('button');
