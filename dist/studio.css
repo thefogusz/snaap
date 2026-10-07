@@ -112,8 +112,9 @@
   gap: 8px;
   font-size: 13px;
   color: var(--muted);
-  margin: 16px 0;
+  margin: 0 0 12px;
 }
+.pair-control > .field-note { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
 .asset-dialog { width: min(760px, calc(100vw - 32px)); }
 .asset-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .asset-dialog label { display: grid; gap: 6px; margin: 12px 0; font-size: 13px; }
@@ -129,6 +130,9 @@
 .chart-source-select { max-width: 170px; min-height: 36px; font-size: 12px; }
 @media (max-width: 480px) { .asset-fields { grid-template-columns: minmax(0, 1fr); gap: 0; } .asset-dialog { padding: 16px; } }
 .pair-control > [data-pair-picker] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   justify-content: space-between;
   text-align: left;
   width: 100%;
