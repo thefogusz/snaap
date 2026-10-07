@@ -34,7 +34,9 @@ export function registerGoogle(
     path: "/api/v1/auth/",
     maxAge: 600,
   };
-  app.get("/api/v1/auth/google", async (req, reply) => {
+  // Each start inserts an oauth_attempts row; limit per client separately from the API budget.
+  const authLimit = { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } };
+  app.get("/api/v1/auth/google", authLimit, async (req, reply) => {
     const purpose = z
       .object({ admin: z.literal("1").optional() })
       .parse(req.query).admin
@@ -71,7 +73,7 @@ export function registerGoogle(
     }).toString();
     return reply.redirect(url.href);
   });
-  app.get("/api/v1/auth/google/callback", async (req, reply) => {
+  app.get("/api/v1/auth/google/callback", authLimit, async (req, reply) => {
     let adminFlow = req.cookies.snaap_oauth_purpose === "admin";
     const fail = (reply: FastifyReply, reason: string) =>
       reply.redirect(

@@ -56,8 +56,18 @@ export async function buildApp(
 ) {
   const origin = options.origin ?? "http://127.0.0.1:4173";
   const allowedHost = new URL(origin).host;
+  // Without this every client behind Railway's edge shares one req.ip, and so one
+  // rate-limit bucket for all unauthenticated requests. Trust only the configured nearest
+  // hops; Fastify ignores numeric hop counts, and this is only sound when the app is
+  // reachable solely through those proxies (a Railway public domain, not a raw port).
+  const proxyHops = Number(
+    process.env.TRUST_PROXY_HOPS || (process.env.RAILWAY_PROJECT_ID ? 1 : 0),
+  );
+  if (!Number.isInteger(proxyHops) || proxyHops < 0 || proxyHops > 5)
+    throw new Error("TRUST_PROXY_HOPS must be an integer from 0 to 5");
   const app = Fastify({
     logger: false,
+    trustProxy: proxyHops ? (_address: string, hop: number) => hop < proxyHops : false,
     bodyLimit: 2 * 1024 * 1024,
     ajv: { customOptions: { removeAdditional: false } },
   });
@@ -67,6 +77,8 @@ export async function buildApp(
     timeWindow: "1 minute",
     hook: "preHandler",
     keyGenerator: (req) => req.userId || req.ip,
+    // Provider webhooks are signature-verified and arrive from a few shared provider IPs.
+    allowList: (req) => !!req.routeOptions.url?.startsWith("/api/v1/hooks/"),
     errorResponseBuilder: (_req, context) =>
       new ApiError(429, "RATE_LIMITED", `ส่งคำขอถี่เกินไป กรุณารอ ${Math.ceil(context.ttl / 1000)} วินาทีแล้วลองใหม่`),
   });
@@ -298,7 +310,8 @@ export async function buildApp(
     monitoring: !!options.monitoring,
   }));
   app.post("/api/v1/auth/local", async (req, reply) => {
-    if (!options.local || !["127.0.0.1", "::1"].includes(req.ip))
+    // The socket address, not req.ip, so a forwarded header can never claim loopback.
+    if (!options.local || !["127.0.0.1", "::1"].includes(req.socket.remoteAddress ?? ""))
       throw new ApiError(404, "NOT_FOUND", "ไม่พบ");
     const id = "00000000-0000-4000-8000-000000000001";
     await db.query(

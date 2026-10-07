@@ -42,3 +42,37 @@ test('percent-encoded admin paths still require the admin identity',async()=>{
     assert.equal(plain.statusCode,403,plain.body);
   }finally{await app.close();}
 });
+
+async function withProxyHops<T>(work:()=>Promise<T>){
+  const saved=process.env.TRUST_PROXY_HOPS;
+  process.env.TRUST_PROXY_HOPS='1';
+  try{return await work();}finally{if(saved===undefined)delete process.env.TRUST_PROXY_HOPS;else process.env.TRUST_PROXY_HOPS=saved;}
+}
+
+test('behind a trusted proxy each client gets its own login limit and provider hooks are not throttled',async()=>{
+  await withProxyHops(async()=>{
+    const {app}=await appWith(undefined);
+    try{
+      const start=(client:string)=>app.inject({method:'GET',url:'/api/v1/auth/google',headers:{...headers,'x-forwarded-for':client},remoteAddress:'10.0.0.2'});
+      for(let i=0;i<20;i++) assert.notEqual((await start('198.51.100.7')).statusCode,429);
+      assert.equal((await start('198.51.100.7')).statusCode,429);
+      assert.notEqual((await start('198.51.100.8')).statusCode,429,'another client behind the same proxy is unaffected');
+      for(let i=0;i<200;i++){
+        const hook=await app.inject({method:'POST',url:'/api/v1/hooks/line',headers:{...headers,'content-type':'application/json'},payload:'{}',remoteAddress:'10.0.0.2'});
+        assert.notEqual(hook.statusCode,429,`hook request ${i}`);
+      }
+    }finally{await app.close();}
+  });
+});
+
+test('a forwarded header cannot claim loopback for local login',async()=>{
+  await withProxyHops(async()=>{
+    const query=async()=>({rowCount:0,rows:[]});
+    const db={query,connect:async()=>({query,release(){}})} as unknown as pg.Pool;
+    const {app}=await buildApp(db,{local:true});
+    try{
+      const result=await app.inject({method:'POST',url:'/api/v1/auth/local',headers:{...headers,'x-snaap-client':'web','x-forwarded-for':'127.0.0.1'},remoteAddress:'192.0.2.10',payload:{}});
+      assert.equal(result.statusCode,404,result.body);
+    }finally{await app.close();}
+  });
+});
