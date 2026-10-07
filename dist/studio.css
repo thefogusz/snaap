@@ -114,6 +114,20 @@
   color: var(--muted);
   margin: 16px 0;
 }
+.asset-dialog { width: min(760px, calc(100vw - 32px)); }
+.asset-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.asset-dialog label { display: grid; gap: 6px; margin: 12px 0; font-size: 13px; }
+.asset-dialog select, .asset-dialog input { width: 100%; min-width: 0; min-height: 44px; }
+.asset-dialog .instrument-list small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.asset-dialog .instrument-list { max-height: 32vh; }
+.asset-widget iframe { width: 100%; height: 430px; border: 0; display: block; }
+.asset-widget:empty { display: none; }
+.asset-source-options { font-size: 12px; margin-top: 10px; }
+.asset-source-options summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.asset-dialog [hidden] { display: none !important; }
+.chart-source { font-size: 11px; color: var(--muted); padding: 0 20px 8px; }
+.chart-source-select { max-width: 170px; min-height: 36px; font-size: 12px; }
+@media (max-width: 480px) { .asset-fields { grid-template-columns: minmax(0, 1fr); gap: 0; } .asset-dialog { padding: 16px; } }
 .pair-control > [data-pair-picker] {
   justify-content: space-between;
   text-align: left;
@@ -162,6 +176,12 @@
 .instrument-dialog[open]{display:flex;flex-direction:column;max-height:calc(100dvh - 48px);overflow:hidden}
 .instrument-dialog>.instrument-list{flex:1;min-height:100px;max-height:36vh;margin-top:6px;overscroll-behavior:contain}
 .instrument-dialog>header,.instrument-dialog>.pair-selection-modes,.instrument-dialog>.pair-catalog-tools,.instrument-dialog>.pair-selection-footer{flex-shrink:0}
+.asset-dialog[open] { display: block; overflow-y: auto; overscroll-behavior: contain; }
+.asset-dialog > .instrument-list { max-height: 28vh; min-height: 100px; }
+.asset-dialog .asset-widget iframe { height: clamp(300px, 50dvh, 430px); }
+.asset-dialog .pair-selection-footer { flex-wrap: wrap; }
+.asset-picked { display: flex; gap: 6px; flex-wrap: wrap; }
+.asset-picked button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
 @media (min-width: 1100px) {
   .main-shell .home-view:has(.workbench:not([hidden]):not([data-tab="chat"])) {
     max-width: 1800px;

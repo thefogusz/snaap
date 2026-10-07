@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import * as assetTools from '../dist/asset-catalog.js';
 
 const source = await readFile(new URL('../dist/studio.js', import.meta.url), 'utf8');
 const functions = source.slice(source.indexOf('  async function update('), source.indexOf('  document.addEventListener("setup-rendered", schedule);'));
@@ -12,25 +13,26 @@ function fixture() {
   const rejected: Array<(error: Error) => void> = [];
   const loading: boolean[] = [];
   const rendered: unknown[] = [];
+  const requests: any[] = [];
   const timers = new Map<number, () => void>();
   let timerId = 0;
   const element = { textContent: '', innerHTML: '', value: '', hidden: false, disabled: false, style: { opacity: '' } };
   const context = vm.createContext({
     state: { draft }, AbortSignal, AbortController, previewController: null, chart: null, chartLoading: (active:boolean) => loading.push(active), workbench: { hidden: false, dataset: { tab: 'split' } },
     studio: { querySelector: () => element, querySelectorAll: () => [element] },
-    chartPicker: { ...element }, chartPickerWrap: { ...element }, canvas: { ...element }, status: element,
+    chartPicker: { ...element }, chartPickerWrap: { ...element }, canvas: { ...element }, status: element, sourcePicker: {...element}, sourceLabel: {...element}, assetTools,
     chartFrame: null, window: {SnaapStudio: {chartIndicators: () => []}}, hasEntryCondition: () => true,
     conditionFrames: (draft: {timeframe: string}) => [draft.timeframe],
     framePicker: { dataset: {}, innerHTML: '', querySelectorAll: () => [] },
     esc: String, directionLabel: () => 'Spot', stop: () => {},
-    api: () => new Promise((resolve,reject) => {pending.push(resolve);rejected.push(reject);}),
+    api: (_path:string,_method:string,request:unknown) => { requests.push(JSON.parse(JSON.stringify(request))); return new Promise((resolve,reject) => {pending.push(resolve);rejected.push(reject);}); },
     render: (data: unknown) => { rendered.push(data); context.result = data; },
     setTimeout: (callback: () => void) => { timers.set(++timerId, callback); return timerId; },
     clearTimeout: (id: number) => timers.delete(id),
-    key: '', pendingKey: '', generation: 0, chartPair: null, result: null, timer: null,
+    key: '', pendingKey: '', generation: 0, chartPair: null, chartExchange:null, result: null, timer: null,
   });
   vm.runInContext(functions + ';globalThis.updateChart=update;globalThis.scheduleChart=schedule;', context);
-  return { context, pending, rejected, loading, rendered, timers, flush: () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(fn => fn()); } };
+  return { context, pending, rejected, loading, rendered, requests, timers, flush: () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(fn => fn()); } };
 }
 
 test('a failed initial preview clears its placeholder and allows a retry', async () => {
@@ -97,4 +99,18 @@ test('startup setup events without a draft do not throw or request a preview', a
   f.context.scheduleChart();
   await f.context.updateChart();
   assert.equal(f.pending.length, 0);
+});
+
+test('chart uses the saved source for each pair and a source change discards the previous preview', async () => {
+  const f=fixture();
+  Object.assign(f.context.state.draft,{exchange:['Binance','MEXC'],pairs:['BTC/USDT','RARE/USDT'],targets:[{exchange:'Binance',pair:'BTC/USDT'},{exchange:'MEXC',pair:'BTC/USDT'},{exchange:'MEXC',pair:'RARE/USDT'}]});
+  f.context.chartPair='RARE/USDT';
+  const rare=f.context.updateChart();
+  assert.deepEqual(f.requests[0].spec.exchange,['MEXC']);assert.deepEqual(f.requests[0].spec.pairs,['RARE/USDT']);assert.equal(f.requests[0].spec.targets,undefined);
+  f.pending[0]({id:'rare'});await rare;
+  f.context.chartPair='BTC/USDT';f.context.chartExchange='Binance';
+  const first=f.context.updateChart();
+  f.context.chartExchange='MEXC';const second=f.context.updateChart(true);
+  f.pending[1]({id:'stale-binance'});await first;f.pending[2]({id:'mexc'});await second;
+  assert.deepEqual(f.rendered,[{id:'rare'},{id:'mexc'}]);assert.deepEqual(f.requests[2].spec.exchange,['MEXC']);
 });

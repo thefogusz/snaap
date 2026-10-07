@@ -289,6 +289,7 @@
       focusPath = null;
     return {
       pair,
+      ...(window.SnaapChart.exchange ? { exchange: window.SnaapChart.exchange } : {}),
       chartTimeframe: view.frame,
       ...(focusPath ? { conditionPath: focusPath } : {}),
       ...(window.SnaapChart.selectedTime != null
@@ -447,13 +448,13 @@
       settings.className = "studio-setup-settings";
       settings.setAttribute("aria-label", "ตลาดและประเภทการเทรด");
       const exchange = body.querySelector(".exchange-fieldset");
-      const market = body.querySelector('[data-path="market"]')?.closest("label");
+      const market = body.querySelector('.asset-contract');
       const pair = body.querySelector(".pair-control");
       const direction = body.querySelector(".setup-direction, .setup-direction-spot");
       const name = body.querySelector('[data-path="name"]')?.closest("label");
       const frameSelect = body.querySelector('[data-path="timeframe"]');
       const evaluation = frameSelect?.closest("label");
-      for (const field of [exchange, market, pair, direction])
+      for (const field of [pair, market, direction, exchange])
         if (field) settings.append(field);
       body.querySelector(":scope > .field-grid")?.remove();
       body.prepend(settings);

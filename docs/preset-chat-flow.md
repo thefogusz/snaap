@@ -16,7 +16,7 @@ No template is labeled safe or optimized for high leverage. Optional guidance ex
 
 ## Flow
 
-Preset button is a sibling below the composer, aligned right, outside the composer scroll area. Empty-chat bottom padding adapts to available height. Opening the picker makes no draft or LLM request. Selecting a style starts three local card steps: exchange/market/direction, live catalog pair/timeframe, explicit review/apply. Applying replaces this conversation's draft with revision checks, and stores an assistant summary plus `messages.ui_card` in one transaction.
+Preset button is a sibling below the composer, aligned right, outside the composer scroll area. Empty-chat bottom padding adapts to available height. Opening the picker makes no draft or LLM request. Selecting a style starts three local card steps: category/assets/contract/direction, timeframe and any required price level, explicit review/apply. The shared asset picker recommends sources and preserves exact source/pair targets; see [asset-first selection](multi-pair-setups.md). Applying replaces this conversation's draft with revision checks, and stores an assistant summary plus `messages.ui_card` in one transaction.
 
 Only the latest preset card can save a conversation draft. Older cards remain historical snapshots. Save verifies instruments, schema, owned verified destinations and draft revision; creates one rule per card; repeated unchanged saves reuse its ID and revision. Changes to existing saved rules require their current revision and pause the rule. Activation calls the existing real activation endpoint, enforcing monitoring readiness, instrument data, destination verification and quota. It never calls an LLM.
 

@@ -47,13 +47,14 @@ export function buildPreset(id,config){
  const side=config.market==='Spot'?'SPOT':config.side;
  const pairs=[...(config.pairs??[config.pair])];
  const spec={schemaVersion:2,name:`${p.title} · ${pairs.length===1?pairs[0]:pairs.length+' คู่'} · ${side}`,exchange:[config.exchange],market:config.market,side,pairs,timeframe:t,...branch(side==='SHORT'),destinations:[]};
+ if(config.targets){spec.targets=config.targets;spec.exchange=[...new Set(config.targets.map(t=>t.exchange))];}
  if(side==='BOTH')spec.short=branch(true);
  return spec;
 }
 export function describePreset(spec){
  const operand=o=>o.kind==='CONSTANT'?String(o.value):o.kind==='PRICE'?`${{close:'ราคาปิด',low:'ราคาต่ำสุด',high:'ราคาสูงสุด'}[o.field]??o.field} (${o.timeframe})`:`${o.name} ${o.period}${o.params?.factor?' / '+o.params.factor:''} (${o.timeframe})`;
  const condition=c=>c.kind==='HOLD'?`${condition(c.condition)} ต่อเนื่อง ${c.bars} แท่ง`:c.kind==='GROUP'?c.children.map(condition).join(c.op==='AND'?' และ ':' หรือ '):`${operand(c.left)} ${{CROSS_ABOVE:'ตัดขึ้นเหนือ',CROSS_BELOW:'ตัดลงใต้','>':'มากกว่า','<':'น้อยกว่า'}[c.op]??c.op} ${operand(c.right)}`;
- const lines=[`${spec.exchange[0]} · ${spec.pairs.join(', ')} · ${spec.market} · ${spec.side} · ${spec.timeframe}`,`เข้า${spec.side==='BOTH'?' Long':''}: ${condition(spec.entry)}`,`ออก${spec.side==='BOTH'?' Long':''}: ${condition(spec.exit)}`];
+ const lines=[`${spec.exchange.join(' · ')} · ${spec.pairs.join(', ')} · ${spec.market} · ${spec.side} · ${spec.timeframe}`,`เข้า${spec.side==='BOTH'?' Long':''}: ${condition(spec.entry)}`,`ออก${spec.side==='BOTH'?' Long':''}: ${condition(spec.exit)}`];
  if(spec.short)lines.push(`เข้า Short: ${condition(spec.short.entry)}`,`ออก Short: ${condition(spec.short.exit)}`);
  spec.stages.forEach((s,i)=>lines.push(`รอยืนยัน ${i+1}: ${condition(s.condition)} ภายใน ${s.withinBars} แท่ง`));
  lines.push('พัก 3 แท่งหลังจบวงจร · ตรวจแท่งปิด · เป็นสัญญาณ ไม่ส่งออเดอร์');
