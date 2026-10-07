@@ -27,6 +27,7 @@
   function enhance(select) {
     if (
       select.hidden ||
+      select.hasAttribute("data-native") ||
       select.classList.contains("conversation-select") ||
       select.multiple
     )

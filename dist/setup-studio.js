@@ -29,11 +29,36 @@
   tabsBar.innerHTML = ["agent", "conditions", "evidence", "chart"]
     .map(
       (name, i) =>
-        `<button type="button" data-studio-tab="${name}" aria-pressed="${i === 1}">${["Agent", "เงื่อนไข", "เหตุผล", "กราฟ"][i]}</button>`,
+        `<button type="button" data-studio-tab="${name}" aria-pressed="${i === 1}">${["แชท", "เซ็ตอัพ", "เหตุผล", "กราฟ"][i]}</button>`,
     )
     .join("");
   workbench.before(tabsBar);
-  workbench.dataset.inspector = "conditions";
+  const mobileMenu = document.createElement("details");
+  mobileMenu.className = "studio-mobile-menu";
+  mobileMenu.innerHTML = `<summary aria-label="ตัวเลือกพื้นที่ทำงาน">${uiIcon("more")}</summary><div class="studio-mobile-menu-items"><button type="button" data-studio-tab="evidence">เหตุผลสัญญาณ</button></div>`;
+  tabsBar.append(mobileMenu);
+  const mobileMenuItems = mobileMenu.querySelector("div");
+  function placeMobileActions() {
+    const mobile = innerWidth < 900 && !workbench.hidden;
+    if (conversationPicker.parentElement === (mobile ? mobileMenuItems : conversationActions)) return;
+    if (mobile) mobileMenuItems.append(conversationTitle, conversationPicker, newConversationButton);
+    else {
+      workbenchToolbar.insertBefore(conversationTitle, conversationActions);
+      conversationActions.append(conversationPicker, newConversationButton);
+      mobileMenu.open = false;
+    }
+  }
+  document.addEventListener("click", event => {
+    if (!mobileMenu.contains(event.target) || event.target.closest("button")) mobileMenu.open = false;
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && mobileMenu.open) {
+      mobileMenu.open = false;
+      mobileMenu.querySelector("summary").focus();
+      event.preventDefault();
+    }
+  });
+  workbench.dataset.inspector ??= "conditions";
   // Layout preferences belong to the workspace UI, never to the strategy draft.
   const layoutKey = "snaap-studio-panel-widths-v1";
   let preferredWidths = { agent: 300, conditions: 340 };
@@ -140,6 +165,12 @@
   const toolbar = document.createElement("div");
   toolbar.className = "studio-chart-toolbar";
   toolbar.innerHTML = `<div class="studio-timeframes" aria-label="ไทม์เฟรมกราฟ">${tf.map((t) => `<button type="button" data-chart-frame="${t}" aria-pressed="false">${t.toUpperCase()}</button>`).join("")}</div><button type="button" class="secondary" data-add-chart-indicator>＋ อินดิเคเตอร์</button>`;
+  const mobileFrame = document.createElement("select");
+  mobileFrame.className = "studio-mobile-frame";
+  mobileFrame.setAttribute("data-native", "");
+  mobileFrame.setAttribute("aria-label", "ไทม์เฟรมกราฟ");
+  mobileFrame.onchange = () => setView(mobileFrame.value);
+  toolbar.prepend(mobileFrame);
   chartPane.querySelector("header").after(toolbar);
   const eventList = document.createElement("div");
   eventList.className = "studio-event-list";
@@ -201,6 +232,7 @@
     } catch {}
   }
   function selectTab(name) {
+    if (innerWidth < 900) setWorkbenchTab("split");
     workbench.dataset.inspector = name;
     if (name === "agent") {
       workbench.dataset.agentCollapsed = "false";
@@ -215,13 +247,14 @@
         .setAttribute("aria-expanded", "true");
     }
     tabsBar
-      .querySelectorAll("button")
+      .querySelectorAll("[data-studio-tab]")
       .forEach((b) =>
         b.setAttribute("aria-pressed", String(b.dataset.studioTab === name)),
       );
     requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   }
   function setView(frame, time) {
+    if (innerWidth < 900) selectTab("chart");
     session();
     view.frame = frame;
     persist();
@@ -230,6 +263,8 @@
   }
   function paintFrames() {
     const supported = setupTimeframes();
+    mobileFrame.innerHTML = supported.map(frame => `<option value="${esc(frame)}">${esc(frame.toUpperCase())}</option>`).join("");
+    mobileFrame.value = session().frame;
     toolbar
       .querySelectorAll("[data-chart-frame]")
       .forEach((b) => {
@@ -382,6 +417,7 @@
     } else if (editorMode === "indicator") renderIndicatorEditor();
   }
   function decorate() {
+    placeMobileActions();
     if (!state.draft) return;
     session();
     const supported = setupTimeframes();
@@ -390,7 +426,8 @@
       persist();
     }
     header.hidden = workbench.hidden || workbench.dataset.tab === "chat";
-    tabsBar.hidden = header.hidden;
+    tabsBar.hidden = workbench.hidden || (innerWidth >= 900 && workbench.dataset.tab === "chat");
+    tabsBar.querySelectorAll("[data-studio-tab]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.studioTab === workbench.dataset.inspector)));
     draftStatus.hidden = header.hidden;
     panel.querySelector('[data-path="name"]')?.closest("label")?.append(draftStatus);
     draftStatus.textContent = state.saved
@@ -859,8 +896,10 @@
   const viewport = () => {
     const height = window.visualViewport?.height ?? innerHeight;
     workbench.dataset.keyboardOpen = String(innerHeight - height > 140);
-    workbench.dataset.compact = String(innerWidth < 900 && height <= 740);
-    if (workbench.dataset.compact === "false" && workbench.dataset.inspector === "chart") selectTab("conditions");
+    if (innerWidth < 900 && !workbench.hidden && workbench.dataset.tab === "chat") setWorkbenchTab("chat");
+    placeMobileActions();
+    if (innerWidth >= 900 && workbench.dataset.inspector === "chart") selectTab("conditions");
+    tabsBar.hidden = workbench.hidden || (innerWidth >= 900 && workbench.dataset.tab === "chat");
     document.documentElement.style.setProperty(
       "--studio-viewport-height",
       height + "px",

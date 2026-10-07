@@ -875,14 +875,16 @@ function showDesigner() {
 }
 let requestedWorkbenchMode;
 function setWorkbenchTab(mode) {
-  // Older saved sessions and setup entry points resolve to the combined view.
-  mode = mode === 'chat' ? 'chat' : 'split';
+  // Mobile shares one workspace; its selected pane determines the visible content.
+  const mobileChat = mode === 'chat' && innerWidth < 900;
+  mode = mode === 'chat' && !mobileChat ? 'chat' : 'split';
   requestAnimationFrame(resizeChatInputs);
   requestAnimationFrame(alignToast);
   requestedWorkbenchMode = mode;
   const applyMode = () => {
     if (requestedWorkbenchMode !== mode) return;
     workbench.dataset.tab = mode;
+    if (mobileChat) workbench.dataset.inspector = "agent";
     setupPaneNav.hidden = mode !== 'split';
     followupText.placeholder = mode === 'split'
       ? 'เล่าไอเดียเทรด แล้วออกแบบเซ็ตอัพแบบเรียลไทม์ผ่านการพูดคุย…'
