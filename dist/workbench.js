@@ -851,7 +851,7 @@ function navigate(view, load = true) {
   });
   $("#page-name").textContent = {
     home: "แชท",
-    sentiment: "Sentiment",
+    sentiment: "ภาพรวมตลาด",
     watch: "รายการแจ้งเตือน",
     history: "ข้อมูลของฉัน",
     notifications: "การแจ้งเตือน",
