@@ -33,6 +33,7 @@ test('ICI flows: units, chronology, missing values, cache failures and no double
   assert.throws(() => parseFlows(weekly.replace('<td>-4</td>', '<td>*</td>'), 'us', us.source));
 
   let calls = 0, unavailable = false, now = Date.now();
+  const warnings = t.mock.method(console, 'warn', () => {});
   t.mock.method(Date, 'now', () => now);
   t.mock.method(globalThis, 'fetch', async () => {
     calls++;
@@ -52,6 +53,11 @@ test('ICI flows: units, chronology, missing values, cache failures and no double
   await app.inject('/api/v1/sentiment?universe=us'); assert.equal(calls, 2);
   const empty = Fastify(); registerSentiment(empty); t.after(() => empty.close());
   assert.equal((await empty.inject('/api/v1/sentiment?universe=us')).statusCode, 503);
+  assert.deepEqual(warnings.mock.calls.at(-1)!.arguments, ['Sentiment source refresh failed', 'us', 'offline']);
+  t.mock.method(globalThis, 'fetch', async () => new Response('unavailable', {status: 503}));
+  now += 60001;
+  await empty.inject('/api/v1/sentiment?universe=us');
+  assert.deepEqual(warnings.mock.calls.at(-1)!.arguments, ['Sentiment source refresh failed', 'us', 'Source HTTP 503 (www.ici.org)']);
 });
 
 

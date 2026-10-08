@@ -79,7 +79,8 @@ export function parseFlows(html: string, universe: Universe, source: string, now
 
 async function getHtml(url: string, contentType = 'text/html') {
   const response = await fetch(url, { signal: AbortSignal.timeout(15000), redirect: 'error', headers: { Accept: contentType } });
-  if (!response.ok || !response.headers.get('content-type')?.includes(contentType)) throw new Error('Source unavailable');
+  if (!response.ok) throw new Error(`Source HTTP ${response.status} (${new URL(url).hostname})`);
+  if (!response.headers.get('content-type')?.includes(contentType)) throw new Error(`Unexpected source content type (${new URL(url).hostname})`);
   let html = '';
   const decoder = new TextDecoder();
   for await (const chunk of response.body!) {
@@ -306,7 +307,8 @@ export function registerSentiment(app: FastifyInstance) {
           current.failed = false;
         } catch (error) {
           current.failed = true;
-          req.log.warn({ err: error, universe }, 'Sentiment source refresh failed');
+          // Fastify request logging is disabled in production.
+          console.warn('Sentiment source refresh failed', universe, error instanceof Error ? error.message.slice(0, 500) : 'Unknown error');
         } finally { current.checked = Date.now(); current.pending = undefined; }
       })();
     }
