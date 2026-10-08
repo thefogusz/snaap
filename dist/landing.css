@@ -128,7 +128,11 @@ em {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: url("/assets/snaap-lime-flow.png") center 65% / cover no-repeat;
+  background: url("/assets/snaap-lime-flow.webp") center 65% / cover no-repeat;
+  background-image: image-set(
+    url("/assets/snaap-lime-flow.avif") type("image/avif"),
+    url("/assets/snaap-lime-flow.webp") type("image/webp")
+  );
   opacity: 0.1;
   mask-image: linear-gradient(#000, #000 65%, transparent);
 }

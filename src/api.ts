@@ -3,9 +3,11 @@ import { assertAccess } from './access-controls.js';
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
+import compress from "@fastify/compress";
 import rateLimit from "@fastify/rate-limit";
 import { randomUUID, randomBytes } from "node:crypto";
 import path from "node:path";
+import { constants as zlibConstants } from "node:zlib";
 import { z } from "zod";
 import type pg from "pg";
 import { transaction } from "./data/db.js";
@@ -72,6 +74,14 @@ export async function buildApp(
     ajv: { customOptions: { removeAdditional: false } },
   });
   await app.register(cookie);
+  // Text responses compress ~70-75%. Quality 5 keeps brotli cheap enough for per-request use;
+  // the streamed chat route hijacks its reply and is unaffected.
+  await app.register(compress, {
+    global: true,
+    threshold: 1024,
+    encodings: ["br", "gzip"],
+    brotliOptions: { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } },
+  });
   await app.register(rateLimit, {
     max: async () => (await usagePolicy(db)).requestsPerMinute,
     timeWindow: "1 minute",
@@ -774,6 +784,15 @@ export async function buildApp(
   await app.register(staticFiles, {
     root: path.resolve("dist"),
     index: "landing.html",
+    setHeaders: (res, file) => {
+      // JS, CSS and HTML are unversioned: always revalidate (ETag -> 304). Images and the
+      // pinned chart library change rarely, so let browsers reuse them for a day.
+      const rarelyChanges = /\/dist\/(assets|vendor)\//.test(file.replaceAll("\\", "/"));
+      res.header(
+        "Cache-Control",
+        rarelyChanges ? "public, max-age=86400" : "no-cache",
+      );
+    },
   });
   // Explicit SPA routes keep direct links and refreshes working without hiding
   // missing assets or unknown API endpoints behind the app shell.
