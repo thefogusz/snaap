@@ -644,6 +644,29 @@ try {
   assert.equal(evmEvidence.output.window.finality,'finalized');assert.equal(evmEvidence.output.owner,'UNKNOWN');assert.equal(evmEvidence.result.draft,null);
   assert.ok((await runTool('read_evm_transfers',{chain:'ethereum',contractAddress:'http://localhost',walletAddress:null,blocks:20,limit:10,minRawAmount:'0'})).output.error);
   console.log('PASS news, BTC, DEX, DeFi and EVM tools preserve bounded evidence and unchanged drafts; invalid arguments fail safely');
+  const fetchBeforeSentiment=globalThis.fetch;
+  let iciCalls=0;
+  globalThis.fetch=async(input,init)=>{
+    if(String(input).startsWith('https://www.ici.org/')){iciCalls++;return new Response('blocked',{status:403});}
+    return fetchBeforeSentiment(input,init);
+  };
+  try{
+    assert.equal((await app.inject({url:'/api/v1/sentiment?universe=us',headers:{host:headers.host}})).statusCode,401);
+    const dashboard=await app.inject({url:'/api/v1/sentiment?universe=us',headers});
+    assert.equal(dashboard.statusCode,200);assert.equal(dashboard.json().stale,true);
+    const sentiment=await runTool('read_sentiment',{dataset:'us-flows'},{draft:studioSpec});
+    assert.deepEqual(sentiment.output.data,dashboard.json());
+    assert.equal(sentiment.result.draft,null);
+    assert.equal(sentiment.result.artifacts.length,0,'Sentiment evidence goes to the answer, not an unsupported artifact');
+    assert.equal(iciCalls,1,'dashboard and harness share the same failed-refresh cache');
+    const advertised=requests.at(-1).tools.find((tool:any)=>tool.name==='read_sentiment');
+    assert.equal(advertised.strict,true);assert.equal(advertised.parameters.additionalProperties,false);
+    assert.equal(advertised.parameters.properties.dataset.enum.length,5);
+    assert.ok(promptText(requests.at(-1)).includes('checkedAt/retrievedAt are fetch/check times'));
+    assert.ok((await runTool('read_sentiment',{dataset:'http://localhost/secret'})).output.error);
+    assert.equal(iciCalls,1,'invalid arguments never reach a source');
+    console.log('PASS harness Sentiment tool shares authenticated dashboard cache, dates and stale evidence; strict arguments and unchanged drafts');
+  }finally{globalThis.fetch=fetchBeforeSentiment;}
   reply=async()=>response('ส่งร่างเข้า editor แล้วครับ');
   const beforeUnrequested=requests.length;
   const unrequested=await auditTurn('RSI คืออะไร',{draft:studioSpec});

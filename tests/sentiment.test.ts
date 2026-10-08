@@ -40,14 +40,19 @@ test('ICI flows: units, chronology, missing values, cache failures and no double
     if (unavailable) throw new Error('offline');
     return new Response(weekly, { headers: { 'content-type': 'text/html' } });
   });
-  const app = Fastify(); registerSentiment(app); t.after(() => app.close());
+  const app = Fastify(); const readSentiment = registerSentiment(app); t.after(() => app.close());
+  await assert.rejects(async () => readSentiment({dataset:'http://localhost/secret'}));
+  await assert.rejects(async () => readSentiment({dataset:'us-flows',url:'https://example.com'}));
   assert.equal((await app.inject('/api/v1/sentiment?universe=bad')).statusCode, 400);
   assert.equal(calls, 0);
-  const [first, concurrent] = await Promise.all([app.inject('/api/v1/sentiment?universe=us'), app.inject('/api/v1/sentiment?universe=us')]);
+  const [first, concurrent, evidence] = await Promise.all([app.inject('/api/v1/sentiment?universe=us'), app.inject('/api/v1/sentiment?universe=us'), readSentiment({dataset:'us-flows'})]);
+  assert.deepEqual(evidence.data, first.json());
+  assert.equal(evidence.dataset, 'us-flows');
   assert.equal(first.statusCode, 200); assert.equal(concurrent.statusCode, 200); assert.equal(calls, 1);
   assert.equal(first.json().stale, false);
   unavailable = true; now += 7 * 3600000;
   const stale = await app.inject('/api/v1/sentiment?universe=us');
+  assert.deepEqual((await readSentiment({dataset:'us-flows'})).data, stale.json());
   assert.equal(stale.statusCode, 200); assert.equal(stale.json().stale, true);
   assert.deepEqual(stale.json().total, first.json().total);
   await app.inject('/api/v1/sentiment?universe=us'); assert.equal(calls, 2);
@@ -108,10 +113,12 @@ test('Specialists: actual flows vs supply vs index, aligned dates, partial failu
     const body=String(url).includes('gold.org')?gold:String(url).includes('llama.fi')?stable:fear;
     return new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}});
   });
-  const app=Fastify();registerSentiment(app);t.after(()=>app.close());
+  const app=Fastify();const readSentiment=registerSentiment(app);t.after(()=>app.close());
   const [first,other]=await Promise.all([app.inject('/api/v1/sentiment/specialists'),app.inject('/api/v1/sentiment/specialists')]);
   assert.equal(first.statusCode,200);assert.equal(other.statusCode,200);assert.equal(calls,3);
   assert.equal(first.json().crypto.stale,false);
+  assert.deepEqual((await readSentiment({dataset:'specialists'})).data,first.json());
+  assert.equal(calls,3);
   fail=true;now+=2*3600000;
   const stale=(await app.inject('/api/v1/sentiment/specialists')).json();
   assert.equal(stale.gold.stale,true);assert.equal(stale.crypto.stale,false);assert.equal(stale.fear.stale,false);
@@ -157,9 +164,12 @@ test('Daily markets: identity, calendar gaps, provisional candles, returns and i
     const body=text.includes('coinbase.com')?candles:quote(text.match(/chart\/([^?]+)/)![1]);
     return new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}});
   });
-  const app=Fastify();registerSentiment(app);t.after(()=>app.close());
+  const app=Fastify();const readSentiment=registerSentiment(app);t.after(()=>app.close());
   const [first,parallel]=await Promise.all([app.inject('/api/v1/sentiment/daily'),app.inject('/api/v1/sentiment/daily')]);
   assert.equal(first.statusCode,200);assert.equal(parallel.statusCode,200);assert.equal(calls,10);
+  const evidence=await readSentiment({dataset:'daily'});
+  assert.deepEqual((evidence.data as any).markets,first.json().markets);
+  assert.equal(calls,10);
   assert.equal(first.json().markets.length,10);
   fail=true;now+=6*60000;
   const stale=(await app.inject('/api/v1/sentiment/daily')).json().markets;
@@ -198,10 +208,34 @@ test('Crypto hierarchy: cap-weighted changes, 80% contribution, stablecoin exclu
     calls++;if(fail)throw Error('offline');
     return new Response(JSON.stringify(String(url).includes('category=stablecoins')?stables:raw),{headers:{'content-type':'application/json'}});
   });
-  const app=Fastify();registerSentiment(app);t.after(()=>app.close());
+  const app=Fastify();const readSentiment=registerSentiment(app);t.after(()=>app.close());
   const [first,other]=await Promise.all([app.inject('/api/v1/sentiment/crypto-breakdown'),app.inject('/api/v1/sentiment/crypto-breakdown')]);
   assert.equal(first.statusCode,200);assert.equal(other.statusCode,200);assert.equal(calls,2);
+  assert.deepEqual((await readSentiment({dataset:'crypto-breakdown'})).data,first.json());
+  assert.equal(calls,2);
   now+=16*60000;fail=true;
   const stale=await app.inject('/api/v1/sentiment/crypto-breakdown');assert.equal(stale.json().stale,true);assert.equal(stale.json().cap,490);
   const empty=Fastify();registerSentiment(empty);t.after(()=>empty.close());assert.equal((await empty.inject('/api/v1/sentiment/crypto-breakdown')).statusCode,503);
+});
+
+test('Sentiment reader preserves cold-start fallback and per-source errors without invented values',async t=>{
+  t.mock.method(console,'warn',()=>{});
+  let calls=0;
+  t.mock.method(globalThis,'fetch',async()=>{calls++;throw Error('offline');});
+  const app=Fastify(),readSentiment=registerSentiment(app);t.after(()=>app.close());
+  for(const dataset of ['us-flows','global-flows','daily','specialists','crypto-breakdown']){
+    const evidence=await readSentiment({dataset});
+    assert.equal(evidence.dataset,dataset);assert.ok(evidence.interpretation.length);
+    const data=evidence.data as any;
+    if(dataset.endsWith('-flows')){
+      assert.equal(data.stale,true);assert.ok(data.source.startsWith('https://www.ici.org/'));
+      assert.ok(data.publishedAt);assert.ok(data.retrievedAt);assert.ok(data.checkedAt);
+    }else if(dataset==='daily')assert.ok(data.markets.every((m:any)=>m.error&&m.stale&&!m.history));
+    else if(dataset==='specialists')assert.ok(Object.values(data).every((m:any)=>m.error&&m.source));
+    else assert.ok(data.error);
+  }
+  const before=calls;
+  await assert.rejects(()=>readSentiment({dataset:'us-flows',url:'http://localhost'}));
+  await assert.rejects(()=>readSentiment({dataset:'unknown'}));
+  assert.equal(calls,before);
 });

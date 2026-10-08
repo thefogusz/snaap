@@ -221,26 +221,35 @@ export function parseCryptoBreakdown(input:unknown,stableInput:unknown,now=Date.
   return {...total,groups,count:coins.length,excluded:raw.length-coins.length,observedAt:coins.map(c=>c.updatedAt).sort()[0],source:'https://www.coingecko.com/',sourceName:'CoinGecko',stale:false};
 }
 
+export const sentimentQuerySchema = z.object({dataset:z.enum(['us-flows','global-flows','daily','specialists','crypto-breakdown'])}).strict();
+const sentimentNotes = {
+  'us-flows':'USD net flows of US long-term mutual funds and ETF net issuance, weekly; excludes money-market funds. Not all US capital flows or daily flows.',
+  'global-flows':'USD net sales of regulated open-end funds, quarterly, including reinvested dividends. Not all global capital or transfers between markets. Do not add to US flows.',
+  daily:'Reference ETF and Coinbase BTC/ETH close-price returns, not fund flows or dividend-adjusted total returns. days covers seven UTC calendar dates; ETF dates use exchange timezone. Missing dates stay null; provisional bars are unfinished. change and change7 are percentages.',
+  specialists:'Gold: actual global physically backed ETF net flows in USD at the reported cadence. crypto: change in native USD-pegged stablecoin supply, not BTC/ETH flows or proven new money. fear: daily Bitcoin Fear & Greed index 0–100, not fund flows. Per-feed errors mean unavailable.',
+  'crypto-breakdown':'CoinGecko top-100 coverage excluding classified stablecoins; BTC, ETH and remaining altcoins. cap/delta/gain/loss are USD market capitalization, not cash flows; change is percent over rolling 24h. Contribution to rising value uses positive delta/gain; to falling value uses absolute negative delta/loss. Neither is trading volume or proof of money entering/leaving crypto.',
+};
+
 export function registerSentiment(app: FastifyInstance) {
   let cryptoData:ReturnType<typeof parseCryptoBreakdown>|undefined,cryptoChecked=0,cryptoFailed=false,cryptoPending:Promise<void>|undefined;
-  app.get('/api/v1/sentiment/crypto-breakdown',async(req,reply)=>{
+  async function readCrypto(){
     if(Date.now()-cryptoChecked>(cryptoFailed?60000:15*60000)){
       cryptoPending??=(async()=>{
         try{
           const base='https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&page=1&sparkline=false';
           const [markets,stable]=await Promise.all([getHtml(base+'&per_page=100','application/json'),getHtml(base+'&category=stablecoins&per_page=250','application/json')]);
           cryptoData=parseCryptoBreakdown(JSON.parse(markets),JSON.parse(stable));cryptoFailed=false;
-        }catch(error){cryptoFailed=true;req.log.warn({err:error},'Crypto breakdown source unavailable');}
+        }catch(error){cryptoFailed=true;app.log.warn({err:error},'Crypto breakdown source unavailable');}
         finally{cryptoChecked=Date.now();cryptoPending=undefined;}
       })();
     }
-    await cryptoPending;reply.header('Cache-Control','private, no-store');
-    if(!cryptoData)return reply.code(503).send({error:'ยังอ่านองค์ประกอบคริปโตไม่ได้'});
+    await cryptoPending;
+    if(!cryptoData)return {error:'ยังอ่านองค์ประกอบคริปโตไม่ได้'};
     return {...cryptoData,stale:cryptoFailed,checkedAt:new Date(cryptoChecked).toISOString()};
-  });
+  }
   type DailyData = ReturnType<typeof parseDailyQuotes> | ReturnType<typeof parseCryptoCandles>;
   const dailyCache = new Map<string,{data?:DailyData;checked:number;failed?:boolean;pending?:Promise<void>}>();
-  app.get('/api/v1/sentiment/daily', async (req,reply)=>{
+  async function readDaily(){
     const markets = await Promise.all(dailyMarkets.map(async market=>{
       let entry=dailyCache.get(market.id);
       if(!entry){entry={checked:0};dailyCache.set(market.id,entry);}
@@ -251,16 +260,15 @@ export function registerSentiment(app: FastifyInstance) {
             const url=crypto?`https://api.exchange.coinbase.com/products/${market.symbol}/candles?granularity=86400`:`https://query1.finance.yahoo.com/v8/finance/chart/${market.symbol}?range=1mo&interval=1d`;
             const raw=JSON.parse(await getHtml(url,'application/json'));
             current.data=crypto?parseCryptoCandles(raw,market.symbol):parseDailyQuotes(raw,market.symbol);current.failed=false;
-          }catch(error){current.failed=true;req.log.warn({err:error,symbol:market.symbol},'Daily market source unavailable');}
+          }catch(error){current.failed=true;app.log.warn({err:error,symbol:market.symbol},'Daily market source unavailable');}
           finally{current.checked=Date.now();current.pending=undefined;}
         })();
       }
       await current.pending;
       return {...market,...current.data,...(current.data?dailyWindow(current.data.history):{}),stale:!!current.failed,checkedAt:new Date(current.checked).toISOString(),...(!current.data?{error:'ยังอ่านราคาต้นทางไม่ได้'}:{})};
     }));
-    reply.header('Cache-Control','private, no-store');
     return {markets,retrievedAt:new Date().toISOString()};
-  });
+  }
   const feeds = [
     { id: 'gold', source: goldSource, url: goldApi, parse: parseGold, ttl: 3600000 },
     { id: 'crypto', source: cryptoSource, url: 'https://stablecoins.llama.fi/stablecoincharts/all', parse: parseStablecoins, ttl: 15*60000 },
@@ -268,7 +276,7 @@ export function registerSentiment(app: FastifyInstance) {
   ];
   type Specialist = ReturnType<typeof parseGold> | ReturnType<typeof parseStablecoins> | ReturnType<typeof parseFear>;
   const specialistCache = new Map<string, { data?: Specialist; checked: number; failed?: boolean; pending?: Promise<void> }>();
-  app.get('/api/v1/sentiment/specialists', async (req, reply) => {
+  async function readSpecialists(){
     const results = await Promise.all(feeds.map(async feed => {
       let entry = specialistCache.get(feed.id);
       if (!entry) { entry = { checked: 0 }; specialistCache.set(feed.id, entry); }
@@ -276,20 +284,17 @@ export function registerSentiment(app: FastifyInstance) {
       if (Date.now() - current.checked > (current.failed ? 60000 : feed.ttl)) {
         current.pending ??= (async () => {
           try { current.data = feed.parse(JSON.parse(await getHtml(feed.url, 'application/json'))); current.failed = false; }
-          catch (error) { current.failed = true; req.log.warn({ err: error, feed: feed.id }, 'Sentiment source unavailable'); }
+          catch (error) { current.failed = true; app.log.warn({ err: error, feed: feed.id }, 'Sentiment source unavailable'); }
           finally { current.checked = Date.now(); current.pending = undefined; }
         })();
       }
       await current.pending;
       return [feed.id, current.data ? { ...current.data, stale: !!current.failed, checkedAt: new Date(current.checked).toISOString() } : { id: feed.id, source: feed.source, error: 'อ่านข้อมูลต้นทางไม่สำเร็จ กรุณาลองอีกครั้ง' }];
     }));
-    reply.header('Cache-Control', 'private, no-store');
     return Object.fromEntries(results);
-  });
+  }
   const cache = new Map<Universe, { data?: FlowDataset; checked: number; pending?: Promise<void>; failed?: boolean }>();
-  app.get<{ Querystring: { universe?: string } }>('/api/v1/sentiment', async (req, reply) => {
-    const universe = req.query.universe ?? 'global';
-    if (universe !== 'global' && universe !== 'us') return reply.code(400).send({ error: 'Invalid universe' });
+  async function readFlows(universe:Universe){
     let entry = cache.get(universe);
     if (!entry) { entry = { checked: 0 }; cache.set(universe, entry); }
     const current = entry;
@@ -314,8 +319,32 @@ export function registerSentiment(app: FastifyInstance) {
       })();
     }
     await current.pending;
-    reply.header('Cache-Control', 'private, no-store');
     // Verified published reports survive a cold start when ICI denies cloud-host requests.
     return { ...(current.data ?? iciReports[universe]), stale: !!current.failed, checkedAt: new Date(current.checked).toISOString() };
+  }
+  app.get('/api/v1/sentiment/crypto-breakdown',async(_req,reply)=>{
+    reply.header('Cache-Control','private, no-store');
+    const data=await readCrypto();
+    if('error' in data)reply.code(503);
+    return data;
   });
+  app.get('/api/v1/sentiment/daily',async(_req,reply)=>{
+    reply.header('Cache-Control','private, no-store');
+    return readDaily();
+  });
+  app.get('/api/v1/sentiment/specialists',async(_req,reply)=>{
+    reply.header('Cache-Control','private, no-store');
+    return readSpecialists();
+  });
+  app.get<{Querystring:{universe?:string}}>('/api/v1/sentiment',async(req,reply)=>{
+    const universe=req.query.universe??'global';
+    if(universe!=='global'&&universe!=='us')return reply.code(400).send({error:'Invalid universe'});
+    reply.header('Cache-Control','private, no-store');
+    return readFlows(universe);
+  });
+  return async function readSentiment(input:unknown){
+    const {dataset}=sentimentQuerySchema.parse(input);
+    const readers={'us-flows':()=>readFlows('us'),'global-flows':()=>readFlows('global'),daily:readDaily,specialists:readSpecialists,'crypto-breakdown':readCrypto};
+    return {dataset,data:await readers[dataset](),interpretation:sentimentNotes[dataset]};
+  };
 }

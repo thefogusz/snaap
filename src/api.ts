@@ -307,9 +307,9 @@ export async function buildApp(
   });
   registerWorkspaces(app, db);
   await registerFiles(app, db);
-  registerHarness(app, db, options.harnessDependencies);
+  const readSentiment = registerSentiment(app);
+  registerHarness(app, db, readSentiment, options.harnessDependencies);
   registerMarkets(app, db, !!options.monitoring);
-  registerSentiment(app);
   await registerBilling(app, db, origin);
   await registerDestinations(app, db, { local: options.local, origin });
   registerHistory(app, db);
