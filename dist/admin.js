@@ -992,9 +992,15 @@
     loadActivity();
 
     // Both header health and the operations inbox remain live on every tab.
-    setInterval(() => {
+    const refreshLive = () => {
       loadActivity(false, true);
       loadOverview();
+    };
+    setInterval(() => {
+      if (!document.hidden) refreshLive();
     }, 15000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshLive();
+    });
   });
 })();

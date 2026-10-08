@@ -73,7 +73,11 @@
   }
   async function poll() {
     if (busy || !state.me?.id) return;
+    // A hidden tab only needs to keep polling when it can raise a desktop or sound alert;
+    // otherwise focus/visibility catches up with the saved cursor.
+    if (document.hidden && baseline && owner === state.me.id && !(preferences.desktop || preferences.sound)) return;
     busy = true;
+    let changed = false;
     try {
       if (owner !== state.me.id) {
         owner = state.me.id; cursor = null; baseline = false;
@@ -85,7 +89,7 @@
       }
       const rows = await getSignals(cursor ? "?after=" + encodeURIComponent(cursor) : "");
       if (!baseline) {
-        cursor = rows[0]?.id ?? null; baseline = true;
+        cursor = rows[0]?.id ?? null; baseline = true; changed = true;
       } else {
         // With no prior signal the endpoint is newest-first; otherwise it is oldest-first.
         const fresh = cursor ? rows : rows.slice().reverse();
@@ -98,6 +102,7 @@
           }
         }
         if (fresh.length) {
+          changed = true;
           cursor = fresh.at(-1).id;
           const last = fresh.at(-1);
           const kind = { ENTRY: "สัญญาณเข้า", EXIT: "สัญญาณออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลารอ" }[last.event.kind] || "สัญญาณใหม่";
@@ -119,7 +124,8 @@
       }
       failed = false;
     } catch { failed = true; }
-    finally { busy = false; repaint(); void window.SnaapSignalUnread?.refresh(); }
+    // The unread badge refreshes itself on focus and visibility; poll only when signals moved.
+    finally { busy = false; repaint(); if (changed) void window.SnaapSignalUnread?.refresh(); }
   }
   document.addEventListener("click", async event => {
     const button = event.target.closest("[data-browser-alert]");
@@ -145,6 +151,7 @@
     if (preferences.sound) void unlockAudio().then(repaint).catch(() => {});
   });
   window.addEventListener("focus", () => { repaint(); void poll(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) void poll(); });
   window.SnaapBrowserAlerts = { settingsMarkup };
   setInterval(poll, 15000);
   window.addEventListener("snaap-account-ready", () => { void poll(); });
