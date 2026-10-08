@@ -81,10 +81,13 @@ export async function evaluateTarget(
     return;
   }
   let series: Series;
-  await db.query(
-    "INSERT INTO monitor_status VALUES($1,$2,$3,'RECOVERING',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
-    [row.id, target.exchange, target.pair],
-  );
+  // Mark a target RECOVERING only the first time it is evaluated. Rewriting it on every candle
+  // flipped READY -> RECOVERING -> READY and opened and resolved an admin incident per candle.
+  if (!previous)
+    await db.query(
+      "INSERT INTO monitor_status VALUES($1,$2,$3,'RECOVERING',now()) ON CONFLICT(rule_id,exchange,pair) DO NOTHING",
+      [row.id, target.exchange, target.pair],
+    );
   try {
     series = await fetchSeries(spec, target.exchange, target.pair);
   } catch {
@@ -215,10 +218,6 @@ export async function evaluateTarget(
       "INSERT INTO monitor_checkpoints VALUES($1,$2,$3,$4,$5,now()) ON CONFLICT(rule_id,revision,exchange,pair) DO UPDATE SET state=excluded.state,checked_at=now()",
       [row.id, target.revision, target.exchange, target.pair, state],
     );
-    await c.query(
-      "INSERT INTO monitor_status VALUES($1,$2,$3,'READY',now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
-      [row.id, target.exchange, target.pair],
-    );
     const branchProgress = strategyBranches(spec).map((branch) => {
       const currentState =
         spec.side === "BOTH"
@@ -254,6 +253,16 @@ export async function evaluateTarget(
         result: evidence.result,
       };
     });
+    // One status write per evaluation: READY, or INSUFFICIENT when a condition is UNKNOWN.
+    await c.query(
+      "INSERT INTO monitor_status VALUES($1,$2,$3,$4,now()) ON CONFLICT(rule_id,exchange,pair) DO UPDATE SET status=excluded.status,checked_at=now()",
+      [
+        row.id,
+        target.exchange,
+        target.pair,
+        branchProgress.some((p) => p.result === "UNKNOWN") ? "INSUFFICIENT" : "READY",
+      ],
+    );
     await c.query(
       "UPDATE monitor_insights SET progress=$4 WHERE rule_id=$1 AND exchange=$2 AND pair=$3 AND revision=$5",
       [
@@ -264,11 +273,6 @@ export async function evaluateTarget(
         target.revision,
       ],
     );
-    if (branchProgress.some((p) => p.result === "UNKNOWN"))
-      await c.query(
-        "UPDATE monitor_status SET status='INSUFFICIENT' WHERE rule_id=$1 AND exchange=$2 AND pair=$3",
-        [row.id, target.exchange, target.pair],
-      );
   });
   return deliveryIds;
 }
@@ -281,6 +285,11 @@ export async function startMonitor(
     connectionString: url,
     schema: queueSchema,
     useListenNotify: true,
+    // pg-boss opens its own pool (default 10 clients) beside the application's eight.
+    max: 5,
+    application_name: "snaap-queue",
+    // Completed jobs are only deleted by the maintenance pass, which defaults to once a day.
+    maintenanceIntervalSeconds: 300,
   });
   const measurements = {
     batches: 0,
@@ -315,7 +324,9 @@ export async function startMonitor(
   // Remove jobs left by the retired post-signal price tracker.
   if (await boss.getQueue("outcome")) await boss.deleteQueue("outcome");
   await boss.updateQueue("evaluate", { notify: true });
-  await boss.updateQueue("deliver", { notify: true });
+  await boss.updateQueue("deliver", { notify: true, deleteAfterSeconds: 172800 });
+  // A stale scan tick is useless; do not keep seven days of them.
+  await boss.updateQueue("scan", { deleteAfterSeconds: 3600, retentionSeconds: 3600 });
   const insertJobs = async (
     name: string,
     jobs: Parameters<PgBoss["insert"]>[1],

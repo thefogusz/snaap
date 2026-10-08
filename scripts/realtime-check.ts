@@ -75,6 +75,9 @@ try {
       .rows[0].status,
     "PENDING",
   );
+  const marketIncidents = async () =>
+    (await db.query("SELECT coalesce(sum(occurrences),0)::int AS n FROM admin_events WHERE event_key LIKE 'market:%'")).rows[0].n;
+  const incidentsAfterFirstCandle = await marketIncidents();
   let fetches = 0, release!: () => void;
   const bothFetched = new Promise<void>(resolve => { release = resolve; });
   await Promise.all([1, 2].map(() => evaluateTarget(db, target, async () => {
@@ -84,6 +87,7 @@ try {
   }, 600000)));
   assert.equal((await db.query('SELECT count(*)::int AS n FROM signals WHERE rule_id=$1', [rule])).rows[0].n, 1, 'concurrent evaluation retains one lifecycle/signal');
   assert.equal((await db.query('SELECT state FROM monitor_checkpoints WHERE rule_id=$1', [rule])).rows[0].state.lastTime, 600000);
+  assert.equal(await marketIncidents(), incidentsAfterFirstCandle, 'a healthy follow-up candle must not reopen a market incident');
   await db.query("UPDATE rules SET spec=$1 WHERE id=$2", [
     {
       ...spec,
