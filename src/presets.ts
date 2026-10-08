@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type pg from "pg";
 import { z } from "zod";
 import { transaction } from "./data/db.js";
-import { strategySchema, timeframe } from "./domain/engine.js";
+import { exchangeSchema, strategySchema, timeframe } from "./domain/engine.js";
 import {
   buildPreset,
   describePreset,
@@ -24,8 +24,8 @@ const configSchema = z
       "supertrend",
       "break-retest",
     ]),
-    exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
-    targets: z.array(z.object({ exchange: z.enum(['Binance', 'Bybit', 'OKX', 'Bitget', 'MEXC', 'Gate']), pair: z.string().min(1).max(61) }).strict()).min(1).max(50).optional(),
+    exchange: exchangeSchema,
+    targets: z.array(z.object({ exchange: exchangeSchema, pair: z.string().min(1).max(61) }).strict()).min(1).max(50).optional(),
     market: z.enum(["Spot", "Perpetual Futures"]),
     side: z.enum(["SPOT", "LONG", "SHORT", "BOTH"]),
     pair: z.string().min(1).max(61).optional(),

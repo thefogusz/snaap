@@ -55,3 +55,19 @@ test('weekly freshness uses exchange Monday UTC boundaries', () => {
   assert.equal(freshness('1w', [bar(monday - frames['1w'])], monday).status, 'DELAYED');
   assert.equal(freshness('1w', [bar(monday + 3 * frames['1d'])], monday + 4 * frames['1d']).status, 'INSUFFICIENT');
 });
+test("an old gap outside the bars a setup reads does not stall monitoring", async () => {
+  const { seriesFreshness, indicatorWarmup } = await import("../src/domain/insights.js");
+  const now = 1000 * step;
+  const bars = Array.from({ length: 600 }, (_, i) => bar((401 + i) * step)).filter((b) => b.time !== 450 * step);
+  const rsi = { kind: "INDICATOR", name: "RSI", period: 14, timeframe: "1h" } as const;
+  const spec: any = {
+    schemaVersion: 2, name: "gap", exchange: ["Binance"], market: "Spot", pairs: ["BTC/USDT"], timeframe: "1h",
+    entry: { kind: "COMPARE", op: ">", left: rsi, right: { kind: "CONSTANT", value: 50 } },
+    cooldownBars: 0, stages: [], destinations: [],
+  };
+  assert.equal(indicatorWarmup([rsi]).get("1h"), 46);
+  assert.equal(freshness("1h", bars, now).status, "INSUFFICIENT", "the whole-series check still sees the gap");
+  assert.equal(seriesFreshness(spec, { "1h": bars }, now)[0].status, "CURRENT");
+  const recentGap = bars.filter((b) => b.time !== 990 * step);
+  assert.equal(seriesFreshness(spec, { "1h": recentGap }, now)[0].status, "INSUFFICIENT", "a gap inside the warmup still blocks");
+});

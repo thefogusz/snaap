@@ -147,18 +147,30 @@ const condition: z.ZodType<Condition> = z.lazy(() =>
       .strict(),
   ]),
 );
+/** Supported venues; order matters for validation messages and LLM tool schemas. */
+export const exchangeSchema = z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]);
+export type ExchangeName = z.infer<typeof exchangeSchema>;
+/** CCXT ids for each supported venue. */
+export const ccxtIds = {
+  Binance: "binance",
+  Bybit: "bybit",
+  OKX: "okx",
+  Bitget: "bitget",
+  MEXC: "mexc",
+  Gate: "gate",
+} as const satisfies Record<ExchangeName, string>;
 export const entryMatchPercentSchema = z.number().int().min(1).max(100);
 const strategyStructure = z
   .object({
     schemaVersion: z.literal(2),
     name: z.string().trim().min(1).max(100),
     exchange: z
-      .array(z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]))
+      .array(exchangeSchema)
       .min(1)
       .max(6),
     market: z.enum(["Spot", "Perpetual Futures"]),
     targets: z.array(z.object({
-      exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
+      exchange: exchangeSchema,
       pair: z.string().min(1).max(61),
     }).strict()).min(1).max(50).optional(),
     side: z.enum(["SPOT", "LONG", "SHORT", "BOTH"]).optional(),

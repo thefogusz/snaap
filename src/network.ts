@@ -72,6 +72,9 @@ export async function postWebhook(
       },
     );
     req.setTimeout(10000, () => req.destroy(new Error("TIMEOUT")));
+    // setTimeout above is an idle timeout; a trickling response also needs an overall cap.
+    const overall = setTimeout(() => req.destroy(new Error("TIMEOUT")), 15000);
+    req.on("close", () => clearTimeout(overall));
     req.on("error", reject);
     req.end(body);
   });

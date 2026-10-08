@@ -9,16 +9,13 @@ import { randomUUID } from "node:crypto";
 import { transaction } from './data/db.js';
 import { ApiError } from "./errors.js";
 import { preview } from "./domain/preview.js";
-import { freshness, usedFrames as neededFrames } from "./domain/insights.js";
-import { indicatorByName } from "../dist/indicator-catalog.js";
+import { freshness, indicatorWarmup, usedFrames as neededFrames } from "./domain/insights.js";
 import { availableTimeframes, lastClosedBoundary } from "../dist/timeframes.js";
 import {
+  ccxtIds as ids,
+  exchangeSchema,
   frames,
   timeframe,
-  replay,
-  evaluate,
-  advance,
-  emptyLifecycle,
   strategySchema,
   strategyOperands,
   type Candle,
@@ -26,14 +23,6 @@ import {
   operand,
   type Strategy,
 } from "./domain/engine.js";
-const ids = {
-  Binance: "binance",
-  Bybit: "bybit",
-  OKX: "okx",
-  Bitget: "bitget",
-  MEXC: "mexc",
-  Gate: "gate",
-} as const;
 const clients = new Map<string, any>(),
   cache = new Map<string, { at: number; data: Candle[] }>(),
   pending = new Map<string, Promise<Candle[]>>();
@@ -406,38 +395,7 @@ export async function strategySeries(
   extra: import("./domain/engine.js").Operand[] = [],
 ) {
   const series: Series = {};
-  const warmup = new Map<string, number>();
-  const collect = (o: import("./domain/engine.js").Operand) => {
-    if (o.kind === "INDICATOR") {
-      const definition = indicatorByName[o.name];
-      const extendedWarmup = definition
-        ? 4 *
-            Math.max(
-              o.period,
-              ...definition.params
-                .filter((p) => p.integer)
-                .map((p) =>
-                  p.key === "period"
-                    ? o.period
-                    : (o.params?.[p.key] ?? p.value),
-                ),
-            ) +
-          32
-        : 0;
-      warmup.set(
-        o.timeframe,
-        Math.max(
-          warmup.get(o.timeframe) ?? 500,
-          extendedWarmup,
-          o.period + 32,
-          ...(o.formula?.terms.map((t) => t.period + 32) ?? [0]),
-          (o.slow ?? 0) + (o.signal ?? 9) + 32,
-        ),
-      );
-    }
-  };
-  strategyOperands(spec).forEach(collect);
-  extra.forEach(collect);
+  const warmup = indicatorWarmup([...strategyOperands(spec), ...extra]);
   const requestedFrames = new Set(neededFrames(spec));
   for (const o of extra) if (o.kind === "INDICATOR" || o.kind === "PRICE") requestedFrames.add(o.timeframe);
   for (const frame of requestedFrames)
@@ -446,7 +404,7 @@ export async function strategySeries(
       spec.market,
       pair,
       frame,
-      warmup.get(frame) ?? 500,
+      Math.max(500, warmup.get(frame) ?? 0),
     );
   return series;
 }
@@ -468,7 +426,7 @@ export function registerMarkets(
   app.get("/api/v1/instruments", async (req) => {
     const query = z
       .object({
-        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
+        exchange: exchangeSchema,
         market: z.enum(["Spot", "Perpetual Futures"]),
         refresh: z.enum(["true", "false"]).optional(),
       })
@@ -560,7 +518,7 @@ export function registerMarkets(
     const input = z
       .object({
         spec: strategySchema,
-        exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
+        exchange: exchangeSchema,
         pair: z
           .string()
           .regex(/^[A-Z0-9][A-Z0-9._-]{0,39}\/[A-Z0-9][A-Z0-9._-]{0,19}$/),

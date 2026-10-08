@@ -10,12 +10,13 @@ import { readSheet as readXlsxFile } from "read-excel-file/node";
 import { z } from "zod";
 import { ApiError } from "./errors.js";
 import { mergeTrades } from "./domain/imports.js";
+import { exchangeSchema } from "./domain/engine.js";
 import { transaction } from "./data/db.js";
 import { checkXlsxSize } from "./zip-limit.js";
 const tradeSchema = z
   .object({
     time: z.string().datetime({ offset: true }),
-    exchange: z.enum(["Binance", "Bybit", "OKX", "Bitget", "MEXC", "Gate"]),
+    exchange: exchangeSchema,
     pair: z
       .string()
       .regex(

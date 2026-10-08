@@ -11,6 +11,7 @@ import {
   type Strategy,
 } from "./engine.js";
 import { entryUnits } from "../../dist/entry-flexibility.js";
+import { indicatorByName } from "../../dist/indicator-catalog.js";
 
 export function isValidCandle(c: Candle, frame: keyof typeof frames) {
   return (
@@ -23,17 +24,55 @@ export function isValidCandle(c: Candle, frame: keyof typeof frames) {
   );
 }
 
+/**
+ * Bars each timeframe's indicators read, per operand. Fetching adds a 500-bar floor on top;
+ * gap checks use these windows directly because indicators never bridge older gaps.
+ */
+export function indicatorWarmup(operands: Operand[]) {
+  const warmup = new Map<keyof typeof frames, number>();
+  for (const o of operands) {
+    if (o.kind !== "INDICATOR") continue;
+    const definition = indicatorByName[o.name];
+    const extendedWarmup = definition
+      ? 4 *
+          Math.max(
+            o.period,
+            ...definition.params
+              .filter((p) => p.integer)
+              .map((p) =>
+                p.key === "period" ? o.period : (o.params?.[p.key] ?? p.value),
+              ),
+          ) +
+        32
+      : 0;
+    warmup.set(
+      o.timeframe,
+      Math.max(
+        warmup.get(o.timeframe) ?? 0,
+        extendedWarmup,
+        o.period + 32,
+        ...(o.formula?.terms.map((t) => t.period + 32) ?? [0]),
+        (o.slow ?? 0) + (o.signal ?? 9) + 32,
+      ),
+    );
+  }
+  return warmup;
+}
+
+/** `window` limits the gap check to the most recent closed bars; omitted, the whole series counts. */
 export function freshness(
   frame: keyof typeof frames,
   candles: Candle[],
   now: number,
+  window?: number,
 ) {
   const step = frames[frame],
     expectedClose = lastClosedBoundary(now, frame);
   const closed = candles.filter((c) => c.time <= expectedClose);
   const latestClose = closed.at(-1)?.time ?? null;
-  const gap = closed.some(
-    (c, i) => i > 0 && c.time - closed[i - 1].time !== step,
+  const recent = window === undefined ? closed : closed.slice(-window);
+  const gap = recent.some(
+    (c, i) => i > 0 && c.time - recent[i - 1].time !== step,
   );
   const invalid = closed.some((c) => !isValidCandle(c, frame));
   const status =
@@ -55,8 +94,11 @@ export function seriesFreshness(
   series: Series,
   now = Date.now(),
 ) {
+  // A gap older than the bars the setup reads cannot change a result, so it must not stall
+  // the rule and force refetches until it scrolls out of the fetched history.
+  const warmup = indicatorWarmup(strategyOperands(spec));
   return usedFrames(spec).map((frame) =>
-    freshness(frame, series[frame] ?? [], now),
+    freshness(frame, series[frame] ?? [], now, Math.max(3, (warmup.get(frame) ?? 0) + 1)),
   );
 }
 const label = (o: Operand): string =>

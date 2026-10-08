@@ -1,4 +1,3 @@
-import { postWebhook } from "./network.js";
 export function discordWebhookUrl(address: string) {
   const url = new URL(address);
   if (
@@ -16,16 +15,4 @@ export function discordWebhookUrl(address: string) {
     throw new Error("INVALID_DISCORD_WEBHOOK");
   url.searchParams.set("wait", "true");
   return url.toString();
-}
-export async function postDiscord(address: string, text: string) {
-  return postWebhook(
-    discordWebhookUrl(address),
-    JSON.stringify({
-      username: "Snaap",
-      content: text.slice(0, 2000),
-      allowed_mentions: { parse: [] },
-    }),
-    {},
-    ["discord.com"],
-  );
 }

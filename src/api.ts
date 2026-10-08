@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import staticFiles from "@fastify/static";
 import rateLimit from "@fastify/rate-limit";
-import { randomUUID, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
 import type pg from "pg";
@@ -56,8 +56,18 @@ export async function buildApp(
 ) {
   const origin = options.origin ?? "http://127.0.0.1:4173";
   const allowedHost = new URL(origin).host;
+  // Without this every client behind Railway's edge shares one req.ip, and so one
+  // rate-limit bucket for all unauthenticated requests. Trust only the configured nearest
+  // hops; Fastify ignores numeric hop counts, and this is only sound when the app is
+  // reachable solely through those proxies (a Railway public domain, not a raw port).
+  const proxyHops = Number(
+    process.env.TRUST_PROXY_HOPS || (process.env.RAILWAY_PROJECT_ID ? 1 : 0),
+  );
+  if (!Number.isInteger(proxyHops) || proxyHops < 0 || proxyHops > 5)
+    throw new Error("TRUST_PROXY_HOPS must be an integer from 0 to 5");
   const app = Fastify({
     logger: false,
+    trustProxy: proxyHops ? (_address: string, hop: number) => hop < proxyHops : false,
     bodyLimit: 2 * 1024 * 1024,
     ajv: { customOptions: { removeAdditional: false } },
   });
@@ -67,6 +77,8 @@ export async function buildApp(
     timeWindow: "1 minute",
     hook: "preHandler",
     keyGenerator: (req) => req.userId || req.ip,
+    // Provider webhooks are signature-verified and arrive from a few shared provider IPs.
+    allowList: (req) => !!req.routeOptions.url?.startsWith("/api/v1/hooks/"),
     errorResponseBuilder: (_req, context) =>
       new ApiError(429, "RATE_LIMITED", `ส่งคำขอถี่เกินไป กรุณารอ ${Math.ceil(context.ttl / 1000)} วินาทีแล้วลองใหม่`),
   });
@@ -153,6 +165,10 @@ export async function buildApp(
     } catch {
       throw new ApiError(400, "INVALID_URL", "รูปแบบ URL ไม่ถูกต้อง");
     }
+    // Access decisions use the route the router matched (it decodes the path and
+    // accepts absolute-form targets), never the raw req.url, so "/api/v1/%61dmin"
+    // cannot reach an admin route while skipping its gate.
+    const routePath = req.routeOptions.url ?? pagePath;
     if (
       ["/home", "/notifications", "/history", "/watch", "/billing", "/index.html", "/login.html"].includes(pagePath) ||
       pagePath === "/admin" || pagePath.startsWith("/admin/") ||
@@ -172,7 +188,7 @@ export async function buildApp(
       !!process.env.RAILWAY_PROJECT_ID &&
       req.headers.host === "healthcheck.railway.app" &&
       req.method === "GET" &&
-      req.url === "/api/v1/health";
+      routePath === "/api/v1/health";
     if (req.headers.host !== allowedHost && !railwayHealthcheck)
       throw new ApiError(403, "HOST", "ไม่อนุญาต host นี้");
     if (req.headers.origin && req.headers.origin !== origin)
@@ -181,16 +197,16 @@ export async function buildApp(
       req.method === "GET" &&
       req.headers["sec-fetch-mode"] === "navigate" &&
       req.headers["sec-fetch-dest"] === "document" &&
-      !req.url.startsWith("/api/");
+      !pagePath.startsWith("/api/");
     if (
       req.headers["sec-fetch-site"] === "cross-site" &&
       !publicPageNavigation &&
-      !req.url.startsWith("/api/v1/auth/google/callback")
+      !routePath.startsWith("/api/v1/auth/google/callback")
     )
       throw new ApiError(403, "ORIGIN", "ไม่อนุญาตคำขอข้ามเว็บไซต์");
     if (
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
-      !req.url.startsWith("/api/v1/hooks/") &&
+      !routePath.startsWith("/api/v1/hooks/") &&
       req.headers["x-snaap-client"] !== "web"
     )
       throw new ApiError(403, "CSRF", "คำขอไม่มี client header");
@@ -213,10 +229,10 @@ export async function buildApp(
       if (pagePath !== "/admin") return reply.redirect("/admin");
     }
     if (
-      !req.url.startsWith("/api/v1/") ||
-      req.url.startsWith("/api/v1/auth/") ||
-      req.url.startsWith("/api/v1/hooks/") ||
-      req.url === "/api/v1/health"
+      !routePath.startsWith("/api/v1/") ||
+      routePath.startsWith("/api/v1/auth/") ||
+      routePath.startsWith("/api/v1/hooks/") ||
+      routePath === "/api/v1/health"
     )
       return;
     const token = req.cookies.snaap_session;
@@ -294,7 +310,8 @@ export async function buildApp(
     monitoring: !!options.monitoring,
   }));
   app.post("/api/v1/auth/local", async (req, reply) => {
-    if (!options.local || !["127.0.0.1", "::1"].includes(req.ip))
+    // The socket address, not req.ip, so a forwarded header can never claim loopback.
+    if (!options.local || !["127.0.0.1", "::1"].includes(req.socket.remoteAddress ?? ""))
       throw new ApiError(404, "NOT_FOUND", "ไม่พบ");
     const id = "00000000-0000-4000-8000-000000000001";
     await db.query(

@@ -606,6 +606,8 @@ export function registerHarness(
         }
         requireProposal = false;
         for (const call of calls) {
+          // Tool reads do not receive the deadline signal, so enforce it between calls.
+          if (deadline.aborted) throw new Error("REQUEST_DEADLINE");
           if (++toolCount > 6)
             throw new ApiError(502, 'AI_TOOL_LIMIT', 'AI ใช้เครื่องมือครบขอบเขตคำขอแล้ว คืนโควตาแล้ว กรุณาแบ่งการวิเคราะห์เป็นขั้นย่อย');
           let result: unknown = { error: "Unknown tool" };
@@ -913,19 +915,25 @@ export function registerHarness(
         }),
         { input: 0, output: 0 },
       );
-      await db.query(
-        "UPDATE usage_ledger SET status='REFUNDED',input_tokens=$2,output_tokens=$3,estimated_usd=$4 WHERE id=$1",
-        [
-          runId,
-          totals.input,
-          totals.output,
-          (totals.input * rate.input + totals.output * rate.output) / 1e6,
-        ],
-      );
-      await db.query(
-        "UPDATE agent_runs SET status='FAILED',trace=$2 WHERE id=$1",
-        [runId, JSON.stringify(trace)],
-      );
+      // If recording the failure itself fails, still report the error to the client; the stale-run
+      // reaper in monitor.ts releases the reservation later.
+      try {
+        await db.query(
+          "UPDATE usage_ledger SET status='REFUNDED',input_tokens=$2,output_tokens=$3,estimated_usd=$4 WHERE id=$1",
+          [
+            runId,
+            totals.input,
+            totals.output,
+            (totals.input * rate.input + totals.output * rate.output) / 1e6,
+          ],
+        );
+        await db.query(
+          "UPDATE agent_runs SET status='FAILED',trace=$2 WHERE id=$1",
+          [runId, JSON.stringify(trace)],
+        );
+      } catch (recordError) {
+        console.error("AI run failure was not recorded", (recordError as Error)?.name);
+      }
       const fail = (failure: ApiError) => {
         if (!streaming) throw failure;
         emit({ type: 'error', error: { code: failure.code, message: failure.message } });

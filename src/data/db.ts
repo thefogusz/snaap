@@ -113,15 +113,19 @@ export async function transaction<T>(
   work: (client: pg.PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await db.connect();
+  let broken: Error | undefined;
   try {
     await client.query("BEGIN");
     const result = await work(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    // A failed ROLLBACK must not hide the original error or return a broken client to the pool.
+    await client.query("ROLLBACK").catch((rollbackError: Error) => {
+      broken = rollbackError;
+    });
     throw error;
   } finally {
-    client.release();
+    client.release(broken);
   }
 }

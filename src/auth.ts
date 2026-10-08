@@ -10,9 +10,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 import { ADMIN_EMAIL } from "./admin-access.js";
 import { accessBlocked } from './access-controls.js';
+import { hash } from './crypto.js';
 
-const digest = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
 const callbackQuery = z.object({
   state: z.string().regex(/^[a-f0-9]{64}$/),
   code: z.string().min(1).max(4096).optional(),
@@ -35,7 +34,9 @@ export function registerGoogle(
     path: "/api/v1/auth/",
     maxAge: 600,
   };
-  app.get("/api/v1/auth/google", async (req, reply) => {
+  // Each start inserts an oauth_attempts row; limit per client separately from the API budget.
+  const authLimit = { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } };
+  app.get("/api/v1/auth/google", authLimit, async (req, reply) => {
     const purpose = z
       .object({ admin: z.literal("1").optional() })
       .parse(req.query).admin
@@ -54,7 +55,7 @@ export function registerGoogle(
     await db.query("DELETE FROM oauth_attempts WHERE expires_at<=now()");
     await db.query(
       "INSERT INTO oauth_attempts(state_hash,verifier_hash,nonce,expires_at,purpose) VALUES($1,$2,$3,now()+interval '10 minutes',$4)",
-      [digest(state), digest(verifier), nonce, purpose],
+      [hash(state), hash(verifier), nonce, purpose],
     );
     reply.setCookie("snaap_oauth", `${state}.${verifier}`, cookieOptions);
     reply.setCookie("snaap_oauth_purpose", purpose, cookieOptions);
@@ -72,7 +73,7 @@ export function registerGoogle(
     }).toString();
     return reply.redirect(url.href);
   });
-  app.get("/api/v1/auth/google/callback", async (req, reply) => {
+  app.get("/api/v1/auth/google/callback", authLimit, async (req, reply) => {
     let adminFlow = req.cookies.snaap_oauth_purpose === "admin";
     const fail = (reply: FastifyReply, reason: string) =>
       reply.redirect(
@@ -95,7 +96,7 @@ export function registerGoogle(
     try {
       const attempt = await db.query(
         "DELETE FROM oauth_attempts WHERE state_hash=$1 AND verifier_hash=$2 AND expires_at>now() RETURNING nonce,purpose",
-        [digest(query.state), digest(saved[1]!)],
+        [hash(query.state), hash(saved[1]!)],
       );
       if (!attempt.rowCount) return fail(reply, "expired");
       adminFlow = attempt.rows[0].purpose === "admin";
@@ -162,7 +163,7 @@ export function registerGoogle(
       );
       if (req.cookies.snaap_session)
         await db.query("DELETE FROM sessions WHERE token_hash=$1", [
-          digest(req.cookies.snaap_session),
+          hash(req.cookies.snaap_session),
         ]);
       if (await accessBlocked(db,row.rows[0].id,'account')) return fail(reply,'blocked');
       await session(row.rows[0].id, reply);
