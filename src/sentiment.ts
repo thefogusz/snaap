@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { Pool } from 'pg';
 import { z } from 'zod';
 const cotSource = 'https://publicreporting.cftc.gov/d/6dca-aqww';
 const cotApi = 'https://publicreporting.cftc.gov/resource/6dca-aqww.json';
@@ -144,6 +145,20 @@ export function parseCryptoCandles(input: unknown, symbol: string, now = Date.no
   });
   return { history:history.slice(-32), source: `https://www.coinbase.com/advanced-trade/spot/${symbol}`, sourceName:'Coinbase Exchange', observedAt:null, timezone:'UTC' };
 }
+const krakenSchema = z.object({error:z.array(z.string()).length(0),result:z.record(z.string(),z.unknown())});
+export function parseKrakenCandles(input:unknown, symbol:string, now=Date.now()) {
+  const {result}=krakenSchema.parse(input);
+  const rows=Object.entries(result).filter(([key])=>key!=='last');
+  if(rows.length!==1 || !(symbol==='BTC-USD'?['XXBTZUSD','XBTUSD']:['XETHZUSD','ETHUSD']).includes(rows[0][0]))throw Error('Kraken market identity changed');
+  const candles=z.array(z.tuple([z.number().int().positive(),z.string(),z.string(),z.string(),z.string(),z.string(),z.string(),z.number().int().nonnegative()])).min(8).parse(rows[0][1]);
+  const history=candles.map(([time,open,high,low,close])=>{
+    const values=[open,high,low,close].map(Number);
+    if(time%86400!==0||time*1000>now||values.some(v=>!Number.isFinite(v)||v<=0)||values[2]>Math.min(values[0],values[3])||values[1]<Math.max(values[0],values[3]))throw Error('Invalid Kraken daily candle');
+    return {date:new Date(time*1000).toISOString().slice(0,10),close:values[3],provisional:(time+86400)*1000>now};
+  });
+  if(history.some((row,i)=>i&&row.date<=history[i-1].date))throw Error('Kraken daily chronology changed');
+  return {history:history.slice(-32),source:`https://www.kraken.com/prices/${symbol==='BTC-USD'?'bitcoin':'ethereum'}`,sourceName:'Kraken Spot',observedAt:null,timezone:'UTC'};
+}
 
 export function dailyWindow(history: DailyPoint[], now = Date.now()) {
   const today = new Date(now).toISOString().slice(0,10);
@@ -185,12 +200,26 @@ export function parseCryptoBreakdown(input:unknown,stableInput:unknown,now=Date.
 export const sentimentQuerySchema = z.object({dataset:z.enum(['positioning','daily','specialists','crypto-breakdown'])}).strict();
 const sentimentNotes = {
   positioning:'CFTC weekly non-commercial futures net positions (long minus short) as a percentage of open interest for eight named contracts. Changes are percentage points, not USD fund flows, purchases, or transfers between markets. Tuesday observations are normally released Friday; each contract is a narrow market proxy.',
-  daily:'Reference ETF and Coinbase BTC/ETH close-price returns, not fund flows or dividend-adjusted total returns. days covers seven UTC calendar dates; ETF dates use exchange timezone. Missing dates stay null; provisional bars are unfinished. change and change7 are percentages.',
+  daily:'Reference ETF and Coinbase or fallback Kraken Spot BTC/ETH close-price returns, not fund flows or dividend-adjusted total returns. sourceTier identifies primary, alternate, or saved data; preserve sourceName and observation dates. days covers seven UTC calendar dates; ETF dates use exchange timezone. Missing dates stay null; provisional bars are unfinished. change and change7 are percentages.',
   specialists:'Gold: actual global physically backed ETF net flows in USD at the reported cadence. crypto: change in native USD-pegged stablecoin supply, not BTC/ETH flows or proven new money. fear: daily Bitcoin Fear & Greed index 0–100, not fund flows. Per-feed errors mean unavailable.',
   'crypto-breakdown':'CoinGecko top-100 coverage excluding classified stablecoins; BTC, ETH and remaining altcoins. cap/delta/gain/loss are USD market capitalization, not cash flows; change is percent over rolling 24h. Contribution to rising value uses positive delta/gain; to falling value uses absolute negative delta/loss. Neither is trading volume or proof of money entering/leaving crypto.',
 };
 
-export function registerSentiment(app: FastifyInstance) {
+export function registerSentiment(app: FastifyInstance, db?: Pool) {
+  async function saveSnapshot(key: string, observedAt: string, payload: unknown) {
+    if (!db) return;
+    try {
+      await db.query('INSERT INTO sentiment_snapshots(key,observed_at,payload) VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE SET observed_at=EXCLUDED.observed_at,payload=EXCLUDED.payload,saved_at=now() WHERE sentiment_snapshots.observed_at<=EXCLUDED.observed_at', [key, observedAt, payload]);
+    } catch (error) { app.log.warn({err:error,key},'Sentiment snapshot save failed'); }
+  }
+  async function loadSnapshot<T>(key: string, maxAgeMs: number): Promise<T | undefined> {
+    if (!db) return;
+    try {
+      const {rows}=await db.query('SELECT payload,observed_at FROM sentiment_snapshots WHERE key=$1', [key]);
+      const row=rows[0];
+      if (row && Date.now()-new Date(row.observed_at).getTime()<=maxAgeMs && new Date(row.observed_at).getTime()<=Date.now()+60000) return row.payload as T;
+    } catch (error) { app.log.warn({err:error,key},'Sentiment snapshot read failed'); }
+  }
   let cryptoData:ReturnType<typeof parseCryptoBreakdown>|undefined,cryptoChecked=0,cryptoFailed=false,cryptoPending:Promise<void>|undefined;
   async function readCrypto(){
     if(Date.now()-cryptoChecked>(cryptoFailed?60000:15*60000)){
@@ -198,16 +227,20 @@ export function registerSentiment(app: FastifyInstance) {
         try{
           const base='https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&page=1&sparkline=false';
           const [markets,stable]=await Promise.all([getHtml(base+'&per_page=100','application/json'),getHtml(base+'&category=stablecoins&per_page=250','application/json')]);
-          cryptoData=parseCryptoBreakdown(JSON.parse(markets),JSON.parse(stable));cryptoFailed=false;
+          const next=parseCryptoBreakdown(JSON.parse(markets),JSON.parse(stable));
+          if(cryptoData && next.observedAt<cryptoData.observedAt)throw Error('Crypto observation regressed');
+          cryptoData=next;cryptoFailed=false;
+          await saveSnapshot('crypto-breakdown',cryptoData.observedAt,cryptoData);
         }catch(error){cryptoFailed=true;app.log.warn({err:error},'Crypto breakdown source unavailable');}
         finally{cryptoChecked=Date.now();cryptoPending=undefined;}
       })();
     }
     await cryptoPending;
-    if(!cryptoData)return {error:'ยังอ่านองค์ประกอบคริปโตไม่ได้'};
+    cryptoData??=await loadSnapshot<ReturnType<typeof parseCryptoBreakdown>>('crypto-breakdown',36*3600000);
+    if(!cryptoData || Date.now()-Date.parse(cryptoData.observedAt)>36*3600000)return {error:'ยังอ่านองค์ประกอบคริปโตไม่ได้'};
     return {...cryptoData,stale:cryptoFailed,checkedAt:new Date(cryptoChecked).toISOString()};
   }
-  type DailyData = ReturnType<typeof parseDailyQuotes> | ReturnType<typeof parseCryptoCandles>;
+  type DailyData = ReturnType<typeof parseDailyQuotes> | ReturnType<typeof parseCryptoCandles> | ReturnType<typeof parseKrakenCandles>;
   const dailyCache = new Map<string,{data?:DailyData;checked:number;failed?:boolean;pending?:Promise<void>}>();
   async function readDaily(){
     const markets = await Promise.all(dailyMarkets.map(async market=>{
@@ -218,14 +251,27 @@ export function registerSentiment(app: FastifyInstance) {
         current.pending??=(async()=>{
           try{
             const url=crypto?`https://api.exchange.coinbase.com/products/${market.symbol}/candles?granularity=86400`:`https://query1.finance.yahoo.com/v8/finance/chart/${market.symbol}?range=1mo&interval=1d`;
-            const raw=JSON.parse(await getHtml(url,'application/json'));
-            current.data=crypto?parseCryptoCandles(raw,market.symbol):parseDailyQuotes(raw,market.symbol);current.failed=false;
+            let next:DailyData;
+            try {
+              const raw=JSON.parse(await getHtml(url,'application/json'));
+              next=crypto?parseCryptoCandles(raw,market.symbol):parseDailyQuotes(raw,market.symbol);
+            } catch(error) {
+              if(!crypto)throw error;
+              const pair=market.id==='btc'?'XBTUSD':'ETHUSD';
+              next=parseKrakenCandles(JSON.parse(await getHtml(`https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=1440`,'application/json')),market.symbol);
+            }
+            if(current.data && next.history.at(-1)!.date<current.data.history.at(-1)!.date)throw Error('Daily observation regressed');
+            current.data=next;
+            current.failed=false;
+            await saveSnapshot('daily:'+market.id,current.data.history.at(-1)!.date,current.data);
           }catch(error){current.failed=true;app.log.warn({err:error,symbol:market.symbol},'Daily market source unavailable');}
           finally{current.checked=Date.now();current.pending=undefined;}
         })();
       }
       await current.pending;
-      return {...market,...current.data,...(current.data?dailyWindow(current.data.history):{}),stale:!!current.failed,checkedAt:new Date(current.checked).toISOString(),...(!current.data?{error:'ยังอ่านราคาต้นทางไม่ได้'}:{})};
+      current.data??=await loadSnapshot<DailyData>('daily:'+market.id,(crypto?2:5)*86400000);
+      if(current.data && Date.now()-Date.parse(current.data.history.at(-1)!.date)>(crypto?2:5)*86400000)current.data=undefined;
+      return {...market,...current.data,...(current.data?dailyWindow(current.data.history):{}),stale:!!current.failed,sourceTier:current.failed?'saved':current.data?.sourceName==='Kraken Spot'?'alternate':'primary',checkedAt:new Date(current.checked).toISOString(),...(!current.data?{error:'ยังอ่านราคาต้นทางไม่ได้'}:{})};
     }));
     return {markets,retrievedAt:new Date().toISOString()};
   }
@@ -235,6 +281,7 @@ export function registerSentiment(app: FastifyInstance) {
     { id: 'fear', source: fearSource, url: 'https://api.alternative.me/fng/?limit=1', parse: parseFear, ttl: 15*60000 },
   ];
   type Specialist = ReturnType<typeof parseGold> | ReturnType<typeof parseStablecoins> | ReturnType<typeof parseFear>;
+  const specialistDate=(data:Specialist)=>'period' in data?data.period:data.history.at(-1)!.period;
   const specialistCache = new Map<string, { data?: Specialist; checked: number; failed?: boolean; pending?: Promise<void> }>();
   async function readSpecialists(){
     const results = await Promise.all(feeds.map(async feed => {
@@ -243,12 +290,19 @@ export function registerSentiment(app: FastifyInstance) {
       const current = entry;
       if (Date.now() - current.checked > (current.failed ? 60000 : feed.ttl)) {
         current.pending ??= (async () => {
-          try { current.data = feed.parse(JSON.parse(await getHtml(feed.url, 'application/json'))); current.failed = false; }
+          try { const next=feed.parse(JSON.parse(await getHtml(feed.url, 'application/json')));
+            if(current.data && specialistDate(next)<specialistDate(current.data))throw Error('Specialist observation regressed');
+            current.data=next;current.failed=false;
+            await saveSnapshot('specialist:'+feed.id,specialistDate(next),next);
+          }
           catch (error) { current.failed = true; app.log.warn({ err: error, feed: feed.id }, 'Sentiment source unavailable'); }
           finally { current.checked = Date.now(); current.pending = undefined; }
         })();
       }
       await current.pending;
+      const maxAge=feed.id==='gold'?60*86400000:2*86400000;
+      current.data??=await loadSnapshot<Specialist>('specialist:'+feed.id,maxAge);
+      if(current.data && Date.now()-Date.parse(specialistDate(current.data))>maxAge)current.data=undefined;
       return [feed.id, current.data ? { ...current.data, stale: !!current.failed, checkedAt: new Date(current.checked).toISOString() } : { id: feed.id, source: feed.source, error: 'อ่านข้อมูลต้นทางไม่สำเร็จ กรุณาลองอีกครั้ง' }];
     }));
     return Object.fromEntries(results);
@@ -263,8 +317,11 @@ export function registerSentiment(app: FastifyInstance) {
           url.searchParams.set('$where', `cftc_contract_market_code in (${cotMarkets.map(([, , code]) => `'${code}'`).join(',')}) and report_date_as_yyyy_mm_dd >= '${since}T00:00:00'`);
           url.searchParams.set('$order', 'report_date_as_yyyy_mm_dd DESC');
           url.searchParams.set('$limit', '200');
-          cotData = parsePositioning(JSON.parse(await getHtml(url.href, 'application/json')));
+          const next=parsePositioning(JSON.parse(await getHtml(url.href, 'application/json')));
+          if(cotData && next.periods.at(-1)!<cotData.periods.at(-1)!)throw Error('CFTC observation regressed');
+          cotData=next;
           cotFailed = false;
+          await saveSnapshot('positioning',cotData.periods.at(-1)!,cotData);
         } catch (error) {
           cotFailed = true;
           console.warn('Sentiment source refresh failed', 'CFTC', error instanceof Error ? error.message.slice(0, 500) : 'Unknown error');
@@ -272,7 +329,8 @@ export function registerSentiment(app: FastifyInstance) {
       })();
     }
     await cotPending;
-    if (!cotData) return { source: cotSource, error: 'ยังอ่านข้อมูล CFTC ไม่ได้' };
+    cotData??=await loadSnapshot<ReturnType<typeof parsePositioning>>('positioning',21*86400000);
+    if (!cotData || Date.now()-Date.parse(cotData.periods.at(-1)!)>21*86400000) return { source: cotSource, error: 'ยังอ่านข้อมูล CFTC ไม่ได้' };
     return { ...cotData, stale: cotFailed, checkedAt: new Date(cotChecked).toISOString() };
   }
   app.get('/api/v1/sentiment/crypto-breakdown',async(_req,reply)=>{
@@ -298,6 +356,6 @@ export function registerSentiment(app: FastifyInstance) {
   return async function readSentiment(input:unknown){
     const {dataset}=sentimentQuerySchema.parse(input);
     const readers={positioning:readPositioning,daily:readDaily,specialists:readSpecialists,'crypto-breakdown':readCrypto};
-    return {dataset,data:await readers[dataset](),interpretation:sentimentNotes[dataset],freshness:'Shared cached data: stale:false does not mean fetched live for this request; it only means the last refresh did not fail. stale:true means retained data after refresh failure. checkedAt is the last refresh attempt, not the observation date or proof of a successful download. retrievedAt is retrieval time; use source periods/observedAt for observation freshness. Never describe a cached result as just fetched or real-time.'};
+    return {dataset,data:await readers[dataset](),interpretation:sentimentNotes[dataset],freshness:'Shared cached data: stale:false does not mean fetched live for this request; it only means the last refresh did not fail. stale:true means retained data after refresh failure, including durable snapshots. Daily sourceTier=alternate uses Kraken Spot, not Coinbase; sourceTier=saved uses a prior observation. checkedAt is the last refresh attempt, not the observation date or proof of a successful download. retrievedAt is retrieval time; use source periods/observedAt for observation freshness. Never describe a cached result as just fetched or real-time.'};
   };
 }

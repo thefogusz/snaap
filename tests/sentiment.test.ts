@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { parsePositioning, parseGold, parseStablecoins, parseFear, parseDailyQuotes, parseCryptoCandles, dailyWindow, parseCryptoBreakdown, registerSentiment } from '../src/sentiment.js';
+import { parsePositioning, parseGold, parseStablecoins, parseFear, parseDailyQuotes, parseCryptoCandles, parseKrakenCandles, dailyWindow, parseCryptoBreakdown, registerSentiment } from '../src/sentiment.js';
 
 test('CFTC positioning: contract scope, weekly chronology, units, cache and partial failures', async t => {
   const codes=['13874A','244041','244042','043602','088691','067411','133741','146021'];
@@ -30,7 +30,12 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
     if(unavailable)throw new Error('offline');
     return new Response(JSON.stringify(rows),{headers:{'content-type':'application/json'}});
   });
-  const app=Fastify(),readSentiment=registerSentiment(app);t.after(()=>app.close());
+  const snapshots=new Map<string,{observed_at:Date;payload:unknown}>();
+  const db={query:async(sql:string,params:unknown[])=>{
+    if(sql.startsWith('INSERT INTO sentiment_snapshots')){snapshots.set(params[0] as string,{observed_at:new Date(params[1] as string),payload:params[2]});return {rows:[]};}
+    return {rows:snapshots.has(params[0] as string)?[snapshots.get(params[0] as string)]:[]};
+  }} as any;
+  const app=Fastify(),readSentiment=registerSentiment(app,db);t.after(()=>app.close());
   await assert.rejects(()=>readSentiment({dataset:'us-flows'}));
   await assert.rejects(()=>readSentiment({dataset:'positioning',url:'https://example.com'}));
   const [first,concurrent,evidence]=await Promise.all([app.inject('/api/v1/sentiment/positioning'),app.inject('/api/v1/sentiment/positioning'),readSentiment({dataset:'positioning'})]);
@@ -43,10 +48,14 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
   const stale=await app.inject('/api/v1/sentiment/positioning');
   assert.equal(stale.json().stale,true);assert.deepEqual(stale.json().markets,first.json().markets);
   assert.deepEqual(warnings.mock.calls.at(-1)!.arguments,['Sentiment source refresh failed','CFTC','offline']);
-  const empty=Fastify();registerSentiment(empty);t.after(()=>empty.close());
-  assert.equal((await empty.inject('/api/v1/sentiment/positioning')).statusCode,503);
+  const empty=Fastify();registerSentiment(empty,db);t.after(()=>empty.close());
+  const restored=await empty.inject('/api/v1/sentiment/positioning');
+  assert.equal(restored.statusCode,200);assert.equal(restored.json().stale,true);
+  assert.deepEqual(restored.json().markets,first.json().markets);
   unavailable=false;now+=60001;
   assert.equal((await empty.inject('/api/v1/sentiment/positioning')).json().stale,false);
+  unavailable=true;now+=22*86400000;
+  assert.equal((await empty.inject('/api/v1/sentiment/positioning')).statusCode,503);
 });
 
 test('Specialists: actual flows vs supply vs index, aligned dates, partial failure and cache', async t => {
@@ -125,11 +134,15 @@ test('Daily markets: identity, calendar gaps, provisional candles, returns and i
   assert.throws(()=>parseCryptoCandles([...candles,candles[0]],'BTC-USD',now));
   const invalid=structuredClone(candles);invalid[0][1]=200;
   assert.throws(()=>parseCryptoCandles(invalid,'BTC-USD',now));
-  let calls=0,fail=false;
+  const kraken={error:[],result:{XXBTZUSD:candles.slice().reverse().map(([time,low,high,open,close,volume])=>[time,String(open),String(high),String(low),String(close),String(close),String(volume),1]),last:1}};
+  assert.equal(parseKrakenCandles(kraken,'BTC-USD',now).sourceName,'Kraken Spot');
+  assert.throws(()=>parseKrakenCandles(kraken,'ETH-USD',now));
+  let calls=0,fail=false,failCoinbase=false;
   t.mock.method(globalThis,'fetch',async (url:string|URL|Request)=>{
     calls++;const text=String(url);
     if(fail&&text.includes('/GLD?'))throw Error('offline');
-    const body=text.includes('coinbase.com')?candles:quote(text.match(/chart\/([^?]+)/)![1]);
+    if(failCoinbase&&text.includes('coinbase.com')&&text.includes('BTC-USD'))throw Error('offline');
+    const body=text.includes('kraken.com')?kraken:text.includes('coinbase.com')?candles:quote(text.match(/chart\/([^?]+)/)![1]);
     return new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}});
   });
   const app=Fastify();const readSentiment=registerSentiment(app);t.after(()=>app.close());
@@ -139,10 +152,12 @@ test('Daily markets: identity, calendar gaps, provisional candles, returns and i
   assert.deepEqual((evidence.data as any).markets,first.json().markets);
   assert.equal(calls,10);
   assert.equal(first.json().markets.length,10);
-  fail=true;now+=6*60000;
+  fail=true;failCoinbase=true;now+=6*60000;
   const stale=(await app.inject('/api/v1/sentiment/daily')).json().markets;
   assert.equal(stale.find((m:any)=>m.id==='gld').stale,true);
   assert.equal(stale.find((m:any)=>m.id==='btc').stale,false);
+  assert.equal(stale.find((m:any)=>m.id==='btc').sourceName,'Kraken Spot');
+  assert.equal(stale.find((m:any)=>m.id==='btc').sourceTier,'alternate');
   assert.deepEqual(stale.find((m:any)=>m.id==='gld').history,first.json().markets.find((m:any)=>m.id==='gld').history);
   const empty=Fastify();registerSentiment(empty);t.after(()=>empty.close());
   const partial=(await empty.inject('/api/v1/sentiment/daily')).json().markets;

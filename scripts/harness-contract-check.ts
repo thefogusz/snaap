@@ -648,7 +648,7 @@ try {
   let cotCalls=0;
   globalThis.fetch=async(input,init)=>{
     if(String(input).startsWith('https://publicreporting.cftc.gov/')){cotCalls++;return new Response('offline',{status:503});}
-    if(['query1.finance.yahoo.com','api.exchange.coinbase.com','fsapi.gold.org','stablecoins.llama.fi','api.alternative.me','api.coingecko.com'].includes(new URL(String(input)).hostname))return new Response('offline',{status:503});
+    if(['query1.finance.yahoo.com','api.exchange.coinbase.com','api.kraken.com','fsapi.gold.org','stablecoins.llama.fi','api.alternative.me','api.coingecko.com'].includes(new URL(String(input)).hostname))return new Response('offline',{status:503});
     return fetchBeforeSentiment(input,init);
   };
   try{

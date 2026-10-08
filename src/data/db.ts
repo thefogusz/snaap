@@ -105,6 +105,10 @@ export async function migrate(db: pg.Pool) {
       exchange text, market text, pair text, first_observed_at timestamptz NOT NULL, baseline boolean NOT NULL,
       PRIMARY KEY(exchange,market,pair), FOREIGN KEY(exchange,market) REFERENCES market_catalog_sources
     );
+    CREATE TABLE IF NOT EXISTS sentiment_snapshots (
+      key text PRIMARY KEY, observed_at timestamptz NOT NULL, payload jsonb NOT NULL,
+      saved_at timestamptz NOT NULL DEFAULT now()
+    );
   `);
   await migrateAdmin(db);
 }
