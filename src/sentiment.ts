@@ -205,7 +205,13 @@ const sentimentNotes = {
   'crypto-breakdown':'CoinGecko top-100 coverage excluding classified stablecoins; BTC, ETH and remaining altcoins. cap/delta/gain/loss are USD market capitalization, not cash flows; change is percent over rolling 24h. Contribution to rising value uses positive delta/gain; to falling value uses absolute negative delta/loss. Neither is trading volume or proof of money entering/leaving crypto.',
 };
 
-export function registerSentiment(app: FastifyInstance, db?: Pool) {
+export function positioningRefreshMs(now = Date.now()) {
+  const parts = new Intl.DateTimeFormat('en-US', {timeZone:'America/New_York',weekday:'short',hour:'numeric',hourCycle:'h23'}).formatToParts(now);
+  const day=parts.find(p=>p.type==='weekday')!.value,hour=Number(parts.find(p=>p.type==='hour')!.value);
+  return day==='Fri'&&hour>=15 || day==='Sat'&&hour<4 ? 3600000 : 86400000;
+}
+
+export function registerSentiment(app: FastifyInstance, db?: Pool, background = false) {
   async function saveSnapshot(key: string, observedAt: string, payload: unknown) {
     if (!db) return;
     try {
@@ -223,7 +229,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
   let cryptoData:ReturnType<typeof parseCryptoBreakdown>|undefined,cryptoChecked=0,cryptoFailed=false,cryptoPending:Promise<void>|undefined;
   async function readCrypto(){
     cryptoData??=await loadSnapshot<ReturnType<typeof parseCryptoBreakdown>>('crypto-breakdown',36*3600000);
-    if(Date.now()-cryptoChecked>(cryptoFailed?60000:15*60000)){
+    if(Date.now()-cryptoChecked>=(cryptoFailed?60000:3600000)){
       cryptoPending??=(async()=>{
         try{
           const base='https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&page=1&sparkline=false';
@@ -249,7 +255,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
       if(!entry){entry={checked:0};dailyCache.set(market.id,entry);}
       const current=entry,crypto=market.category==='crypto';
       current.data??=await loadSnapshot<DailyData>('daily:'+market.id,(crypto?2:5)*86400000);
-      if(Date.now()-current.checked>(current.failed?60000:5*60000)){
+      if(Date.now()-current.checked>=(current.failed?60000:3600000)){
         current.pending??=(async()=>{
           try{
             const url=crypto?`https://api.exchange.coinbase.com/products/${market.symbol}/candles?granularity=86400`:`https://query1.finance.yahoo.com/v8/finance/chart/${market.symbol}?range=1mo&interval=1d`;
@@ -278,9 +284,9 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
     return {markets,retrievedAt:new Date().toISOString()};
   }
   const feeds = [
-    { id: 'gold', source: goldSource, url: goldApi, parse: parseGold, ttl: 3600000 },
-    { id: 'crypto', source: cryptoSource, url: 'https://stablecoins.llama.fi/stablecoincharts/all', parse: parseStablecoins, ttl: 15*60000 },
-    { id: 'fear', source: fearSource, url: 'https://api.alternative.me/fng/?limit=1', parse: parseFear, ttl: 15*60000 },
+    { id: 'gold', source: goldSource, url: goldApi, parse: parseGold, ttl: 86400000 },
+    { id: 'crypto', source: cryptoSource, url: 'https://stablecoins.llama.fi/stablecoincharts/all', parse: parseStablecoins, ttl: 6*3600000 },
+    { id: 'fear', source: fearSource, url: 'https://api.alternative.me/fng/?limit=1', parse: parseFear, ttl: 6*3600000 },
   ];
   type Specialist = ReturnType<typeof parseGold> | ReturnType<typeof parseStablecoins> | ReturnType<typeof parseFear>;
   const specialistDate=(data:Specialist)=>'period' in data?data.period:data.history.at(-1)!.period;
@@ -291,7 +297,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
       if (!entry) { entry = { checked: 0 }; specialistCache.set(feed.id, entry); }
       const current = entry;
       current.data??=await loadSnapshot<Specialist>('specialist:'+feed.id,feed.id==='gold'?60*86400000:2*86400000);
-      if (Date.now() - current.checked > (current.failed ? 60000 : feed.ttl)) {
+      if (Date.now() - current.checked >= (current.failed ? 60000 : feed.ttl)) {
         current.pending ??= (async () => {
           try { const next=feed.parse(JSON.parse(await getHtml(feed.url, 'application/json')));
             if(current.data && specialistDate(next)<specialistDate(current.data))throw Error('Specialist observation regressed');
@@ -313,7 +319,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
   let cotData: ReturnType<typeof parsePositioning> | undefined, cotChecked = 0, cotFailed = false, cotPending: Promise<void> | undefined;
   async function readPositioning() {
     cotData??=await loadSnapshot<ReturnType<typeof parsePositioning>>('positioning',21*86400000);
-    if (Date.now() - cotChecked > (cotFailed ? 60000 : 3600000)) {
+    if (Date.now() - cotChecked >= (cotFailed ? 60000 : positioningRefreshMs())) {
       cotPending ??= (async () => {
         try {
           const since = new Date(Date.now() - 12 * 7 * 86400000).toISOString().slice(0,10);
@@ -336,6 +342,22 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
     cotData??=await loadSnapshot<ReturnType<typeof parsePositioning>>('positioning',21*86400000);
     if (!cotData || Date.now()-Date.parse(cotData.periods.at(-1)!)>21*86400000) return { source: cotSource, error: 'ยังอ่านข้อมูล CFTC ไม่ได้' };
     return { ...cotData, stale: cotFailed, checkedAt: new Date(cotChecked).toISOString() };
+  }
+  if (background) {
+    let timer: ReturnType<typeof setInterval> | undefined, pending: Promise<void> | undefined, stopping=false;
+    // ponytail: one scheduler per API process; use a shared job queue before adding API replicas.
+    function refresh() {
+      if(stopping || pending)return;
+      pending=Promise.allSettled([readDaily(),readCrypto(),readSpecialists(),readPositioning()])
+        .then(results=>{for(const result of results)if(result.status==='rejected')app.log.error({err:result.reason},'Background sentiment refresh failed');})
+        .finally(()=>{pending=undefined;});
+    }
+    app.addHook('onReady',async()=>{
+      refresh();timer=setInterval(refresh,60000);timer.unref();
+    });
+    app.addHook('onClose',async()=>{
+      stopping=true;clearInterval(timer);await pending;
+    });
   }
   app.get('/api/v1/sentiment/crypto-breakdown',async(_req,reply)=>{
     reply.header('Cache-Control','private, no-store');

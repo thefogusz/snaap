@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { parsePositioning, parseGold, parseStablecoins, parseFear, parseDailyQuotes, parseCryptoCandles, parseKrakenCandles, dailyWindow, parseCryptoBreakdown, registerSentiment } from '../src/sentiment.js';
+import { parsePositioning, parseGold, parseStablecoins, parseFear, parseDailyQuotes, parseCryptoCandles, parseKrakenCandles, dailyWindow, parseCryptoBreakdown, registerSentiment, positioningRefreshMs } from '../src/sentiment.js';
 
 test('CFTC positioning: contract scope, weekly chronology, units, cache and partial failures', async t => {
   const codes=['13874A','244041','244042','043602','088691','067411','133741','146021'];
@@ -41,7 +41,7 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
   const [first,concurrent,evidence]=await Promise.all([app.inject('/api/v1/sentiment/positioning'),app.inject('/api/v1/sentiment/positioning'),readSentiment({dataset:'positioning'})]);
   assert.equal(first.statusCode,200);assert.equal(concurrent.statusCode,200);assert.equal(calls,1);
   assert.deepEqual(evidence.data,first.json());assert.equal(first.json().stale,false);
-  now+=3599999;
+  now+=positioningRefreshMs(now)-1;
   assert.equal((await app.inject('/api/v1/sentiment/positioning')).json().stale,false);
   assert.equal(calls,1);
   unavailable=true;now+=2;
@@ -77,20 +77,20 @@ test('Specialists: actual flows vs supply vs index, aligned dates, partial failu
   const weekly = structuredClone(gold.chartData.data.Monthly);
   weekly.series.usd.forEach(s=>s.data.forEach((d,i)=>d[0]=Date.parse('2026-09-01')+i*7*86400000));
   assert.equal(parseGold({chartData:{...gold.chartData,data:{...gold.chartData.data,Weekly:weekly}}}).cadence,'weekly');
-  const stable = Array.from({length:8},(_,i)=>({date:String(Date.parse('2026-09-30')/1000+i*86400),totalCirculating:{peggedUSD:1000+i*10},totalCirculatingUSD:{peggedUSD:9999999-i*100}}));
+  const stable = Array.from({length:8},(_,i)=>({date:String(Date.parse('2026-10-01')/1000+i*86400),totalCirculating:{peggedUSD:1000+i*10},totalCirculatingUSD:{peggedUSD:9999999-i*100}}));
   assert.equal(parseStablecoins(stable).history.at(-1)!.value,10); // not the price-valued market cap
   assert.equal(parseStablecoins(stable).supply,1070);
   const gap=structuredClone(stable);gap[5].date=gap[4].date;
   assert.throws(()=>parseStablecoins(gap));
   assert.throws(()=>parseStablecoins(stable.slice(1)));
-  const fear={data:[{value:'64',value_classification:'Greed',timestamp:String(Date.parse('2026-10-07')/1000)}],metadata:{error:null}};
+  const fear={data:[{value:'64',value_classification:'Greed',timestamp:String(Date.parse('2026-10-08')/1000)}],metadata:{error:null}};
   assert.equal(parseFear(fear).value,64);
   assert.equal(parseFear(fear).classification,'Greed');
   assert.equal(parseFear({...fear,data:[{...fear.data[0],value:'47',value_classification:'Neutral'}]}).classification,'Neutral');
   assert.throws(()=>parseFear({...fear,data:[{...fear.data[0],value_classification:'Unknown'}]}));
   assert.throws(()=>parseFear({...fear,data:[{...fear.data[0],value:'101'}]}));
   assert.throws(()=>parseFear({...fear,metadata:{error:'bad'}}));
-  let now=Date.now(),fail=false,calls=0;
+  let now=Date.parse('2026-10-08T12:00:00Z'),fail=false,calls=0;
   t.mock.method(Date,'now',()=>now);
   t.mock.method(globalThis,'fetch',async (url: string | URL | Request)=>{
     calls++;if(fail&&String(url).includes('gold.org'))throw Error('offline');
@@ -103,7 +103,11 @@ test('Specialists: actual flows vs supply vs index, aligned dates, partial failu
   assert.equal(first.json().crypto.stale,false);
   assert.deepEqual((await readSentiment({dataset:'specialists'})).data,first.json());
   assert.equal(calls,3);
-  fail=true;now+=2*3600000;
+  now+=6*3600000-1;
+  await readSentiment({dataset:'specialists'});assert.equal(calls,3);
+  now+=1;
+  await readSentiment({dataset:'specialists'});assert.equal(calls,5,'six-hour sources refresh while gold stays cached');
+  fail=true;now+=18*3600000;
   const stale=(await app.inject('/api/v1/sentiment/specialists')).json();
   assert.equal(stale.gold.stale,true);assert.equal(stale.crypto.stale,false);assert.equal(stale.fear.stale,false);
   assert.deepEqual(stale.gold.history,first.json().gold.history);
@@ -159,7 +163,9 @@ test('Daily markets: identity, calendar gaps, provisional candles, returns and i
   assert.deepEqual((evidence.data as any).markets,first.json().markets);
   assert.equal(calls,10);
   assert.equal(first.json().markets.length,10);
-  fail=true;failCoinbase=true;now+=6*60000;
+  now+=3600000-1;
+  await readSentiment({dataset:'daily'});assert.equal(calls,10);
+  fail=true;failCoinbase=true;now+=1;
   const stale=(await app.inject('/api/v1/sentiment/daily')).json().markets;
   assert.equal(stale.find((m:any)=>m.id==='gld').stale,true);
   assert.equal(stale.find((m:any)=>m.id==='btc').stale,false);
@@ -203,7 +209,7 @@ test('Crypto hierarchy: cap-weighted changes, 80% contribution, stablecoin exclu
   assert.equal(first.statusCode,200);assert.equal(other.statusCode,200);assert.equal(calls,2);
   assert.deepEqual((await readSentiment({dataset:'crypto-breakdown'})).data,first.json());
   assert.equal(calls,2);
-  now+=16*60000;fail=true;
+  now+=3600000;fail=true;
   const stale=await app.inject('/api/v1/sentiment/crypto-breakdown');assert.equal(stale.json().stale,true);assert.equal(stale.json().cap,490);
   const empty=Fastify();registerSentiment(empty);t.after(()=>empty.close());assert.equal((await empty.inject('/api/v1/sentiment/crypto-breakdown')).statusCode,503);
 });
@@ -228,4 +234,41 @@ test('Sentiment reader preserves per-source errors without invented values',asyn
   await assert.rejects(()=>readSentiment({dataset:'positioning',url:'http://localhost'}));
   await assert.rejects(()=>readSentiment({dataset:'unknown'}));
   assert.equal(calls,before);
+});
+
+test('Background refresh runs without a page, shares cache with AI and stops on close', async t => {
+  let now=Date.parse('2026-10-08T08:00:00Z'),tick:()=>void=()=>{},cleared=false,calls=0;
+  t.mock.method(Date,'now',()=>now);
+  t.mock.method(console,'warn',()=>{});
+  t.mock.method(globalThis,'setInterval',((callback:()=>void,ms:number)=>{
+    assert.equal(ms,60000);tick=callback;return {unref(){}};
+  }) as any);
+  t.mock.method(globalThis,'clearInterval',(()=>{cleared=true;}) as any);
+  t.mock.method(globalThis,'fetch',async()=>{calls++;throw Error('offline');});
+  const app=Fastify(),read=registerSentiment(app,undefined,true);
+  await app.ready();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls,18,'all feeds are checked before any dashboard or AI request');
+  await read({dataset:'daily'});
+  await read({dataset:'specialists'});
+  await read({dataset:'positioning'});
+  await read({dataset:'crypto-breakdown'});
+  assert.equal(calls,18,'startup checks every source, including two crypto fallbacks');
+  now+=3600000;tick();
+  await read({dataset:'daily'});
+  await read({dataset:'specialists'});
+  await read({dataset:'positioning'});
+  await read({dataset:'crypto-breakdown'});
+  assert.equal(calls,36,'hourly refresh retries failed sources and is shared with readers');
+  await app.close();assert.equal(cleared,true);
+  tick();assert.equal(calls,36,'closed app cannot start another refresh');
+});
+
+test('CFTC checks daily, and hourly around Friday publication in New York including DST',()=>{
+  assert.equal(positioningRefreshMs(Date.parse('2026-10-08T20:00:00Z')),86400000);
+  assert.equal(positioningRefreshMs(Date.parse('2026-10-09T18:59:00Z')),86400000);
+  assert.equal(positioningRefreshMs(Date.parse('2026-10-09T19:30:00Z')),3600000);
+  assert.equal(positioningRefreshMs(Date.parse('2026-10-10T07:59:00Z')),3600000);
+  assert.equal(positioningRefreshMs(Date.parse('2026-10-10T08:00:00Z')),86400000);
+  assert.equal(positioningRefreshMs(Date.parse('2026-12-04T20:30:00Z')),3600000);
 });
