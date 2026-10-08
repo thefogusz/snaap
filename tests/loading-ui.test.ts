@@ -7,7 +7,7 @@ const source=await readFile(new URL('../dist/loading-ui.js',import.meta.url),'ut
 const skeleton=vm.runInNewContext(source+';skeletonUI') as (kind:string,label:string)=>string;
 
 test('placeholders announce loading and hide decorative shapes from assistive technology',()=>{
-  for(const kind of ['rows','cards','history','chat','chart']){
+  for(const kind of ['rows','cards','history','chat','chart','market-brief','market-daily','market-positioning','market-specialists']){
     const html=skeleton(kind,'กำลังโหลด');
     assert.match(html,/role="status"/);
     assert.match(html,/aria-hidden="true"/);

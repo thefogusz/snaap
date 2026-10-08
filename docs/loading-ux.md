@@ -10,6 +10,7 @@ Base: origin/main at 8d6dfda. User-facing workspace flows were reviewed against 
 | Open a conversation | Message-shaped placeholders removed in finally, including failure and superseded selection |
 | Chart first load | Gently pulsing chart silhouette inside the existing chart bounds |
 | Chart refresh / setup edits | Retain last chart with loading status; abort superseded requests; 20-second deadline and retry feedback; disable stale replay controls |
+| Market overview: summary / 7-day chart / futures / gold and crypto | Initial skeletons follow the existing responsive graphic and card grids; resolved data or errors replace them; refresh keeps loaded content |
 | Notifications: signals / channels / overview | Rows or cards until initial data arrives; retain loaded content on refresh; 12-second read deadline; failure removes placeholders |
 | Pair picker / preset pair catalog | Placeholder rows replaced by catalog or error/retry |
 | Channel appearance preview | Placeholder on first preview; keep previous preview during updates |

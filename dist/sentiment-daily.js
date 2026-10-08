@@ -9,7 +9,7 @@ let host, payload, selection='gld', active=false, loading=false, timer, focusDay
 const q = selector => host.querySelector(selector);
 export function initDaily(element){
   host=element;
-  host.innerHTML='<p class="sd-loading" role="status">กำลังอ่านข้อมูลรายวันจากแต่ละตลาด…</p>';
+  host.innerHTML=skeletonUI('market-daily','กำลังอ่านข้อมูลรายวันจากแต่ละตลาด…');
   host.addEventListener('click',event=>{
     const asset=event.target.closest('[data-daily-asset]');
     if(asset){selection=asset.dataset.dailyAsset;focusDay=null;renderDetail();host.querySelectorAll('[data-daily-asset]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.dailyAsset===selection)));}

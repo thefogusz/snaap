@@ -30,7 +30,7 @@ export function selectPositionMarket(id){
 export async function refreshPositioning(){
   if(!host||busy)return;
   busy=true;
-  if(!data)host.innerHTML='<p class="sp-loading" role="status">กำลังอ่านสถานะฟิวเจอร์สจาก CFTC…</p>';
+  if(!data)host.innerHTML=skeletonUI('market-positioning','กำลังอ่านสถานะฟิวเจอร์สจาก CFTC…');
   try{
     const response=await fetch('/api/v1/sentiment/positioning',{signal:AbortSignal.timeout(20000)});
     if(!response.ok)throw Error('source');

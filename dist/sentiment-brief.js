@@ -6,7 +6,7 @@ const marketNames=Object.fromEntries(assets.map(([id,name])=>[id,name]));
 let host, openDetail, daily, crypto, drill=null, group=null, coin=null, drillTrigger, busy=false, timer;
 export function initBrief(element,onOpen){
   host=element;openDetail=onOpen;
-  host.innerHTML='<p class="sb-loading" role="status">กำลังสรุปภาพตลาดล่าสุด…</p>';
+  host.innerHTML=skeletonUI('market-brief','กำลังสรุปภาพตลาดล่าสุด…');
   host.addEventListener('click',event=>{
     const asset=event.target.closest('[data-brief-asset]');
     if(asset){if(asset.dataset.briefAsset==='crypto'){drillTrigger=asset;drill='crypto';group=null;coin=null;renderDrill();}else if(asset.dataset.briefAsset==='spy'){drillTrigger=asset;drill='stocks';renderDrill();}else openDetail('daily',asset.dataset.briefAsset);}
