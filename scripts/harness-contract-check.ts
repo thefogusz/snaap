@@ -648,6 +648,7 @@ try {
   let iciCalls=0;
   globalThis.fetch=async(input,init)=>{
     if(String(input).startsWith('https://www.ici.org/')){iciCalls++;return new Response('blocked',{status:403});}
+    if(['query1.finance.yahoo.com','api.exchange.coinbase.com','fsapi.gold.org','stablecoins.llama.fi','api.alternative.me','api.coingecko.com'].includes(new URL(String(input)).hostname))return new Response('offline',{status:503});
     return fetchBeforeSentiment(input,init);
   };
   try{
@@ -656,6 +657,7 @@ try {
     assert.equal(dashboard.statusCode,200);assert.equal(dashboard.json().stale,true);
     const sentiment=await runTool('read_sentiment',{dataset:'us-flows'},{draft:studioSpec});
     assert.deepEqual(sentiment.output.data,dashboard.json());
+    assert.match(sentiment.output.freshness,/stale:false does not mean fetched live/);
     assert.equal(sentiment.result.draft,null);
     assert.equal(sentiment.result.artifacts.length,0,'Sentiment evidence goes to the answer, not an unsupported artifact');
     assert.equal(iciCalls,1,'dashboard and harness share the same failed-refresh cache');
@@ -665,6 +667,34 @@ try {
     assert.ok(promptText(requests.at(-1)).includes('checkedAt/retrievedAt are fetch/check times'));
     assert.ok((await runTool('read_sentiment',{dataset:'http://localhost/secret'})).output.error);
     assert.equal(iciCalls,1,'invalid arguments never reach a source');
+    let batchRounds=0;
+    reply=async body=>{
+      if(batchRounds++===0)return {...response(''),output:[
+        ...['us-flows','global-flows','daily','specialists','crypto-breakdown'].map(dataset=>({type:'function_call',name:'read_sentiment',call_id:dataset,arguments:JSON.stringify({dataset})})),
+        {type:'function_call',name:'read_market_news',call_id:'news',arguments:JSON.stringify({topic:'stocks',symbols:['NVDA'],hours:24,limit:10,query:''})},
+      ]};
+      const outputs=Object.fromEntries(body.input.filter((m:any)=>m.type==='function_call_output').map((m:any)=>[m.call_id,JSON.parse(m.output)]));
+      assert.equal(Object.keys(outputs).length,6);
+      assert.deepEqual(outputs['us-flows'].data,dashboard.json());
+      assert.equal(outputs['global-flows'].data.stale,true);
+      assert.ok(outputs.daily.data.markets.every((m:any)=>m.error&&m.stale));
+      assert.ok(Object.values(outputs.specialists.data).every((m:any)=>m.error));
+      assert.ok(outputs['crypto-breakdown'].data.error);
+      assert.equal(outputs.news.displayed,true);
+      assert.ok(Object.values(outputs).filter((m:any)=>m.dataset).every((m:any)=>!m.displayed&&m.interpretation));
+      return response('รายงานกองทุนเป็นข้อมูลที่เก็บไว้ ส่วนข้อมูลรายวันยังอ่านไม่ได้');
+    };
+    const batchStream=await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers:{...headers,accept:'application/x-ndjson'},payload:{text:'สรุป Sentiment ทุกชุดพร้อมข่าว ไม่ต้องแก้ร่าง',mode:'standard',draft:studioSpec}});
+    assert.equal(batchStream.statusCode,200,batchStream.body);
+    const batchEvents=batchStream.body.trim().split('\n').map(line=>JSON.parse(line));
+    assert.equal(batchEvents.at(-1).type,'done',batchStream.body);
+    const batchResult=batchEvents.at(-1).result;
+    assert.equal(batchResult.draft,null);
+    assert.equal(batchResult.artifacts.length,1);assert.equal(batchResult.artifacts[0].tool,'read_market_news');
+    assert.equal(batchRounds,2,'six tools fit in a single evidence round');
+    assert.equal((await db.query('SELECT content FROM messages WHERE id=$1',[batchResult.messageId])).rows[0].content,batchResult.text);
+    assert.equal((await db.query('SELECT status FROM usage_ledger WHERE id=$1',[batchResult.runId])).rows[0].status,'COMPLETED');
+    console.log('PASS streaming all Sentiment datasets alongside an existing research artifact preserves errors, saved answer and usage accounting');
     console.log('PASS harness Sentiment tool shares authenticated dashboard cache, dates and stale evidence; strict arguments and unchanged drafts');
   }finally{globalThis.fetch=fetchBeforeSentiment;}
   reply=async()=>response('ส่งร่างเข้า editor แล้วครับ');

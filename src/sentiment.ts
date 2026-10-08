@@ -345,6 +345,6 @@ export function registerSentiment(app: FastifyInstance) {
   return async function readSentiment(input:unknown){
     const {dataset}=sentimentQuerySchema.parse(input);
     const readers={'us-flows':()=>readFlows('us'),'global-flows':()=>readFlows('global'),daily:readDaily,specialists:readSpecialists,'crypto-breakdown':readCrypto};
-    return {dataset,data:await readers[dataset](),interpretation:sentimentNotes[dataset]};
+    return {dataset,data:await readers[dataset](),interpretation:sentimentNotes[dataset],freshness:'Shared cached data: stale:false does not mean fetched live for this request; it only means the last refresh did not fail. stale:true means retained data after refresh failure. checkedAt is the last refresh attempt, not the observation date or proof of a successful download. retrievedAt is retrieval time; use source periods/observedAt for observation freshness. Never describe a cached result as just fetched or real-time.'};
   };
 }

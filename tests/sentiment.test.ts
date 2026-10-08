@@ -226,6 +226,8 @@ test('Sentiment reader preserves cold-start fallback and per-source errors witho
   for(const dataset of ['us-flows','global-flows','daily','specialists','crypto-breakdown']){
     const evidence=await readSentiment({dataset});
     assert.equal(evidence.dataset,dataset);assert.ok(evidence.interpretation.length);
+    assert.match(evidence.freshness,/stale:false does not mean fetched live/);
+    assert.match(evidence.freshness,/checkedAt/);
     const data=evidence.data as any;
     if(dataset.endsWith('-flows')){
       assert.equal(data.stale,true);assert.ok(data.source.startsWith('https://www.ici.org/'));
