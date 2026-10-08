@@ -18,17 +18,17 @@ export function conditionRows(spec) {
     return row.frames;
   }
   const branch = (b, prefix, side) => {
-    walk(b.entry, `${prefix}entry`, "เข้า", side);
+    walk(b.entry, `${prefix}entry`, (globalThis.SnaapI18n?.text("เข้า") ?? "เข้า"), side);
     (b.stages ?? []).forEach((s, i) =>
       walk(
         s.condition,
         `${prefix}stages.${i}.condition`,
-        `รอยืนยัน ${i + 1}`,
+        `${(globalThis.SnaapI18n?.text("รอยืนยัน ") ?? "รอยืนยัน ")}${i + 1}`,
         side,
       ),
     );
-    walk(b.exit, `${prefix}exit`, "ออก", side);
-    walk(b.cancel, `${prefix}cancel`, "ยกเลิก", side);
+    walk(b.exit, `${prefix}exit`, (globalThis.SnaapI18n?.text("ออก") ?? "ออก"), side);
+    walk(b.cancel, `${prefix}cancel`, (globalThis.SnaapI18n?.text("ยกเลิก") ?? "ยกเลิก"), side);
   };
   branch(
     spec,

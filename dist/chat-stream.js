@@ -15,7 +15,7 @@ export async function readChatStream(response, onEvent) {
         if (event.type === 'done') return event.result;
         onEvent(event);
       }
-      if (done) throw Error('การเชื่อมต่อคำตอบขาดระหว่างทาง กรุณาลองใหม่');
+      if (done) throw Error((globalThis.SnaapI18n?.text("การเชื่อมต่อคำตอบขาดระหว่างทาง กรุณาลองใหม่") ?? "การเชื่อมต่อคำตอบขาดระหว่างทาง กรุณาลองใหม่"));
     }
   } finally {
     await reader.cancel().catch(() => {});

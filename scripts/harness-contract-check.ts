@@ -983,6 +983,22 @@ try {
     assert.equal(renamedTurn.statusCode,200,renamedTurn.body);assert.deepEqual(renamedTurn.json().draft,renamed);
     assert.deepEqual(renamedTurn.json().changes.map((change:any)=>change.path),['name']);
     console.log('PASS Harness flexibility schema, proposals, receipts, replay/preview evidence and unrelated edits agree');
+    let languageRound = 0;
+    reply = async body => {
+      assert.match(promptText(body), /Conversation language: English/);
+      if (++languageRound === 1) return {...response(''),output:[{type:'function_call',name:'load_skill',call_id:'english-journal',arguments:JSON.stringify({skill:'trade-journal'})}]};
+      assert.match(promptText(body), /Conversation language: English/);
+      return response('I can review the history you select.');
+    };
+    const englishTurn = await turn('Explain what my trading history can tell me.');
+    assert.equal(englishTurn.statusCode, 200, englishTurn.body);
+    assert.equal(languageRound, 2);
+    reply = async body => { assert.match(promptText(body), /Conversation language: English/); return response('Which timeframe would you like?'); };
+    assert.equal((await turn('BTC/USDT 1h')).statusCode, 200);
+    assert.equal((await turn('ETH/USDT 4h')).statusCode, 200);
+    reply = async body => { assert.match(promptText(body), /Conversation language: Thai/); return response('ได้ครับ'); };
+    assert.equal((await turn('ช่วยอธิบายเป็นภาษาไทย')).statusCode, 200);
+    console.log('PASS Harness follows English/Thai turns, keeps language for ticker-only follow-ups and reapplies it after specialist loading');
   } finally {
     ccxt.mexc.prototype.loadMarkets = loadMarkets;
     ccxt.mexc.prototype.fetchOHLCV = fetchOHLCV;

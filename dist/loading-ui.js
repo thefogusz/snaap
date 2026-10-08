@@ -1,5 +1,5 @@
 // Shared markup: no per-placeholder listeners, timers, or extra network reads.
-function skeletonUI(kind = 'rows', label = 'กำลังโหลด…') {
+function skeletonUI(kind = 'rows', label = (globalThis.SnaapI18n?.text("กำลังโหลด…") ?? "กำลังโหลด…")) {
   const line = '<i class="skeleton-line"></i>';
   const copy = '<div class="skeleton-copy">' + line + line + '</div>';
   const row = '<div class="skeleton-row"><i class="skeleton-icon"></i>' + copy + '</div>';

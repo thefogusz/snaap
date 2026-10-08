@@ -6,7 +6,7 @@
   const isViewing = () => !document.hidden && document.hasFocus() &&
     !document.querySelector('#view-notifications').hidden && notificationSection === 'inbox';
   function paint() {
-    const label = `สัญญาณที่ยังไม่ได้อ่าน ${count} รายการ`;
+    const label = `${(globalThis.SnaapI18n?.text("สัญญาณที่ยังไม่ได้อ่าน ") ?? "สัญญาณที่ยังไม่ได้อ่าน ")}${count}${(globalThis.SnaapI18n?.text(" รายการ") ?? " รายการ")}`;
     const badge = document.querySelector('#nav-count');
     badge.textContent = count > 99 ? '99+' : String(count);
     badge.hidden = count === 0;

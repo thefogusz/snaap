@@ -1,8 +1,8 @@
 import { availableTimeframes } from './timeframes.js';
 export const exchanges = ['Binance', 'Bybit', 'OKX', 'Bitget', 'MEXC', 'Gate'];
 export const categories = [
-  ['crypto', 'คริปโต'], ['stocks', 'หุ้น / ETF'], ['forex', 'Forex'],
-  ['metals', 'โลหะ'], ['commodities', 'สินค้าโภคภัณฑ์'], ['indices', 'ดัชนี'], ['other', 'อื่น ๆ'],
+  ['crypto', (globalThis.SnaapI18n?.text("คริปโต") ?? "คริปโต")], ['stocks', (globalThis.SnaapI18n?.text("หุ้น / ETF") ?? "หุ้น / ETF")], ['forex', 'Forex'],
+  ['metals', (globalThis.SnaapI18n?.text("โลหะ") ?? "โลหะ")], ['commodities', (globalThis.SnaapI18n?.text("สินค้าโภคภัณฑ์") ?? "สินค้าโภคภัณฑ์")], ['indices', (globalThis.SnaapI18n?.text("ดัชนี") ?? "ดัชนี")], ['other', (globalThis.SnaapI18n?.text("อื่น ๆ") ?? "อื่น ๆ")],
 ];
 // Provider taxonomy: never classify by ticker alone or substitute cash-market quotes.
 export function instrumentMetadata(exchange, instrument, market) {
@@ -52,11 +52,11 @@ export function mergeCatalogs(catalogs, market) {
 export function selectTargets(items, pairs, source = 'auto', frames = []) {
   return pairs.flatMap(pair => {
     const matches = items.filter(m => m.symbol === pair);
-    if (matches.length > 1) throw new Error(`${pair} มีหลายประเภทสินทรัพย์ กรุณาเลือกประเภทให้ชัดเจน`);
+    if (matches.length > 1) throw new Error(`${pair}${(globalThis.SnaapI18n?.text(" มีหลายประเภทสินทรัพย์ กรุณาเลือกประเภทให้ชัดเจน") ?? " มีหลายประเภทสินทรัพย์ กรุณาเลือกประเภทให้ชัดเจน")}`);
     const item = matches[0];
     const sources = item?.sources.filter(exchange => frames.every(frame => availableTimeframes([exchange], item.market).includes(frame))) ?? [];
     const selected = source === 'all' ? sources : source === 'auto' ? sources.slice(0, 1) : sources.filter(exchange => exchange === source);
-    if (!selected.length) throw new Error(`${pair} ไม่มีแหล่งข้อมูลที่รองรับตลาดและไทม์เฟรมนี้`);
+    if (!selected.length) throw new Error(`${pair}${(globalThis.SnaapI18n?.text(" ไม่มีแหล่งข้อมูลที่รองรับตลาดและไทม์เฟรมนี้") ?? " ไม่มีแหล่งข้อมูลที่รองรับตลาดและไทม์เฟรมนี้")}`);
     return selected.map(exchange => ({ exchange, pair }));
   });
 }

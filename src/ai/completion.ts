@@ -6,12 +6,12 @@ export function claimsDraftChange(text: string) {
 }
 export function requestsDraftChange(text: string) {
   if (
-    /ไม่(?:ต้อง|ให้)\s*(?:แก้|ปรับ|เปลี่ยน|สร้าง)|อย่า\s*(?:แก้|ปรับ|เปลี่ยน|สร้าง)|do not (?:edit|change)|don't (?:edit|change)/i.test(
+    /ไม่(?:ต้อง|ให้)\s*(?:แก้|ปรับ|เปลี่ยน|สร้าง)|อย่า\s*(?:แก้|ปรับ|เปลี่ยน|สร้าง)|\b(?:do not|don't|never)\s+(?:create|edit|change|remove|delete|add|design|build|update|adjust)\b/i.test(
       text,
     )
   )
     return false;
-  return /สร้าง|ออกแบบ|เปลี่ยน|ลบ|เพิ่ม|แก้|ปรับ|ส่งร่าง|\b(?:create|edit|change|remove|delete|add)\b/i.test(
+  return /สร้าง|ออกแบบ|เปลี่ยน|ลบ|เพิ่ม|แก้|ปรับ|ส่งร่าง|\b(?:create|edit|change|remove|delete|add|design|build|update|adjust)\b/i.test(
     text,
   );
 }

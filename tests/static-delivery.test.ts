@@ -31,6 +31,7 @@ test('large text assets are compressed and revalidated; images may be reused for
     assert.equal(image.headers['cache-control'],'public, max-age=86400');
 
     const page=await app.inject({method:'GET',url:'/home',headers:{host}});
-    assert.equal(page.headers['cache-control'],'no-cache');
+    assert.equal(page.headers['cache-control'],'no-store');
+    assert.match(page.headers.vary as string, /Cookie/);
   }finally{await app.close();}
 });

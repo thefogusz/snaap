@@ -11,7 +11,7 @@
     const toggle = document.getElementById('theme-toggle');
     if (toggle) {
       toggle.setAttribute('aria-pressed', String(dark));
-      toggle.title = dark ? 'กลับเป็นโหมดสว่าง' : 'เปิดโหมดมืด';
+      toggle.title = dark ? (globalThis.SnaapI18n?.text("กลับเป็นโหมดสว่าง") ?? "กลับเป็นโหมดสว่าง") : (globalThis.SnaapI18n?.text("เปิดโหมดมืด") ?? "เปิดโหมดมืด");
     }
   }
   applyTheme(preference || (system.matches ? 'dark' : 'light'));

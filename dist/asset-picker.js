@@ -1,7 +1,7 @@
 import { categories, exchanges, selectTargets, strategyTargets } from './asset-catalog.js';
 
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const productLabel = row => row.product === 'tokenized_stock' ? 'โทเคนอ้างอิงหุ้น · Spot' : row.market === 'Spot' ? 'Spot' : row.category === 'crypto' ? 'Perpetual' : 'สัญญาอ้างอิง · Perpetual';
+const productLabel = row => row.product === 'tokenized_stock' ? (globalThis.SnaapI18n?.text("โทเคนอ้างอิงหุ้น · Spot") ?? "โทเคนอ้างอิงหุ้น · Spot") : row.market === 'Spot' ? 'Spot' : row.category === 'crypto' ? 'Perpetual' : (globalThis.SnaapI18n?.text("สัญญาอ้างอิง · Perpetual") ?? "สัญญาอ้างอิง · Perpetual");
 
 export function pickAssets({ spec, api, maxPairs = 10, current = () => true }) {
   return new Promise(resolve => {
@@ -13,13 +13,7 @@ export function pickAssets({ spec, api, maxPairs = 10, current = () => true }) {
     const frames = new Set([spec.timeframe]);
     const visit = value => { if (!value || typeof value !== 'object') return; if (value.timeframe) frames.add(value.timeframe); Object.values(value).forEach(visit); };
     visit(spec);
-    dialog.innerHTML = `<header><div><h2 id="asset-dialog-title">เลือกสินทรัพย์</h2><p>รวมคู่เทรดจากทุกกระดานที่รองรับ</p></div><button type="button" data-close aria-label="ปิด">×</button></header>
-      <nav class="asset-categories" aria-label="หมวดสินทรัพย์">${categories.map(([id, label]) => `<button type="button" data-category="${id}" aria-pressed="${id === category}">${label}<small data-total="${id}"></small></button>`).join('')}</nav>
-      <div class="asset-toolbar"><div class="asset-products" role="group" aria-label="ประเภทสัญญา"><button type="button" data-market="Spot">Spot</button><button type="button" data-market="Perpetual Futures">Perpetual</button></div><label class="asset-source">แหล่งราคา<select data-source><option value="keep">อัตโนมัติ · คงแหล่งเดิม</option>${exchanges.map(e => `<option>${e}</option>`).join('')}</select></label></div>
-      <div class="asset-search"><input type="search" aria-label="ค้นหาสินทรัพย์" placeholder="ค้นหา BTC, TSLA, XAU หรือชื่อคู่เทรด" autocomplete="off"><button type="button" data-refresh aria-label="ซิงก์รายชื่อใหม่">↻</button></div>
-      <div class="asset-result-meta"><span data-status role="status">กำลังโหลดรายชื่อ…</span><button type="button" class="text-button" data-selected-only aria-pressed="false">ดูที่เลือก</button></div>
-      <div class="asset-results" aria-label="รายการสินทรัพย์"></div><div class="asset-basket" aria-label="สินทรัพย์ที่เลือก"></div>
-      <footer><span data-count role="status">เลือก 0 / ${maxPairs} คู่</span><button type="button" class="text-button" data-clear>ล้าง</button><button type="button" class="primary" data-apply disabled>ใช้สินทรัพย์ที่เลือก</button></footer>`;
+    dialog.innerHTML = `${(globalThis.SnaapI18n?.text("<header><div><h2 id=\"asset-dialog-title\">เลือกสินทรัพย์</h2><p>รวมคู่เทรดจากทุกกระดานที่รองรับ</p></div><button type=\"button\" data-close aria-label=\"ปิด\">×</button></header>\n      <nav class=\"asset-categories\" aria-label=\"หมวดสินทรัพย์\">") ?? "<header><div><h2 id=\"asset-dialog-title\">เลือกสินทรัพย์</h2><p>รวมคู่เทรดจากทุกกระดานที่รองรับ</p></div><button type=\"button\" data-close aria-label=\"ปิด\">×</button></header>\n      <nav class=\"asset-categories\" aria-label=\"หมวดสินทรัพย์\">")}${categories.map(([id, label]) => `<button type="button" data-category="${id}" aria-pressed="${id === category}">${label}<small data-total="${id}"></small></button>`).join('')}${(globalThis.SnaapI18n?.text("</nav>\n      <div class=\"asset-toolbar\"><div class=\"asset-products\" role=\"group\" aria-label=\"ประเภทสัญญา\"><button type=\"button\" data-market=\"Spot\">Spot</button><button type=\"button\" data-market=\"Perpetual Futures\">Perpetual</button></div><label class=\"asset-source\">แหล่งราคา<select data-source><option value=\"keep\">อัตโนมัติ · คงแหล่งเดิม</option>") ?? "</nav>\n      <div class=\"asset-toolbar\"><div class=\"asset-products\" role=\"group\" aria-label=\"ประเภทสัญญา\"><button type=\"button\" data-market=\"Spot\">Spot</button><button type=\"button\" data-market=\"Perpetual Futures\">Perpetual</button></div><label class=\"asset-source\">แหล่งราคา<select data-source><option value=\"keep\">อัตโนมัติ · คงแหล่งเดิม</option>")}${exchanges.map(e => `<option>${e}</option>`).join('')}${(globalThis.SnaapI18n?.text("</select></label></div>\n      <div class=\"asset-search\"><input type=\"search\" aria-label=\"ค้นหาสินทรัพย์\" placeholder=\"ค้นหา BTC, TSLA, XAU หรือชื่อคู่เทรด\" autocomplete=\"off\"><button type=\"button\" data-refresh aria-label=\"ซิงก์รายชื่อใหม่\">↻</button></div>\n      <div class=\"asset-result-meta\"><span data-status role=\"status\">กำลังโหลดรายชื่อ…</span><button type=\"button\" class=\"text-button\" data-selected-only aria-pressed=\"false\">ดูที่เลือก</button></div>\n      <div class=\"asset-results\" aria-label=\"รายการสินทรัพย์\"></div><div class=\"asset-basket\" aria-label=\"สินทรัพย์ที่เลือก\"></div>\n      <footer><span data-count role=\"status\">เลือก 0 / ") ?? "</select></label></div>\n      <div class=\"asset-search\"><input type=\"search\" aria-label=\"ค้นหาสินทรัพย์\" placeholder=\"ค้นหา BTC, TSLA, XAU หรือชื่อคู่เทรด\" autocomplete=\"off\"><button type=\"button\" data-refresh aria-label=\"ซิงก์รายชื่อใหม่\">↻</button></div>\n      <div class=\"asset-result-meta\"><span data-status role=\"status\">กำลังโหลดรายชื่อ…</span><button type=\"button\" class=\"text-button\" data-selected-only aria-pressed=\"false\">ดูที่เลือก</button></div>\n      <div class=\"asset-results\" aria-label=\"รายการสินทรัพย์\"></div><div class=\"asset-basket\" aria-label=\"สินทรัพย์ที่เลือก\"></div>\n      <footer><span data-count role=\"status\">เลือก 0 / ")}${maxPairs}${(globalThis.SnaapI18n?.text(" คู่</span><button type=\"button\" class=\"text-button\" data-clear>ล้าง</button><button type=\"button\" class=\"primary\" data-apply disabled>ใช้สินทรัพย์ที่เลือก</button></footer>") ?? " คู่</span><button type=\"button\" class=\"text-button\" data-clear>ล้าง</button><button type=\"button\" class=\"primary\" data-apply disabled>ใช้สินทรัพย์ที่เลือก</button></footer>")}`;
     document.body.append(dialog);
     const query = selector => dialog.querySelector(selector), list = query('.asset-results'), search = query('input'), status = query('[data-status]'), apply = query('[data-apply]');
     let selectedOnly = false, seeded = false;
@@ -32,8 +26,8 @@ export function pickAssets({ spec, api, maxPairs = 10, current = () => true }) {
       const valid = targets.every(t => catalog?.items.some(row => row.symbol === t.pair && row.sources.includes(t.exchange)));
       const pairs = new Set(targets.map(t => t.pair));
       apply.disabled = loading || !targets.length || !valid || pairs.size > maxPairs || targets.length > 50 || !current();
-      query('[data-count]').textContent = `เลือก ${pairs.size} / ${maxPairs} คู่`;
-      query('.asset-basket').innerHTML = [...selected].map(([id, value]) => `<button type="button" data-remove-asset="${escape(id)}" aria-label="นำ ${escape(value.row.symbol)} ออก">${escape(value.row.symbol)} <span aria-hidden="true">×</span></button>`).join('');
+      query('[data-count]').textContent = `${(globalThis.SnaapI18n?.text("เลือก ") ?? "เลือก ")}${pairs.size} / ${maxPairs}${(globalThis.SnaapI18n?.text(" คู่") ?? " คู่")}`;
+      query('.asset-basket').innerHTML = [...selected].map(([id, value]) => `<button type="button" data-remove-asset="${escape(id)}${(globalThis.SnaapI18n?.text("\" aria-label=\"นำ ") ?? "\" aria-label=\"นำ ")}${escape(value.row.symbol)}${(globalThis.SnaapI18n?.text(" ออก\">") ?? " ออก\">")}${escape(value.row.symbol)} <span aria-hidden="true">×</span></button>`).join('');
     };
     function paint() {
       if (market === 'Spot' && ['forex', 'indices'].includes(category)) category = 'crypto';
@@ -49,18 +43,18 @@ export function pickAssets({ spec, api, maxPairs = 10, current = () => true }) {
       dialog.querySelectorAll('[data-market]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.market === market)));
       dialog.querySelectorAll('[data-total]').forEach(total => { total.textContent = catalog ? String(catalog.items.filter(row => row.category === total.dataset.total).length) : ''; });
       const unavailable = catalog?.sources.filter(s => s.status !== 'READY').map(s => s.exchange) ?? [];
-      status.textContent = loading ? 'กำลังซิงก์รายชื่อ…' : `${matches.length.toLocaleString('th-TH')} คู่${unavailable.length ? ` · เชื่อม ${unavailable.join(', ')} ไม่สำเร็จ` : ''}`;
+      status.textContent = loading ? (globalThis.SnaapI18n?.text("กำลังซิงก์รายชื่อ…") ?? "กำลังซิงก์รายชื่อ…") : `${matches.length.toLocaleString((globalThis.SnaapI18n?.locale ?? "th-TH"))}${(globalThis.SnaapI18n?.text(" คู่") ?? " คู่")}${unavailable.length ? `${(globalThis.SnaapI18n?.text(" · เชื่อม ") ?? " · เชื่อม ")}${unavailable.join(', ')}${(globalThis.SnaapI18n?.text(" ไม่สำเร็จ") ?? " ไม่สำเร็จ")}` : ''}`;
       list.innerHTML = matches.slice(0, limit).map(row => {
         let targets, error;
         try { targets = targetsFor(row); } catch (e) { error = e.message; }
-        return `<button type="button" class="asset-row" data-asset="${escape(row.id)}" aria-pressed="${selected.has(row.id)}" ${error && !selected.has(row.id) ? 'disabled' : ''} ${error ? `title="${escape(error)}"` : ''}><span class="asset-check" aria-hidden="true">${selected.has(row.id) ? '✓' : '+'}</span><span class="asset-row-name"><strong>${escape(row.symbol)}</strong><small>${escape(productLabel(row))}${row.name && row.name !== row.base ? ` · ${escape(row.name)}` : ''}</small></span><span class="asset-row-source">${escape(error ? source !== 'keep' && !row.sources.includes(source) ? `ไม่มีบน ${source}` : 'ไม่รองรับรอบตรวจนี้' : (selected.get(row.id)?.targets ?? targets).map(t => t.exchange).join(', '))}<small>${row.sources.length} แหล่งราคา</small></span></button>`;
-      }).join('') + (matches.length > limit ? '<button type="button" class="asset-more" data-more>แสดงเพิ่มอีก 50 คู่</button>' : matches.length ? '' : '<p class="asset-empty">ไม่พบสินทรัพย์ในหมวดนี้ ลองเปลี่ยนคำค้นหรือประเภทสัญญา</p>');
+        return `<button type="button" class="asset-row" data-asset="${escape(row.id)}" aria-pressed="${selected.has(row.id)}" ${error && !selected.has(row.id) ? 'disabled' : ''} ${error ? `title="${escape(error)}"` : ''}><span class="asset-check" aria-hidden="true">${selected.has(row.id) ? '✓' : '+'}</span><span class="asset-row-name"><strong>${escape(row.symbol)}</strong><small>${escape(productLabel(row))}${row.name && row.name !== row.base ? ` · ${escape(row.name)}` : ''}</small></span><span class="asset-row-source">${escape(error ? source !== 'keep' && !row.sources.includes(source) ? `${(globalThis.SnaapI18n?.text("ไม่มีบน ") ?? "ไม่มีบน ")}${source}` : (globalThis.SnaapI18n?.text("ไม่รองรับรอบตรวจนี้") ?? "ไม่รองรับรอบตรวจนี้") : (selected.get(row.id)?.targets ?? targets).map(t => t.exchange).join(', '))}<small>${row.sources.length}${(globalThis.SnaapI18n?.text(" แหล่งราคา</small></span></button>") ?? " แหล่งราคา</small></span></button>")}`;
+      }).join('') + (matches.length > limit ? (globalThis.SnaapI18n?.text("<button type=\"button\" class=\"asset-more\" data-more>แสดงเพิ่มอีก 50 คู่</button>") ?? "<button type=\"button\" class=\"asset-more\" data-more>แสดงเพิ่มอีก 50 คู่</button>") : matches.length ? '' : (globalThis.SnaapI18n?.text("<p class=\"asset-empty\">ไม่พบสินทรัพย์ในหมวดนี้ ลองเปลี่ยนคำค้นหรือประเภทสัญญา</p>") ?? "<p class=\"asset-empty\">ไม่พบสินทรัพย์ในหมวดนี้ ลองเปลี่ยนคำค้นหรือประเภทสัญญา</p>"));
       selectionState();
     }
     async function load(refresh = false) {
       const token = ++generation;
       loading = true; catalog = undefined; query('[data-refresh]').disabled = true; paint();
-      list.innerHTML = '<p class="asset-empty" role="status">กำลังโหลดจากกระดาน…</p>';
+      list.innerHTML = (globalThis.SnaapI18n?.text("<p class=\"asset-empty\" role=\"status\">กำลังโหลดจากกระดาน…</p>") ?? "<p class=\"asset-empty\" role=\"status\">กำลังโหลดจากกระดาน…</p>");
       try {
         const data = await api(`/assets?market=${encodeURIComponent(market)}&refresh=${refresh}`);
         if (!dialog.open || token !== generation) return;
@@ -75,7 +69,7 @@ export function pickAssets({ spec, api, maxPairs = 10, current = () => true }) {
           seeded = true;
         }
       } catch (error) {
-        if (dialog.open && token === generation) { list.innerHTML = '<p class="asset-empty">โหลดไม่สำเร็จ กดซิงก์เพื่อลองใหม่</p>'; status.textContent = error.message; }
+        if (dialog.open && token === generation) { list.innerHTML = (globalThis.SnaapI18n?.text("<p class=\"asset-empty\">โหลดไม่สำเร็จ กดซิงก์เพื่อลองใหม่</p>") ?? "<p class=\"asset-empty\">โหลดไม่สำเร็จ กดซิงก์เพื่อลองใหม่</p>"); status.textContent = error.message; }
       } finally {
         if (dialog.open && token === generation) { loading = false; query('[data-refresh]').disabled = false; if (catalog) paint(); else selectionState(); }
       }
@@ -95,13 +89,13 @@ export function pickAssets({ spec, api, maxPairs = 10, current = () => true }) {
         const row = catalog.items.find(row => row.id === button.dataset.asset);
         if (selected.has(row.id)) selected.delete(row.id);
         else {
-          if ([...selected.values()].some(value => value.row.symbol === row.symbol)) { status.textContent = 'ชื่อคู่ซ้ำต่างประเภท กรุณานำคู่เดิมออกก่อน'; return; }
-          if (selected.size >= maxPairs) { status.textContent = `เลือกได้สูงสุด ${maxPairs} คู่ต่อเซ็ตอัพ`; return; }
+          if ([...selected.values()].some(value => value.row.symbol === row.symbol)) { status.textContent = (globalThis.SnaapI18n?.text("ชื่อคู่ซ้ำต่างประเภท กรุณานำคู่เดิมออกก่อน") ?? "ชื่อคู่ซ้ำต่างประเภท กรุณานำคู่เดิมออกก่อน"); return; }
+          if (selected.size >= maxPairs) { status.textContent = `${(globalThis.SnaapI18n?.text("เลือกได้สูงสุด ") ?? "เลือกได้สูงสุด ")}${maxPairs}${(globalThis.SnaapI18n?.text(" คู่ต่อเซ็ตอัพ") ?? " คู่ต่อเซ็ตอัพ")}`; return; }
           selected.set(row.id, { row, targets: targetsFor(row) });
         }
         paint();
       } else if (button.hasAttribute('data-apply')) {
-        if (!current()) { status.textContent = 'เซ็ตอัพเปลี่ยนแล้ว กรุณาปิดและเลือกใหม่'; return; }
+        if (!current()) { status.textContent = (globalThis.SnaapI18n?.text("เซ็ตอัพเปลี่ยนแล้ว กรุณาปิดและเลือกใหม่") ?? "เซ็ตอัพเปลี่ยนแล้ว กรุณาปิดและเลือกใหม่"); return; }
         const targets = [...selected.values()].flatMap(value => value.targets);
         resolve({ market, pairs: [...new Set(targets.map(t => t.pair))], exchange: [...new Set(targets.map(t => t.exchange))], targets });
         dialog.close();

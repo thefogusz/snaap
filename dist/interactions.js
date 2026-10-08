@@ -110,7 +110,7 @@ function decorateControls(root = document) {
     button.classList.add("with-icon");
     button.insertAdjacentHTML(
       "afterbegin",
-      uiIcon(button.textContent.includes("หยุด") ? "pause" : "play"),
+      uiIcon(button.textContent.includes(globalThis.SnaapI18n?.text("หยุด") ?? "หยุด") ? "pause" : "play"),
     );
   });
   query(".runtime-card h2").forEach((heading) => {
@@ -118,13 +118,13 @@ function decorateControls(root = document) {
     const text = heading.textContent;
     const icon = text.includes("Pro")
       ? "spark"
-      : text.includes("สัญญาณ")
+      : text.includes(globalThis.SnaapI18n?.text("สัญญาณ") ?? "สัญญาณ")
         ? "inbox"
-        : text.includes("ตรวจ")
+        : text.includes(globalThis.SnaapI18n?.text("ตรวจ") ?? "ตรวจ")
           ? "chart"
-          : text.includes("ช่องทาง")
+          : text.includes(globalThis.SnaapI18n?.text("ช่องทาง") ?? "ช่องทาง")
             ? "bell"
-            : text.includes("ส่ง")
+            : text.includes(globalThis.SnaapI18n?.text("ส่ง") ?? "ส่ง")
               ? "send"
               : text.includes("API")
                 ? "link"
@@ -135,7 +135,7 @@ function decorateControls(root = document) {
     if (heading.querySelector(".step-symbol")) return;
     heading.insertAdjacentHTML(
       "afterbegin",
-      `<span class="step-symbol">${uiIcon(heading === document.querySelector('.setup-section h3') ? "sliders" : heading.textContent.includes("ออก") ? "exit" : "clock")}</span>`,
+      `<span class="step-symbol">${uiIcon(heading === document.querySelector('.setup-section h3') ? "sliders" : heading.textContent.includes(globalThis.SnaapI18n?.text("ออก") ?? "ออก") ? "exit" : "clock")}</span>`,
     );
   });
 }

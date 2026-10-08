@@ -114,10 +114,10 @@ html[data-theme=dark] #view-sentiment{--sf-gold:#ffcf5c;--sf-blue:#78b1ff;--sf-v
 #view-sentiment .sf-specialist-body .sf-history-column{min-width:72px}
 /* A labeled scale communicates sentiment without treating greed as a buy signal. */
 #view-sentiment .sf-signal{--mood-color:var(--sf-in);display:grid;grid-template-columns:minmax(240px,1fr) auto minmax(260px,1.25fr);gap:22px 30px;align-items:center;padding:24px;background:var(--sf-panel);border:1px solid var(--sf-border);border-left:3px solid var(--mood-color);border-radius:14px;animation:sb-enter .35s ease both}
-#view-sentiment .sf-signal[data-mood=กลัวมาก]{--mood-color:var(--sf-out)}
-#view-sentiment .sf-signal[data-mood=กลัว]{--mood-color:var(--sf-orange)}
-#view-sentiment .sf-signal[data-mood=เป็นกลาง]{--mood-color:var(--sf-gold)}
-#view-sentiment .sf-signal[data-mood=โลภมาก]{--mood-color:var(--sf-teal)}
+#view-sentiment .sf-signal[data-mood="Extreme Fear"]{--mood-color:var(--sf-out)}
+#view-sentiment .sf-signal[data-mood="Fear"]{--mood-color:var(--sf-orange)}
+#view-sentiment .sf-signal[data-mood="Neutral"]{--mood-color:var(--sf-gold)}
+#view-sentiment .sf-signal[data-mood="Extreme Greed"]{--mood-color:var(--sf-teal)}
 .sf-signal-heading{display:flex;align-items:center;gap:12px}
 .sf-bitcoin-mark{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--sf-orange) 15%,transparent);color:var(--sf-orange);font-size:27px}
 #view-sentiment .sf-signal-heading h3{font-size:16px}

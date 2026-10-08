@@ -2,14 +2,14 @@
 (() => {
   const studio = document.createElement("section");
   studio.className = "setup-studio";
-  studio.setAttribute("aria-label", "กราฟจำลองเซ็ตอัพ");
-  studio.innerHTML = `<header><div class="studio-header-info"><strong data-chart-title>กราฟเซ็ตอัพ</strong><p data-chart-status role="status">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class="studio-header-actions"><button type="button" class="secondary" data-chart-refresh>รีเฟรช</button></div></header><div class="chart-legend"></div><div class="studio-canvas" aria-label="กราฟแท่งราคาและอินดิเคเตอร์"></div><div class="replay-controls"><button type="button" class="secondary" data-play disabled>เล่นย้อนหลัง</button><button type="button" class="secondary" data-step disabled aria-label="เลื่อนไปแท่งถัดไป">ถัดไป</button><input type="range" data-scrub aria-label="เลือกแท่งย้อนหลัง" min="0" max="0" value="0" disabled><button type="button" class="text-button" data-latest disabled>ล่าสุด</button></div><p class="chart-disclaimer">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class="setup-insights" data-setup-insights></div><details class="chart-evidence"><summary>รายละเอียดเงื่อนไข · คลิกแท่งบนกราฟเพื่อดูย้อนหลัง</summary><div data-chart-evidence></div></details><a class="chart-credit" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>`;
+  studio.setAttribute("aria-label", (globalThis.SnaapI18n?.text("กราฟจำลองเซ็ตอัพ") ?? "กราฟจำลองเซ็ตอัพ"));
+  studio.innerHTML = (globalThis.SnaapI18n?.text("<header><div class=\"studio-header-info\"><strong data-chart-title>กราฟเซ็ตอัพ</strong><p data-chart-status role=\"status\">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class=\"studio-header-actions\"><button type=\"button\" class=\"secondary\" data-chart-refresh>รีเฟรช</button></div></header><div class=\"chart-legend\"></div><div class=\"studio-canvas\" aria-label=\"กราฟแท่งราคาและอินดิเคเตอร์\"></div><div class=\"replay-controls\"><button type=\"button\" class=\"secondary\" data-play disabled>เล่นย้อนหลัง</button><button type=\"button\" class=\"secondary\" data-step disabled aria-label=\"เลื่อนไปแท่งถัดไป\">ถัดไป</button><input type=\"range\" data-scrub aria-label=\"เลือกแท่งย้อนหลัง\" min=\"0\" max=\"0\" value=\"0\" disabled><button type=\"button\" class=\"text-button\" data-latest disabled>ล่าสุด</button></div><p class=\"chart-disclaimer\">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class=\"setup-insights\" data-setup-insights></div><details class=\"chart-evidence\"><summary>รายละเอียดเงื่อนไข · คลิกแท่งบนกราฟเพื่อดูย้อนหลัง</summary><div data-chart-evidence></div></details><a class=\"chart-credit\" href=\"https://www.tradingview.com/\" target=\"_blank\" rel=\"noopener\">Charts by TradingView</a>") ?? "<header><div class=\"studio-header-info\"><strong data-chart-title>กราฟเซ็ตอัพ</strong><p data-chart-status role=\"status\">เลือกคู่เทรดเพื่อดูกราฟ</p></div><div class=\"studio-header-actions\"><button type=\"button\" class=\"secondary\" data-chart-refresh>รีเฟรช</button></div></header><div class=\"chart-legend\"></div><div class=\"studio-canvas\" aria-label=\"กราฟแท่งราคาและอินดิเคเตอร์\"></div><div class=\"replay-controls\"><button type=\"button\" class=\"secondary\" data-play disabled>เล่นย้อนหลัง</button><button type=\"button\" class=\"secondary\" data-step disabled aria-label=\"เลื่อนไปแท่งถัดไป\">ถัดไป</button><input type=\"range\" data-scrub aria-label=\"เลือกแท่งย้อนหลัง\" min=\"0\" max=\"0\" value=\"0\" disabled><button type=\"button\" class=\"text-button\" data-latest disabled>ล่าสุด</button></div><p class=\"chart-disclaimer\">จำลองสัญญาณจากแท่งปิด · ไม่ใช่ออเดอร์จริง · อัปเดตข้อมูลทุก 30 วินาที</p><div class=\"setup-insights\" data-setup-insights></div><details class=\"chart-evidence\"><summary>รายละเอียดเงื่อนไข · คลิกแท่งบนกราฟเพื่อดูย้อนหลัง</summary><div data-chart-evidence></div></details><a class=\"chart-credit\" href=\"https://www.tradingview.com/\" target=\"_blank\" rel=\"noopener\">Charts by TradingView</a>");
   setupPane.insertBefore(studio, panel);
   // Keep diagnostic content available without taking height from the chart.
   const signalsDialog = document.createElement('dialog');
   signalsDialog.className = 'studio-dialog studio-signals-dialog';
   signalsDialog.setAttribute('aria-labelledby', 'studio-signals-title');
-  signalsDialog.innerHTML = '<header><h2 id="studio-signals-title">สถานะสัญญาณ</h2><button type="button" data-close-signals aria-label="ปิดสถานะสัญญาณ">ปิด</button></header>';
+  signalsDialog.innerHTML = (globalThis.SnaapI18n?.text("<header><h2 id=\"studio-signals-title\">สถานะสัญญาณ</h2><button type=\"button\" data-close-signals aria-label=\"ปิดสถานะสัญญาณ\">ปิด</button></header>") ?? "<header><h2 id=\"studio-signals-title\">สถานะสัญญาณ</h2><button type=\"button\" data-close-signals aria-label=\"ปิดสถานะสัญญาณ\">ปิด</button></header>");
   for (const selector of ['.chart-disclaimer', '.setup-insights', '.chart-evidence'])
     signalsDialog.append(studio.querySelector(selector));
   studio.append(signalsDialog);
@@ -17,9 +17,9 @@
   footer.className = 'studio-chart-footer';
   const replay = document.createElement('details');
   replay.className = 'studio-replay';
-  replay.innerHTML = '<summary>เล่นย้อนหลัง</summary>';
+  replay.innerHTML = (globalThis.SnaapI18n?.text("<summary>เล่นย้อนหลัง</summary>") ?? "<summary>เล่นย้อนหลัง</summary>");
   replay.append(studio.querySelector('.replay-controls'));
-  footer.innerHTML = '<button type="button" class="secondary" data-open-signals>สถานะสัญญาณ</button>';
+  footer.innerHTML = (globalThis.SnaapI18n?.text("<button type=\"button\" class=\"secondary\" data-open-signals>สถานะสัญญาณ</button>") ?? "<button type=\"button\" class=\"secondary\" data-open-signals>สถานะสัญญาณ</button>");
   footer.append(replay, studio.querySelector('.chart-credit'));
   studio.insertBefore(footer, signalsDialog);
   studio.querySelector('[data-open-signals]').onclick = () => signalsDialog.showModal();
@@ -30,7 +30,7 @@
   function chartLoading(active) {
     canvas.setAttribute('aria-busy', String(active));
     canvas.querySelector('.skeleton')?.remove();
-    if (active && !chart) canvas.insertAdjacentHTML('beforeend', skeletonUI('chart', 'กำลังโหลดกราฟ…'));
+    if (active && !chart) canvas.insertAdjacentHTML('beforeend', skeletonUI('chart', (globalThis.SnaapI18n?.text("กำลังโหลดกราฟ…") ?? "กำลังโหลดกราฟ…")));
   }
   let chartPair=null, chartFrame=null, selectedBarTime=null, requestedBarTime=null;
   window.SnaapChart = {
@@ -51,13 +51,13 @@
       chartLoading(false);
       chartPickerWrap.hidden=true;
       scrub.value=0;
-      studio.querySelector('[data-chart-title]').textContent='กราฟเซ็ตอัพใหม่';
-      status.textContent='เพิ่มเงื่อนไขเพื่อดูกราฟและสัญญาณของเซ็ตอัพนี้';
+      studio.querySelector('[data-chart-title]').textContent=(globalThis.SnaapI18n?.text("กราฟเซ็ตอัพใหม่") ?? "กราฟเซ็ตอัพใหม่");
+      status.textContent=(globalThis.SnaapI18n?.text("เพิ่มเงื่อนไขเพื่อดูกราฟและสัญญาณของเซ็ตอัพนี้") ?? "เพิ่มเงื่อนไขเพื่อดูกราฟและสัญญาณของเซ็ตอัพนี้");
       canvas.inert=false;canvas.style.opacity='1';
     },
     visibility(){lines.forEach(({series,operand})=>series.applyOptions({visible:!window.SnaapStudio?.isHidden(operand)}));},
   };
-  const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label","คู่เทรดที่แสดงบนกราฟ");const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector(".studio-header-actions").append(chartPickerWrap);
+  const chartPicker=document.createElement("select");chartPicker.className="studio-pair-select";chartPicker.setAttribute("aria-label",(globalThis.SnaapI18n?.text("คู่เทรดที่แสดงบนกราฟ") ?? "คู่เทรดที่แสดงบนกราฟ"));const chartPickerWrap=document.createElement("div");chartPickerWrap.className="studio-pair-control";chartPickerWrap.append(chartPicker);studio.querySelector(".studio-header-actions").append(chartPickerWrap);
   panel.addEventListener('click', e => {
     const button = e.target.closest('[data-open-condition-chart]');
     if (button) window.SnaapChart.view(button.dataset.openConditionChart);
@@ -79,7 +79,7 @@
   function stop() {
     clearInterval(playTimer);
     playTimer = null;
-    studio.querySelector("[data-play]").textContent = "เล่นย้อนหลัง";
+    studio.querySelector("[data-play]").textContent = (globalThis.SnaapI18n?.text("เล่นย้อนหลัง") ?? "เล่นย้อนหลัง");
   }
   function clear() {
     stop();
@@ -150,11 +150,11 @@
           color: document.documentElement.dataset.theme === "dark" ? (e.kind === "ENTRY" ? "#35ba8a" : "#f18088") : (e.kind === "ENTRY" ? "#137b55" : "#bc3546"),
           shape: (e.kind === "ENTRY") !== (e.side === "SHORT") ? "arrowUp" : "arrowDown",
           text: {
-            ENTRY: "เข้า",
-            EXIT: "ออก",
-            CANCEL: "ยกเลิก",
-            EXPIRED: "หมดเวลา",
-          }[e.kind] + " · " + ({SPOT:"Spot",LONG:"Long",SHORT:"Short"}[e.side] ?? "ไม่ระบุฝั่ง"),
+            ENTRY: (globalThis.SnaapI18n?.text("เข้า") ?? "เข้า"),
+            EXIT: (globalThis.SnaapI18n?.text("ออก") ?? "ออก"),
+            CANCEL: (globalThis.SnaapI18n?.text("ยกเลิก") ?? "ยกเลิก"),
+            EXPIRED: (globalThis.SnaapI18n?.text("หมดเวลา") ?? "หมดเวลา"),
+          }[e.kind] + " · " + ({SPOT:"Spot",LONG:"Long",SHORT:"Short"}[e.side] ?? (globalThis.SnaapI18n?.text("ไม่ระบุฝั่ง") ?? "ไม่ระบุฝั่ง")),
         })),
     );
     selectedBarTime = cut;
@@ -162,10 +162,10 @@
     document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar,selectedTime:cut,source:result.source}}));
     const historical=at<result.candles.length-1;
     const ready=result.freshness?.every(f=>f.status==='CURRENT')??true;
-    studio.querySelector('[data-setup-insights]').innerHTML = freshnessUI(result.freshness) + (historical?'<p>กำลังดูสถานะย้อนหลังตามแท่งที่เลือก</p>':'') + (ready||historical?(bar?.branches??[]).map(b=>`<strong>${esc(directionLabel(b.side,b.side === "SPOT" ? "Spot" : "Perpetual Futures"))}</strong>${progressUI(b.progress)}`).join(''):'<p role="status">รอข้อมูลแท่งปิดให้ครบก่อนแสดงสถานะปัจจุบัน · ยังดูหลักฐานของแท่งย้อนหลังได้</p>');
+    studio.querySelector('[data-setup-insights]').innerHTML = freshnessUI(result.freshness) + (historical?(globalThis.SnaapI18n?.text("<p>กำลังดูสถานะย้อนหลังตามแท่งที่เลือก</p>") ?? "<p>กำลังดูสถานะย้อนหลังตามแท่งที่เลือก</p>"):'') + (ready||historical?(bar?.branches??[]).map(b=>`<strong>${esc(directionLabel(b.side,b.side === "SPOT" ? "Spot" : "Perpetual Futures"))}</strong>${progressUI(b.progress)}`).join(''):(globalThis.SnaapI18n?.text("<p role=\"status\">รอข้อมูลแท่งปิดให้ครบก่อนแสดงสถานะปัจจุบัน · ยังดูหลักฐานของแท่งย้อนหลังได้</p>") ?? "<p role=\"status\">รอข้อมูลแท่งปิดให้ครบก่อนแสดงสถานะปัจจุบัน · ยังดูหลักฐานของแท่งย้อนหลังได้</p>"));
     studio.querySelector("[data-chart-evidence]").innerHTML =
-      (hasEntryCondition() ? (barEvidence(bar, { showProgress: false }) || "<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>") : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
-      (bar?.cancel && !bar.branches && !bar.explanations ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+      (hasEntryCondition() ? (barEvidence(bar, { showProgress: false }) || (globalThis.SnaapI18n?.text("<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>") ?? "<p>ไม่มีข้อมูลประเมินในรอบตรวจแท่งนี้</p>")) : (globalThis.SnaapI18n?.text("<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") ?? "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>")) +
+      (bar?.cancel && !bar.branches && !bar.explanations ? (globalThis.SnaapI18n?.text("<p>เงื่อนไขยกเลิก</p>") ?? "<p>เงื่อนไขยกเลิก</p>") + evidenceUI(bar.cancel) : "");
     if (fit) fitFrame();
   }
   function render(data) {
@@ -248,7 +248,7 @@
     studio.querySelector(".chart-legend").innerHTML = data.overlays
       .map(
         (o, i) =>
-          o.chartOperand || window.SnaapStudio?.isHidden(o.operand) ? "" : `<span class="studio-legend-chip" style="color:${colors[i % colors.length]}"><button type="button" class="studio-legend-item" data-chart-indicator="${i}">${esc(operandText(o.operand))} ⚙</button><button type="button" class="studio-legend-remove" data-remove-chart-indicator="${i}" aria-label="นำ ${esc(operandText(o.operand))} ออกจากกราฟ" title="นำออกจากกราฟ · คงเงื่อนไขไว้">×</button></span>`,
+          o.chartOperand || window.SnaapStudio?.isHidden(o.operand) ? "" : `<span class="studio-legend-chip" style="color:${colors[i % colors.length]}"><button type="button" class="studio-legend-item" data-chart-indicator="${i}">${esc(operandText(o.operand))} ⚙</button><button type="button" class="studio-legend-remove" data-remove-chart-indicator="${i}${(globalThis.SnaapI18n?.text("\" aria-label=\"นำ ") ?? "\" aria-label=\"นำ ")}${esc(operandText(o.operand))}${(globalThis.SnaapI18n?.text(" ออกจากกราฟ\" title=\"นำออกจากกราฟ · คงเงื่อนไขไว้\">×</button></span>") ?? " ออกจากกราฟ\" title=\"นำออกจากกราฟ · คงเงื่อนไขไว้\">×</button></span>")}`,
       )
       .join("");
     studio
@@ -266,17 +266,17 @@
       const index = data.timeline.findLastIndex((b) => b.time <= selectedBarTime);
       if (index < 0) {
         document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar:null,selectedTime:selectedBarTime,source:data.source}}));
-        studio.querySelector('[data-chart-evidence]').textContent=hasEntryCondition() ? 'ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้' : 'ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ';
+        studio.querySelector('[data-chart-evidence]').textContent=hasEntryCondition() ? (globalThis.SnaapI18n?.text("ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้") ?? "ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้") : (globalThis.SnaapI18n?.text("ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ") ?? "ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ");
         return;
       }
       const bar = data.timeline[index];
       document.dispatchEvent(new CustomEvent('studio-evidence',{detail:{bar,selectedTime:selectedBarTime,source:data.source}}));
       studio.querySelector("[data-chart-evidence]").innerHTML =
-        (hasEntryCondition() ? barEvidence(bar) : "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") +
-        (bar?.cancel ? "<p>เงื่อนไขยกเลิก</p>" + evidenceUI(bar.cancel) : "");
+        (hasEntryCondition() ? barEvidence(bar) : (globalThis.SnaapI18n?.text("<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") ?? "<p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>")) +
+        (bar?.cancel ? (globalThis.SnaapI18n?.text("<p>เงื่อนไขยกเลิก</p>") ?? "<p>เงื่อนไขยกเลิก</p>") + evidenceUI(bar.cancel) : "");
       studio.querySelector(".chart-evidence").open = true;
     });
-    status.textContent = `${data.freshness?.some(f=>f.status!=="CURRENT")?"ข้อมูลยังไม่พร้อมสำหรับสัญญาณล่าสุด · ":""}${data.candles.length} แท่งปิด · ${data.events.length} สัญญาณ · ตรวจทุก ${data.source.evaluationFrame} · อัปเดต ${new Date(data.source.asOf).toLocaleTimeString("th-TH")}`;
+    status.textContent = `${data.freshness?.some(f=>f.status!=="CURRENT")?(globalThis.SnaapI18n?.text("ข้อมูลยังไม่พร้อมสำหรับสัญญาณล่าสุด · ") ?? "ข้อมูลยังไม่พร้อมสำหรับสัญญาณล่าสุด · "):""}${data.candles.length}${(globalThis.SnaapI18n?.text(" แท่งปิด · ") ?? " แท่งปิด · ")}${data.events.length}${(globalThis.SnaapI18n?.text(" สัญญาณ · ตรวจทุก ") ?? " สัญญาณ · ตรวจทุก ")}${data.source.evaluationFrame}${(globalThis.SnaapI18n?.text(" · อัปเดต ") ?? " · อัปเดต ")}${new Date(data.source.asOf).toLocaleTimeString((globalThis.SnaapI18n?.locale ?? "th-TH"))}`;
   }
   async function update(force = false) {
     if (!state.draft || workbench.hidden || workbench.dataset.tab === "chat") return;
@@ -305,11 +305,11 @@
       `${chartExchange} · ${chartPair} · ${chartFrame} · ${directionLabel(state.draft.side,state.draft.market)}`;
     if (!chartExchange || !state.draft.pairs.length) {
       pendingKey = "";
-      status.textContent = "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ";
+      status.textContent = (globalThis.SnaapI18n?.text("เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ") ?? "เลือกหนึ่งกระดานและหนึ่งคู่เทรดเพื่อดูกราฟ");
       chartLoading(false);canvas.inert=false;canvas.style.opacity='1';
       return;
     }
-    status.textContent = "กำลังคำนวณกราฟและสัญญาณ…";
+    status.textContent = (globalThis.SnaapI18n?.text("กำลังคำนวณกราฟและสัญญาณ…") ?? "กำลังคำนวณกราฟและสัญญาณ…");
     try {
       const data = await api("/preview", "POST", request, {signal});
       if (token !== generation || JSON.stringify(state.draft) !== draftAtRequest || chartPair!==request.spec.pairs[0] || chartFrame!==request.chartTimeframe || state.conversation!==scope.conversation || state.workspaceId!==scope.workspace) return;
@@ -317,7 +317,7 @@
       key = next;
     } catch (e) {
       if (token === generation) {
-        status.textContent = e.name === 'TimeoutError' ? 'โหลดกราฟนานกว่าปกติ · กดรีเฟรชเพื่อลองอีกครั้ง' : e.message;
+        status.textContent = e.name === 'TimeoutError' ? (globalThis.SnaapI18n?.text("โหลดกราฟนานกว่าปกติ · กดรีเฟรชเพื่อลองอีกครั้ง") ?? "โหลดกราฟนานกว่าปกติ · กดรีเฟรชเพื่อลองอีกครั้ง") : e.message;
         key = "";
       }
     } finally {
@@ -338,9 +338,9 @@
     stop();
     studio.querySelectorAll('.replay-controls button,.replay-controls input').forEach(e=>e.disabled=true);
     clearTimeout(timer);
-    status.textContent = "เซ็ตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…";
+    status.textContent = (globalThis.SnaapI18n?.text("เซ็ตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…") ?? "เซ็ตอัพเปลี่ยนแล้ว · กำลังอัปเดตกราฟ…");
     canvas.style.opacity = chart ? '.55' : '1';canvas.inert=true;chartLoading(true);
-    studio.querySelector("[data-chart-evidence]").textContent="กำลังคำนวณร่างล่าสุด…";
+    studio.querySelector("[data-chart-evidence]").textContent=(globalThis.SnaapI18n?.text("กำลังคำนวณร่างล่าสุด…") ?? "กำลังคำนวณร่างล่าสุด…");
     timer = setTimeout(() => {
       update();
     }, 120);
@@ -368,7 +368,7 @@
     }
     if (at >= result.candles.length - 1)
       draw(Math.min(40, result.candles.length - 1), true);
-    studio.querySelector("[data-play]").textContent = "หยุด";
+    studio.querySelector("[data-play]").textContent = (globalThis.SnaapI18n?.text("หยุด") ?? "หยุด");
     playTimer = setInterval(() => {
       draw(at + 1);
       if (at >= result.candles.length - 1) stop();
@@ -402,7 +402,7 @@
       const results = await Promise.all(spec.exchange.map(async exchange => ({ exchange, catalog: await api(`/instruments?exchange=${encodeURIComponent(exchange)}&market=${encodeURIComponent(spec.market)}`) })));
       if (token !== availabilityGeneration || !hint.isConnected) return;
       const missing = assetTools.strategyTargets(spec).filter(t => !results.find(r => r.exchange === t.exchange)?.catalog.items.some(m => m.supported && m.symbol === t.pair));
-      hint.textContent = missing.length ? 'คู่เทรดไม่พร้อม: ' + missing.map(t => t.pair + ' · ' + t.exchange).join(', ') : '';
+      hint.textContent = missing.length ? (globalThis.SnaapI18n?.text("คู่เทรดไม่พร้อม: ") ?? "คู่เทรดไม่พร้อม: ") + missing.map(t => t.pair + ' · ' + t.exchange).join(', ') : '';
       hint.hidden = !missing.length;
     } catch (error) { if (token === availabilityGeneration && hint.isConnected) { hint.hidden = false; hint.textContent = error.message; } }
   }

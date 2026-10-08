@@ -2,7 +2,7 @@
 (() => {
   const root = document.documentElement;
   root.dataset.boot = 'loading';
-  const fallback = setTimeout(() => fail('โหลดนานกว่าปกติ ลองอีกครั้งได้'), 15000);
+  const fallback = setTimeout(() => fail((globalThis.SnaapI18n?.text("โหลดนานกว่าปกติ ลองอีกครั้งได้") ?? "โหลดนานกว่าปกติ ลองอีกครั้งได้")), 15000);
   function fail(message) {
     clearTimeout(fallback);
     const status = document.querySelector('[data-startup-message]');

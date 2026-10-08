@@ -2,7 +2,7 @@
 function selectImageRegion(image) {
   const dialog = document.createElement("dialog");
   dialog.className = "runtime-dialog crop-dialog";
-  dialog.innerHTML = `<h2>เลือกบริเวณที่ต้องการถาม</h2><p>ลากบนภาพเพื่อเลือก หรือใช้ทั้งภาพ</p><div class="crop-stage"><img alt="ภาพที่แนบ"><div class="crop-box" hidden></div></div><p class="crop-status" role="status">ใช้ทั้งภาพ</p><div class="design-actions"><button class="primary" data-use>ใช้บริเวณนี้</button><button class="secondary" data-whole>ใช้ทั้งภาพ</button><button class="text-button" data-cancel>ยกเลิก</button></div>`;
+  dialog.innerHTML = (globalThis.SnaapI18n?.text("<h2>เลือกบริเวณที่ต้องการถาม</h2><p>ลากบนภาพเพื่อเลือก หรือใช้ทั้งภาพ</p><div class=\"crop-stage\"><img alt=\"ภาพที่แนบ\"><div class=\"crop-box\" hidden></div></div><p class=\"crop-status\" role=\"status\">ใช้ทั้งภาพ</p><div class=\"design-actions\"><button class=\"primary\" data-use>ใช้บริเวณนี้</button><button class=\"secondary\" data-whole>ใช้ทั้งภาพ</button><button class=\"text-button\" data-cancel>ยกเลิก</button></div>") ?? "<h2>เลือกบริเวณที่ต้องการถาม</h2><p>ลากบนภาพเพื่อเลือก หรือใช้ทั้งภาพ</p><div class=\"crop-stage\"><img alt=\"ภาพที่แนบ\"><div class=\"crop-box\" hidden></div></div><p class=\"crop-status\" role=\"status\">ใช้ทั้งภาพ</p><div class=\"design-actions\"><button class=\"primary\" data-use>ใช้บริเวณนี้</button><button class=\"secondary\" data-whole>ใช้ทั้งภาพ</button><button class=\"text-button\" data-cancel>ยกเลิก</button></div>");
   const img = dialog.querySelector("img"),
     stage = dialog.querySelector(".crop-stage"),
     box = dialog.querySelector(".crop-box");
@@ -45,7 +45,7 @@ function selectImageRegion(image) {
       height: Math.floor(height * sy),
     };
     dialog.querySelector(".crop-status").textContent =
-      `เลือก ${region.width} × ${region.height} พิกเซล`;
+      `${(globalThis.SnaapI18n?.text("เลือก ") ?? "เลือก ")}${region.width} × ${region.height}${(globalThis.SnaapI18n?.text(" พิกเซล") ?? " พิกเซล")}`;
   };
   stage.onpointerup = () => {
     start = null;

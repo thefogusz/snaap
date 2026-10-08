@@ -15,7 +15,7 @@
       )
       .filter(Boolean)
       .join(" ") ||
-    "เลือกค่า";
+    (globalThis.SnaapI18n?.text("เลือกค่า") ?? "เลือกค่า");
   function close() {
     if (!opened) return;
     opened.trigger.setAttribute("aria-expanded", "false");
@@ -63,7 +63,7 @@
     sync(control);
   }
   function sync({ select, trigger }) {
-    const text = select.selectedOptions[0]?.textContent || "เลือกค่า";
+    const text = select.selectedOptions[0]?.textContent || (globalThis.SnaapI18n?.text("เลือกค่า") ?? "เลือกค่า");
     const value = trigger.querySelector(".snaap-select-value");
     if (value.textContent !== text) value.textContent = text;
     const name = labelFor(select);
@@ -91,8 +91,8 @@
       menu.removeAttribute('role');
       searchInput=document.createElement('input');
       searchInput.type='search';searchInput.className='snaap-select-search';
-      searchInput.placeholder='ค้นหาอินดิเคเตอร์…';
-      searchInput.setAttribute('aria-label','ค้นหาอินดิเคเตอร์');
+      searchInput.placeholder=(globalThis.SnaapI18n?.text("ค้นหาอินดิเคเตอร์…") ?? "ค้นหาอินดิเคเตอร์…");
+      searchInput.setAttribute('aria-label',(globalThis.SnaapI18n?.text("ค้นหาอินดิเคเตอร์") ?? "ค้นหาอินดิเคเตอร์"));
       searchInput.setAttribute('role','combobox');searchInput.setAttribute('aria-expanded','true');
       list=document.createElement('div');list.id=menu.id+'-options';list.setAttribute('role','listbox');list.setAttribute('aria-label',labelFor(select));
       searchInput.setAttribute('aria-controls',list.id);menu.append(searchInput,list);

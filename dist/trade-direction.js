@@ -34,9 +34,9 @@ export function setShortMirroring(input,enabled) {
   return spec;
 }
 export function directionLabel(side, market) {
-  if (market === 'Spot' || side === 'SPOT') return 'Spot (ซื้อ)';
-  if (!market && !['LONG','SHORT','BOTH'].includes(side)) return 'ยังไม่ระบุตลาด / ฝั่ง';
-  return {LONG:'Long (ซื้อ) · Futures', SHORT:'Short (ขาย) · Futures', BOTH:'Long + Short · Futures'}[side] ?? 'Futures · ยังไม่ระบุฝั่ง';
+  if (market === 'Spot' || side === 'SPOT') return (globalThis.SnaapI18n?.text("Spot (ซื้อ)") ?? "Spot (ซื้อ)");
+  if (!market && !['LONG','SHORT','BOTH'].includes(side)) return (globalThis.SnaapI18n?.text("ยังไม่ระบุตลาด / ฝั่ง") ?? "ยังไม่ระบุตลาด / ฝั่ง");
+  return {LONG:(globalThis.SnaapI18n?.text("Long (ซื้อ) · Futures") ?? "Long (ซื้อ) · Futures"), SHORT:(globalThis.SnaapI18n?.text("Short (ขาย) · Futures") ?? "Short (ขาย) · Futures"), BOTH:'Long + Short · Futures'}[side] ?? (globalThis.SnaapI18n?.text("Futures · ยังไม่ระบุฝั่ง") ?? "Futures · ยังไม่ระบุฝั่ง");
 }
 export function signalDirection(event, setupMarket, setupSide) {
   // The saved revision, not today's edited setup, provides the legacy fallback.

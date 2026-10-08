@@ -25,19 +25,19 @@
   const range = (n, a, b) => ease((n - a) / (b - a));
   const strategies = {
     breakout: {
-      quote: "“แจ้งเมื่อ BTC ทะลุแนวต้าน”",
-      rule: "ปิดเหนือแนวต้าน → จับสัญญาณ",
-      message: "BTC ปิดเหนือแนวต้านแล้ว",
-      label: "แนวต้าน",
+      quote: (globalThis.SnaapI18n?.text("“แจ้งเมื่อ BTC ทะลุแนวต้าน”") ?? "“แจ้งเมื่อ BTC ทะลุแนวต้าน”"),
+      rule: (globalThis.SnaapI18n?.text("ปิดเหนือแนวต้าน → จับสัญญาณ") ?? "ปิดเหนือแนวต้าน → จับสัญญาณ"),
+      message: (globalThis.SnaapI18n?.text("BTC ปิดเหนือแนวต้านแล้ว") ?? "BTC ปิดเหนือแนวต้านแล้ว"),
+      label: (globalThis.SnaapI18n?.text("แนวต้าน") ?? "แนวต้าน"),
       values: [
         285, 260, 272, 232, 245, 210, 225, 192, 208, 225, 205, 181, 198, 183,
         168, 173, 133, 117, 138, 98, 110, 75, 90, 59,
       ],
     },
     pullback: {
-      quote: "“หาจังหวะ BTC ย่อในขาขึ้น”",
-      rule: "ย่อแตะ EMA 200 แล้วปิดกลับขึ้น → จับสัญญาณ",
-      message: "BTC ย่อแตะ EMA แล้วปิดกลับขึ้น",
+      quote: (globalThis.SnaapI18n?.text("“หาจังหวะ BTC ย่อในขาขึ้น”") ?? "“หาจังหวะ BTC ย่อในขาขึ้น”"),
+      rule: (globalThis.SnaapI18n?.text("ย่อแตะ EMA 200 แล้วปิดกลับขึ้น → จับสัญญาณ") ?? "ย่อแตะ EMA 200 แล้วปิดกลับขึ้น → จับสัญญาณ"),
+      message: (globalThis.SnaapI18n?.text("BTC ย่อแตะ EMA แล้วปิดกลับขึ้น") ?? "BTC ย่อแตะ EMA แล้วปิดกลับขึ้น"),
       label: "EMA 200",
       values: [
         285, 260, 272, 232, 245, 210, 225, 192, 208, 218, 238, 252, 267, 245,
@@ -56,18 +56,18 @@
   const sceneCopy = [
     [
       "01 · THE IDEA",
-      "เริ่มจากสิ่งที่คุณมองหา.",
-      "บอกไอเดียด้วยภาษาของคุณ ที่เหลือให้ AI ออกแบบ.",
+      (globalThis.SnaapI18n?.text("เริ่มจากสิ่งที่คุณมองหา.") ?? "เริ่มจากสิ่งที่คุณมองหา."),
+      (globalThis.SnaapI18n?.text("บอกไอเดียด้วยภาษาของคุณ ที่เหลือให้ AI ออกแบบ.") ?? "บอกไอเดียด้วยภาษาของคุณ ที่เหลือให้ AI ออกแบบ."),
     ],
     [
       "02 · THE SETUP",
-      "ไอเดียกลายเป็นเซ็ตอัพ.",
-      "AI วางเงื่อนไขบนกราฟ แล้ว Snaap เฝ้าจังหวะให้คุณ.",
+      (globalThis.SnaapI18n?.text("ไอเดียกลายเป็นเซ็ตอัพ.") ?? "ไอเดียกลายเป็นเซ็ตอัพ."),
+      (globalThis.SnaapI18n?.text("AI วางเงื่อนไขบนกราฟ แล้ว Snaap เฝ้าจังหวะให้คุณ.") ?? "AI วางเงื่อนไขบนกราฟ แล้ว Snaap เฝ้าจังหวะให้คุณ."),
     ],
     [
       "03 · THE SIGNAL",
-      "จังหวะที่ใช่. ส่งถึงคุณ.",
-      "เมื่อราคาเข้าเงื่อนไข รับสัญญาณในช่องทางที่คุณเลือก.",
+      (globalThis.SnaapI18n?.text("จังหวะที่ใช่. ส่งถึงคุณ.") ?? "จังหวะที่ใช่. ส่งถึงคุณ."),
+      (globalThis.SnaapI18n?.text("เมื่อราคาเข้าเงื่อนไข รับสัญญาณในช่องทางที่คุณเลือก.") ?? "เมื่อราคาเข้าเงื่อนไข รับสัญญาณในช่องทางที่คุณเลือก."),
     ],
   ];
   const createSvg = (tag, attrs) => {
@@ -216,7 +216,7 @@
     play.querySelector("path").setAttribute("d", "M8 5v14l11-7Z");
     play.setAttribute(
       "aria-label",
-      progress >= 0.99 ? "เล่นโฟลว์จำลองอีกครั้ง" : "เล่นโฟลว์จำลอง",
+      progress >= 0.99 ? (globalThis.SnaapI18n?.text("เล่นโฟลว์จำลองอีกครั้ง") ?? "เล่นโฟลว์จำลองอีกครั้ง") : (globalThis.SnaapI18n?.text("เล่นโฟลว์จำลอง") ?? "เล่นโฟลว์จำลอง"),
     );
   }
   function tick(time) {
@@ -227,7 +227,7 @@
     if (progress >= 1) {
       stop();
       $("#demo-status").textContent =
-        `พบสัญญาณ ${strategies[strategy].message} แจ้งเตือนไปที่ ${$("#notification-channel").textContent}`;
+        `${(globalThis.SnaapI18n?.text("พบสัญญาณ ") ?? "พบสัญญาณ ")}${strategies[strategy].message}${(globalThis.SnaapI18n?.text(" แจ้งเตือนไปที่ ") ?? " แจ้งเตือนไปที่ ")}${$("#notification-channel").textContent}`;
       return;
     }
     frame = requestAnimationFrame(tick);
@@ -242,7 +242,7 @@
     playing = true;
     previousTime = 0;
     play.querySelector("path").setAttribute("d", "M6 5h4v14H6zM14 5h4v14h-4z");
-    play.setAttribute("aria-label", "หยุดโฟลว์จำลองชั่วคราว");
+    play.setAttribute("aria-label", (globalThis.SnaapI18n?.text("หยุดโฟลว์จำลองชั่วคราว") ?? "หยุดโฟลว์จำลองชั่วคราว"));
     frame = requestAnimationFrame(tick);
   }
   play.addEventListener("click", () => (playing ? stop() : run()));
@@ -285,7 +285,7 @@
           ],
           { duration: 420, easing: "ease-out" },
         );
-      $("#demo-status").textContent = `ช่องทางจำลอง ${button.dataset.channel}`;
+      $("#demo-status").textContent = `${(globalThis.SnaapI18n?.text("ช่องทางจำลอง ") ?? "ช่องทางจำลอง ")}${button.dataset.channel}`;
     }),
   );
   function syncScroll() {
@@ -388,7 +388,7 @@
     moveHeroAgent(14);
     hero.classList.remove("is-scanning");
     hero.classList.add("is-signalling");
-    $("#hero-hint").textContent = "Snaap พบสัญญาณแล้ว";
+    $("#hero-hint").textContent = (globalThis.SnaapI18n?.text("Snaap พบสัญญาณแล้ว") ?? "Snaap พบสัญญาณแล้ว");
   }
   hero.addEventListener("click", () => {
     const active = hero.getAttribute("aria-pressed") !== "true";
@@ -399,13 +399,13 @@
     hero.setAttribute(
       "aria-label",
       active
-        ? "รีเซ็ตการจับสัญญาณจำลอง"
-        : "ให้ Snaap เฝ้ากราฟและจับสัญญาณจำลอง",
+        ? (globalThis.SnaapI18n?.text("รีเซ็ตการจับสัญญาณจำลอง") ?? "รีเซ็ตการจับสัญญาณจำลอง")
+        : (globalThis.SnaapI18n?.text("ให้ Snaap เฝ้ากราฟและจับสัญญาณจำลอง") ?? "ให้ Snaap เฝ้ากราฟและจับสัญญาณจำลอง"),
     );
     moveHeroAgent(6);
     $("#hero-hint").textContent = active
-      ? "Snaap กำลังเฝ้ากราฟ…"
-      : "ให้ Snaap จับสัญญาณ";
+      ? (globalThis.SnaapI18n?.text("Snaap กำลังเฝ้ากราฟ…") ?? "Snaap กำลังเฝ้ากราฟ…")
+      : (globalThis.SnaapI18n?.text("ให้ Snaap จับสัญญาณ") ?? "ให้ Snaap จับสัญญาณ");
     if (!active) return;
     if (reduced.matches) {
       finishHeroScan();

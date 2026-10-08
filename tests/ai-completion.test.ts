@@ -30,6 +30,14 @@ test('configured reasoning/output limit remains independent of request cost',()=
   assert.equal(outputLimit('standard'),6000);
 });
 
+test('English setup edits and negations retain the same draft-action guard as Thai', () => {
+  for (const verb of ['design', 'build', 'update', 'adjust']) {
+    assert.equal(requestsDraftChange(`${verb} my setup`), true);
+    assert.equal(requestsDraftChange(`Do not ${verb} my setup`), false);
+    assert.equal(requestsDraftChange(`Don't ${verb} my setup`), false);
+  }
+});
+
 test('Gate search and native perpetual targets use the same canonical pair identity', () => {
   assert.equal(instrumentSearch('Gate TSLA/USDT perpetual'), 'TSLAUSDT');
   const spec = toolSpec(JSON.stringify({ spec: { market: 'Perpetual Futures', pairs: ['TSLA/USDT:USDT'], targets: [{ exchange: 'Gate', pair: 'TSLA/USDT:USDT' }] } }));

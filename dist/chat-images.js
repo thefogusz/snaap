@@ -6,8 +6,8 @@ export function openChatImage(src, name, opener) {
   if (!viewer) {
     viewer = document.createElement('dialog');
     viewer.className = 'chat-image-viewer';
-    viewer.setAttribute('aria-label', 'ดูภาพเต็ม');
-    viewer.innerHTML = '<button type="button" class="chat-image-close" aria-label="ปิดภาพเต็ม"><span aria-hidden="true">×</span></button><img class="chat-image-full" alt=""><span class="chat-image-caption"></span>';
+    viewer.setAttribute('aria-label', (globalThis.SnaapI18n?.text("ดูภาพเต็ม") ?? "ดูภาพเต็ม"));
+    viewer.innerHTML = (globalThis.SnaapI18n?.text("<button type=\"button\" class=\"chat-image-close\" aria-label=\"ปิดภาพเต็ม\"><span aria-hidden=\"true\">×</span></button><img class=\"chat-image-full\" alt=\"\"><span class=\"chat-image-caption\"></span>") ?? "<button type=\"button\" class=\"chat-image-close\" aria-label=\"ปิดภาพเต็ม\"><span aria-hidden=\"true\">×</span></button><img class=\"chat-image-full\" alt=\"\"><span class=\"chat-image-caption\"></span>");
     document.body.append(viewer);
     const close = viewer.querySelector('button');
     const image = viewer.querySelector('img');

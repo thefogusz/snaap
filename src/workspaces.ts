@@ -24,11 +24,12 @@ export function registerWorkspaces(app: FastifyInstance, db: pg.Pool) {
       ).rows;
       if (!rows.some((r) => r.is_default)) {
         const id = randomUUID();
+        const name = req.cookies.snaap_language === 'en' ? 'Main workspace' : 'พื้นที่หลัก';
         await c.query(
-          "INSERT INTO workspaces(id,owner_id,name,is_default) VALUES($1,$2,'พื้นที่หลัก',true)",
-          [id, req.userId],
+          "INSERT INTO workspaces(id,owner_id,name,is_default) VALUES($1,$2,$3,true)",
+          [id, req.userId, name],
         );
-        rows.unshift({ id, name: "พื้นที่หลัก", is_default: true });
+        rows.unshift({ id, name, is_default: true });
       }
       const defaultId = rows.find((r) => r.is_default).id;
       for (const table of ["rules", "conversations"])

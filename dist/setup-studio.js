@@ -17,26 +17,26 @@
     editorMode = null;
   const header = document.createElement("nav");
   header.className = "studio-workspace-header";
-  header.setAttribute("aria-label", "แสดงแผงเซ็ตอัพ");
+  header.setAttribute("aria-label", (globalThis.SnaapI18n?.text("แสดงแผงเซ็ตอัพ") ?? "แสดงแผงเซ็ตอัพ"));
   header.innerHTML =
-    '<button type="button" data-collapse-agent aria-expanded="true">Agent</button><button type="button" data-collapse-conditions aria-expanded="true">เงื่อนไข</button>';
+    (globalThis.SnaapI18n?.text("<button type=\"button\" data-collapse-agent aria-expanded=\"true\">Agent</button><button type=\"button\" data-collapse-conditions aria-expanded=\"true\">เงื่อนไข</button>") ?? "<button type=\"button\" data-collapse-agent aria-expanded=\"true\">Agent</button><button type=\"button\" data-collapse-conditions aria-expanded=\"true\">เงื่อนไข</button>");
   conversationActions.prepend(header);
   const draftStatus = document.createElement("span");
   draftStatus.className = "studio-draft-status";
   draftStatus.setAttribute("role", "status");
   const tabsBar = document.createElement("nav");
   tabsBar.className = "studio-inspector-tabs";
-  tabsBar.setAttribute("aria-label", "พื้นที่ทำงานเซ็ตอัพ");
+  tabsBar.setAttribute("aria-label", (globalThis.SnaapI18n?.text("พื้นที่ทำงานเซ็ตอัพ") ?? "พื้นที่ทำงานเซ็ตอัพ"));
   tabsBar.innerHTML = ["agent", "conditions", "evidence", "chart"]
     .map(
       (name, i) =>
-        `<button type="button" data-studio-tab="${name}" aria-pressed="${i === 1}">${["แชท", "เซ็ตอัพ", "เหตุผล", "กราฟ"][i]}</button>`,
+        `<button type="button" data-studio-tab="${name}" aria-pressed="${i === 1}">${[(globalThis.SnaapI18n?.text("แชท") ?? "แชท"), (globalThis.SnaapI18n?.text("เซ็ตอัพ") ?? "เซ็ตอัพ"), (globalThis.SnaapI18n?.text("เหตุผล") ?? "เหตุผล"), (globalThis.SnaapI18n?.text("กราฟ") ?? "กราฟ")][i]}</button>`,
     )
     .join("");
   workbench.before(tabsBar);
   const mobileMenu = document.createElement("details");
   mobileMenu.className = "studio-mobile-menu";
-  mobileMenu.innerHTML = `<summary aria-label="ตัวเลือกพื้นที่ทำงาน">${uiIcon("more")}</summary><div class="studio-mobile-menu-items"><button type="button" data-studio-tab="evidence">เหตุผลสัญญาณ</button></div>`;
+  mobileMenu.innerHTML = `${(globalThis.SnaapI18n?.text("<summary aria-label=\"ตัวเลือกพื้นที่ทำงาน\">") ?? "<summary aria-label=\"ตัวเลือกพื้นที่ทำงาน\">")}${uiIcon("more")}${(globalThis.SnaapI18n?.text("</summary><div class=\"studio-mobile-menu-items\"><button type=\"button\" data-studio-tab=\"evidence\">เหตุผลสัญญาณ</button></div>") ?? "</summary><div class=\"studio-mobile-menu-items\"><button type=\"button\" data-studio-tab=\"evidence\">เหตุผลสัญญาณ</button></div>")}`;
   tabsBar.append(mobileMenu);
   const mobileMenuItems = mobileMenu.querySelector("div");
   function placeMobileActions() {
@@ -78,8 +78,8 @@
     handle.tabIndex = 0;
     handle.setAttribute("role", "separator");
     handle.setAttribute("aria-orientation", "vertical");
-    handle.setAttribute("aria-label", name === "agent" ? "ปรับความกว้างแชท" : "ปรับความกว้างแผงออกแบบเซ็ตอัพ");
-    handle.title = "ลากเพื่อปรับความกว้าง · ลูกศรซ้าย/ขวา · ดับเบิลคลิกคืนขนาดเดิม";
+    handle.setAttribute("aria-label", name === "agent" ? (globalThis.SnaapI18n?.text("ปรับความกว้างแชท") ?? "ปรับความกว้างแชท") : (globalThis.SnaapI18n?.text("ปรับความกว้างแผงออกแบบเซ็ตอัพ") ?? "ปรับความกว้างแผงออกแบบเซ็ตอัพ"));
+    handle.title = (globalThis.SnaapI18n?.text("ลากเพื่อปรับความกว้าง · ลูกศรซ้าย/ขวา · ดับเบิลคลิกคืนขนาดเดิม") ?? "ลากเพื่อปรับความกว้าง · ลูกศรซ้าย/ขวา · ดับเบิลคลิกคืนขนาดเดิม");
     workbench.append(handle);
     return handle;
   });
@@ -159,17 +159,17 @@
   new MutationObserver(() => resizePanels()).observe(workbench, { attributes: true, attributeFilter: ["data-agent-collapsed", "data-conditions-collapsed"] });
   const reasonPane = document.createElement("aside");
   reasonPane.className = "studio-reason-pane";
-  reasonPane.setAttribute("aria-label", "เหตุผลสัญญาณ");
+  reasonPane.setAttribute("aria-label", (globalThis.SnaapI18n?.text("เหตุผลสัญญาณ") ?? "เหตุผลสัญญาณ"));
   reasonPane.innerHTML =
-    "<h3>เหตุผลสัญญาณ</h3><p>เลือกแท่งบนกราฟเพื่อดูค่าที่ตรวจ</p>";
+    (globalThis.SnaapI18n?.text("<h3>เหตุผลสัญญาณ</h3><p>เลือกแท่งบนกราฟเพื่อดูค่าที่ตรวจ</p>") ?? "<h3>เหตุผลสัญญาณ</h3><p>เลือกแท่งบนกราฟเพื่อดูค่าที่ตรวจ</p>");
   workbench.append(reasonPane);
   const toolbar = document.createElement("div");
   toolbar.className = "studio-chart-toolbar";
-  toolbar.innerHTML = `<div class="studio-timeframes" aria-label="ไทม์เฟรมกราฟ">${tf.map((t) => `<button type="button" data-chart-frame="${t}" aria-pressed="false">${t.toUpperCase()}</button>`).join("")}</div><button type="button" class="secondary" data-add-chart-indicator>＋ อินดิเคเตอร์</button>`;
+  toolbar.innerHTML = `${(globalThis.SnaapI18n?.text("<div class=\"studio-timeframes\" aria-label=\"ไทม์เฟรมกราฟ\">") ?? "<div class=\"studio-timeframes\" aria-label=\"ไทม์เฟรมกราฟ\">")}${tf.map((t) => `<button type="button" data-chart-frame="${t}" aria-pressed="false">${t.toUpperCase()}</button>`).join("")}${(globalThis.SnaapI18n?.text("</div><button type=\"button\" class=\"secondary\" data-add-chart-indicator>＋ อินดิเคเตอร์</button>") ?? "</div><button type=\"button\" class=\"secondary\" data-add-chart-indicator>＋ อินดิเคเตอร์</button>")}`;
   const mobileFrame = document.createElement("select");
   mobileFrame.className = "studio-mobile-frame";
   mobileFrame.setAttribute("data-native", "");
-  mobileFrame.setAttribute("aria-label", "ไทม์เฟรมกราฟ");
+  mobileFrame.setAttribute("aria-label", (globalThis.SnaapI18n?.text("ไทม์เฟรมกราฟ") ?? "ไทม์เฟรมกราฟ"));
   mobileFrame.onchange = () => setView(mobileFrame.value);
   toolbar.prepend(mobileFrame);
   chartPane.querySelector("header").after(toolbar);
@@ -308,7 +308,7 @@
       focusPath = null;filter = "";bar = null;selectedOperand = null;editorMode = null;
       overlayEditor.hidden = true;
       eventList.hidden = true;eventList.replaceChildren();
-      reasonPane.innerHTML = '<h3>เหตุผลสัญญาณ</h3><p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>';
+      reasonPane.innerHTML = (globalThis.SnaapI18n?.text("<h3>เหตุผลสัญญาณ</h3><p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>") ?? "<h3>เหตุผลสัญญาณ</h3><p>ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ</p>");
       persist();
     },
     adoptConversation(id) {
@@ -333,7 +333,7 @@
     eventList.hidden = true;
     renderOverview();
     reasonPane.innerHTML =
-      `<h3>เหตุผลสัญญาณ</h3><p role="status">${hasEntryCondition() ? "กำลังคำนวณร่างล่าสุด…" : "ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ"}</p>`;
+      `${(globalThis.SnaapI18n?.text("<h3>เหตุผลสัญญาณ</h3><p role=\"status\">") ?? "<h3>เหตุผลสัญญาณ</h3><p role=\"status\">")}${hasEntryCondition() ? (globalThis.SnaapI18n?.text("กำลังคำนวณร่างล่าสุด…") ?? "กำลังคำนวณร่างล่าสุด…") : (globalThis.SnaapI18n?.text("ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ") ?? "ยังไม่มีเงื่อนไขสำหรับประเมินสัญญาณ")}</p>`;
   }
   async function commit(next) {
     const original = JSON.stringify(state.draft),
@@ -343,7 +343,7 @@
       original !== JSON.stringify(state.draft) ||
       conversation !== state.conversation
     )
-      throw Error("ร่างเปลี่ยนระหว่างตรวจค่า กรุณาลองอีกครั้ง");
+      throw Error((globalThis.SnaapI18n?.text("ร่างเปลี่ยนระหว่างตรวจค่า กรุณาลองอีกครั้ง") ?? "ร่างเปลี่ยนระหว่างตรวจค่า กรุณาลองอีกครั้ง"));
     snapshot();
     state.draft = checked.spec;
     queueDraftSave();
@@ -351,40 +351,40 @@
   }
   function valueLabel(e) {
     return !e
-      ? "รอคำนวณ"
-      : ({ TRUE: "✓ ผ่าน", FALSE: "× ไม่ผ่าน", UNKNOWN: "? ข้อมูลไม่พอ" }[
+      ? (globalThis.SnaapI18n?.text("รอคำนวณ") ?? "รอคำนวณ")
+      : ({ TRUE: (globalThis.SnaapI18n?.text("✓ ผ่าน") ?? "✓ ผ่าน"), FALSE: (globalThis.SnaapI18n?.text("× ไม่ผ่าน") ?? "× ไม่ผ่าน"), UNKNOWN: (globalThis.SnaapI18n?.text("? ข้อมูลไม่พอ") ?? "? ข้อมูลไม่พอ") }[
           e.result
-        ] ?? "รอคำนวณ");
+        ] ?? (globalThis.SnaapI18n?.text("รอคำนวณ") ?? "รอคำนวณ"));
   }
   function renderOverview() {
     const box = panel.querySelector(".studio-condition-overview");
     if (!box || !state.draft) return;
     if (!hasEntryCondition()) {
-      box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซ็ตอัพ</h3><span>0/${MAX_SETUP_CONDITIONS}</span></div><p class="field-note">ยังไม่มีเงื่อนไข เริ่มเพิ่มเองหรือให้ Snaap ช่วยออกแบบ</p><button type="button" class="secondary" data-add="entry">เพิ่มเงื่อนไขเข้า</button>`;
+      box.innerHTML = `${(globalThis.SnaapI18n?.text("<div class=\"studio-overview-heading\"><h3>เงื่อนไขเซ็ตอัพ</h3><span>0/") ?? "<div class=\"studio-overview-heading\"><h3>เงื่อนไขเซ็ตอัพ</h3><span>0/")}${MAX_SETUP_CONDITIONS}${(globalThis.SnaapI18n?.text("</span></div><p class=\"field-note\">ยังไม่มีเงื่อนไข เริ่มเพิ่มเองหรือให้ Snaap ช่วยออกแบบ</p><button type=\"button\" class=\"secondary\" data-add=\"entry\">เพิ่มเงื่อนไขเข้า</button>") ?? "</span></div><p class=\"field-note\">ยังไม่มีเงื่อนไข เริ่มเพิ่มเองหรือให้ Snaap ช่วยออกแบบ</p><button type=\"button\" class=\"secondary\" data-add=\"entry\">เพิ่มเงื่อนไขเข้า</button>")}`;
       return;
     }
     const rows = conditionRows(state.draft);
-    box.innerHTML = `<div class="studio-overview-heading"><h3>เงื่อนไขเซ็ตอัพ</h3><span>${setupConditionCount(state.draft)}/${MAX_SETUP_CONDITIONS}</span></div><label class="studio-filter">ไทม์เฟรมเงื่อนไข<select data-condition-frame><option value="">ทุกไทม์เฟรม</option>${tf.map((t) => `<option value="${t}" ${filter === t ? "selected" : ""}>${t.toUpperCase()}</option>`).join("")}</select></label><p class="field-note">ตรวจสัญญาณเมื่อแท่ง ${esc(state.draft.timeframe.toUpperCase())} ปิด · ใช้แท่งปิดล่าสุดของแต่ละไทม์เฟรม</p>${
+    box.innerHTML = `${(globalThis.SnaapI18n?.text("<div class=\"studio-overview-heading\"><h3>เงื่อนไขเซ็ตอัพ</h3><span>") ?? "<div class=\"studio-overview-heading\"><h3>เงื่อนไขเซ็ตอัพ</h3><span>")}${setupConditionCount(state.draft)}/${MAX_SETUP_CONDITIONS}${(globalThis.SnaapI18n?.text("</span></div><label class=\"studio-filter\">ไทม์เฟรมเงื่อนไข<select data-condition-frame><option value=\"\">ทุกไทม์เฟรม</option>") ?? "</span></div><label class=\"studio-filter\">ไทม์เฟรมเงื่อนไข<select data-condition-frame><option value=\"\">ทุกไทม์เฟรม</option>")}${tf.map((t) => `<option value="${t}" ${filter === t ? "selected" : ""}>${t.toUpperCase()}</option>`).join("")}${(globalThis.SnaapI18n?.text("</select></label><p class=\"field-note\">ตรวจสัญญาณเมื่อแท่ง ") ?? "</select></label><p class=\"field-note\">ตรวจสัญญาณเมื่อแท่ง ")}${esc(state.draft.timeframe.toUpperCase())}${(globalThis.SnaapI18n?.text(" ปิด · ใช้แท่งปิดล่าสุดของแต่ละไทม์เฟรม</p>") ?? " ปิด · ใช้แท่งปิดล่าสุดของแต่ละไทม์เฟรม</p>")}${
       rows
         .filter((r) => !filter || r.frames.includes(filter))
         .map((r) => {
           const e = evidenceAtPath(bar, r.path, state.draft),
             depth = (r.path.match(/children|\.condition/g) ?? []).length;
-          return `<article class="studio-condition-card ${r.path === focusPath ? "selected" : ""}" style="--condition-depth:${Math.min(depth, 3)}"><div><small>${esc(r.side)} · ${esc(r.section)}${r.condition.kind === "GROUP" ? ` · ${r.condition.op === "AND" ? "ครบทุกข้อ" : "อย่างน้อยหนึ่งข้อ"}` : r.condition.kind === "HOLD" ? " · ต่อเนื่อง" : ""}</small><span class="studio-truth" data-truth="${e?.result ?? "PENDING"}">${valueLabel(e)}</span></div><p>${esc(r.condition.kind === "GROUP" ? `${r.condition.op === "AND" ? "ต้องผ่านครบ" : "ผ่านอย่างน้อยหนึ่งข้อจาก"} ${r.condition.children.length} เงื่อนไข / กลุ่มด้านล่าง` : conditionText(r.condition))}</p>${e?.left !== undefined ? `<small>ค่าที่ตรวจ ${esc(Number(e.left).toLocaleString("th-TH", { maximumFractionDigits: 6 }))} · เทียบกับ ${e.right === undefined ? "—" : esc(Number(e.right).toLocaleString("th-TH", { maximumFractionDigits: 6 }))}</small>` : ""}${e?.reason ? `<small>${esc(e.reason)}</small>` : ""}${
+          return `<article class="studio-condition-card ${r.path === focusPath ? "selected" : ""}" style="--condition-depth:${Math.min(depth, 3)}"><div><small>${esc(r.side)} · ${esc(r.section)}${r.condition.kind === "GROUP" ? ` · ${r.condition.op === "AND" ? (globalThis.SnaapI18n?.text("ครบทุกข้อ") ?? "ครบทุกข้อ") : (globalThis.SnaapI18n?.text("อย่างน้อยหนึ่งข้อ") ?? "อย่างน้อยหนึ่งข้อ")}` : r.condition.kind === "HOLD" ? (globalThis.SnaapI18n?.text(" · ต่อเนื่อง") ?? " · ต่อเนื่อง") : ""}</small><span class="studio-truth" data-truth="${e?.result ?? "PENDING"}">${valueLabel(e)}</span></div><p>${esc(r.condition.kind === "GROUP" ? `${r.condition.op === "AND" ? (globalThis.SnaapI18n?.text("ต้องผ่านครบ") ?? "ต้องผ่านครบ") : (globalThis.SnaapI18n?.text("ผ่านอย่างน้อยหนึ่งข้อจาก") ?? "ผ่านอย่างน้อยหนึ่งข้อจาก")} ${r.condition.children.length}${(globalThis.SnaapI18n?.text(" เงื่อนไข / กลุ่มด้านล่าง") ?? " เงื่อนไข / กลุ่มด้านล่าง")}` : conditionText(r.condition))}</p>${e?.left !== undefined ? `${(globalThis.SnaapI18n?.text("<small>ค่าที่ตรวจ ") ?? "<small>ค่าที่ตรวจ ")}${esc(Number(e.left).toLocaleString((globalThis.SnaapI18n?.locale ?? "th-TH"), { maximumFractionDigits: 6 }))}${(globalThis.SnaapI18n?.text(" · เทียบกับ ") ?? " · เทียบกับ ")}${e.right === undefined ? "—" : esc(Number(e.right).toLocaleString((globalThis.SnaapI18n?.locale ?? "th-TH"), { maximumFractionDigits: 6 }))}</small>` : ""}${e?.reason ? `<small>${esc(e.reason)}</small>` : ""}${
             bar?.references
               ? `<div class="studio-reference-times">${r.frames
                   .map((frame) => {
                     const ref = bar.references.find(
                       (x) => x.timeframe === frame,
                     );
-                    return `<small>${esc(frame.toUpperCase())}: ${ref?.closedAt ? esc(new Date(ref.closedAt).toLocaleString("th-TH")) : "ข้อมูลไม่พอ"}${ref?.stale ? " · ข้อมูลขาดช่วง" : ""}</small>`;
+                    return `<small>${esc(frame.toUpperCase())}: ${ref?.closedAt ? esc(new Date(ref.closedAt).toLocaleString((globalThis.SnaapI18n?.locale ?? "th-TH"))) : (globalThis.SnaapI18n?.text("ข้อมูลไม่พอ") ?? "ข้อมูลไม่พอ")}${ref?.stale ? (globalThis.SnaapI18n?.text(" · ข้อมูลขาดช่วง") ?? " · ข้อมูลขาดช่วง") : ""}</small>`;
                   })
                   .join("")}</div>`
               : ""
-          }<div class="studio-condition-actions"><button type="button" data-studio-edit="${r.path}">แก้</button><button type="button" data-studio-view="${r.path}">ดูกราฟ</button><button type="button" data-studio-ask="${r.path}">ถาม Snaap</button></div></article>`;
+          }<div class="studio-condition-actions"><button type="button" data-studio-edit="${r.path}${(globalThis.SnaapI18n?.text("\">แก้</button><button type=\"button\" data-studio-view=\"") ?? "\">แก้</button><button type=\"button\" data-studio-view=\"")}${r.path}${(globalThis.SnaapI18n?.text("\">ดูกราฟ</button><button type=\"button\" data-studio-ask=\"") ?? "\">ดูกราฟ</button><button type=\"button\" data-studio-ask=\"")}${r.path}${(globalThis.SnaapI18n?.text("\">ถาม Snaap</button></div></article>") ?? "\">ถาม Snaap</button></div></article>")}`;
         })
-        .join("") || "<p>ไม่มีเงื่อนไขในไทม์เฟรมนี้</p>"
-    }${bar ? `<small>อ้างอิงแท่งตรวจ ${esc(new Date(bar.time).toLocaleString("th-TH"))}</small>` : ""}`;
+        .join("") || (globalThis.SnaapI18n?.text("<p>ไม่มีเงื่อนไขในไทม์เฟรมนี้</p>") ?? "<p>ไม่มีเงื่อนไขในไทม์เฟรมนี้</p>")
+    }${bar ? `${(globalThis.SnaapI18n?.text("<small>อ้างอิงแท่งตรวจ ") ?? "<small>อ้างอิงแท่งตรวจ ")}${esc(new Date(bar.time).toLocaleString((globalThis.SnaapI18n?.locale ?? "th-TH")))}</small>` : ""}`;
   }
   function openCondition(path) {
     if (!state.draft) return;
@@ -415,7 +415,7 @@
         editorMode = null;
         return;
       }
-      overlayEditor.innerHTML = `<header><h3>แก้เงื่อนไข · ${esc(row.section)}</h3><button type="button" data-close-inspector aria-label="ปิดการแก้เงื่อนไข">×</button></header>${conditionUI(row.condition, row.path)}`;
+      overlayEditor.innerHTML = `${(globalThis.SnaapI18n?.text("<header><h3>แก้เงื่อนไข · ") ?? "<header><h3>แก้เงื่อนไข · ")}${esc(row.section)}${(globalThis.SnaapI18n?.text("</h3><button type=\"button\" data-close-inspector aria-label=\"ปิดการแก้เงื่อนไข\">×</button></header>") ?? "</h3><button type=\"button\" data-close-inspector aria-label=\"ปิดการแก้เงื่อนไข\">×</button></header>")}${conditionUI(row.condition, row.path)}`;
     } else if (editorMode === "indicator") renderIndicatorEditor();
   }
   function decorate() {
@@ -433,21 +433,21 @@
     draftStatus.hidden = header.hidden;
     panel.querySelector('[data-path="name"]')?.closest("label")?.append(draftStatus);
     draftStatus.textContent = state.saved
-      ? "ร่าง · เวอร์ชัน " + state.saved.revision
-      : "ร่างใหม่";
+      ? (globalThis.SnaapI18n?.text("ร่าง · เวอร์ชัน ") ?? "ร่าง · เวอร์ชัน ") + state.saved.revision
+      : (globalThis.SnaapI18n?.text("ร่างใหม่") ?? "ร่างใหม่");
     const savedMatchesDraft = Boolean(state.saved && JSON.stringify(comparableSpec(state.saved.spec)) === JSON.stringify(comparableSpec(state.draft)));
     const currentSetupActive = savedMatchesDraft && state.saved.active;
     const activationDisabled = !savedMatchesDraft || currentSetupActive;
     panel.querySelectorAll('[data-studio-activate]').forEach(button=>{
       button.disabled=activationDisabled;
-      button.textContent=currentSetupActive ? 'เปิดใช้งานแล้ว' : 'เปิดใช้งาน';
-      button.title=currentSetupActive ? 'เซ็ตอัพนี้กำลังตรวจสัญญาณ' : activationDisabled ? 'บันทึกเซ็ตอัพก่อนเปิดใช้งาน' : 'เปิดตรวจและแจ้งเตือนเซ็ตอัพนี้';
+      button.textContent=currentSetupActive ? (globalThis.SnaapI18n?.text("เปิดใช้งานแล้ว") ?? "เปิดใช้งานแล้ว") : (globalThis.SnaapI18n?.text("เปิดใช้งาน") ?? "เปิดใช้งาน");
+      button.title=currentSetupActive ? (globalThis.SnaapI18n?.text("เซ็ตอัพนี้กำลังตรวจสัญญาณ") ?? "เซ็ตอัพนี้กำลังตรวจสัญญาณ") : activationDisabled ? (globalThis.SnaapI18n?.text("บันทึกเซ็ตอัพก่อนเปิดใช้งาน") ?? "บันทึกเซ็ตอัพก่อนเปิดใช้งาน") : (globalThis.SnaapI18n?.text("เปิดตรวจและแจ้งเตือนเซ็ตอัพนี้") ?? "เปิดตรวจและแจ้งเตือนเซ็ตอัพนี้");
     });
     if (!panel.querySelector(".studio-condition-overview")) {
       const body = panel.querySelector(".design-body");
       const settings = document.createElement("section");
       settings.className = "studio-setup-settings";
-      settings.setAttribute("aria-label", "ตลาดและประเภทการเทรด");
+      settings.setAttribute("aria-label", (globalThis.SnaapI18n?.text("ตลาดและประเภทการเทรด") ?? "ตลาดและประเภทการเทรด"));
       const exchange = body.querySelector(".exchange-fieldset");
       const market = body.querySelector('[data-path="market"]')?.closest("label");
       const pair = body.querySelector(".pair-control");
@@ -471,7 +471,7 @@
       overview.after(overlayEditor);
       const details = document.createElement("details");
       details.className = "studio-setup-details";
-      details.innerHTML = "<summary>รอบตรวจสัญญาณ</summary>";
+      details.innerHTML = (globalThis.SnaapI18n?.text("<summary>รอบตรวจสัญญาณ</summary>") ?? "<summary>รอบตรวจสัญญาณ</summary>");
       if (evaluation) details.append(evaluation);
       overlayEditor.after(details);
       // The overview already shows the setup; keep the full review available on demand.
@@ -485,13 +485,13 @@
         const details = document.createElement("details");
         details.className = "studio-original-editor";
         details.innerHTML =
-          "<summary>โครงสร้างเงื่อนไขเข้า · เพิ่ม / จัดกลุ่ม</summary>";
+          (globalThis.SnaapI18n?.text("<summary>โครงสร้างเงื่อนไขเข้า · เพิ่ม / จัดกลุ่ม</summary>") ?? "<summary>โครงสร้างเงื่อนไขเข้า · เพิ่ม / จัดกลุ่ม</summary>");
         section.before(details);
         details.append(section);
       });
       if (frameSelect?.parentElement.firstChild)
         frameSelect.parentElement.firstChild.textContent =
-          "ตรวจสัญญาณเมื่อแท่ง … ปิด";
+          (globalThis.SnaapI18n?.text("ตรวจสัญญาณเมื่อแท่ง … ปิด") ?? "ตรวจสัญญาณเมื่อแท่ง … ปิด");
     }
     renderOverview();
     renderInspector();
@@ -542,7 +542,7 @@
   }
   function addIndicator(opener) {
     const el = dialog(
-      '<header><h2>เพิ่มอินดิเคเตอร์</h2><button type="button" data-close-dialog aria-label="ปิด">×</button></header><label>ค้นหาอินดิเคเตอร์<input type="search" autofocus placeholder="EMA, RSI, แนวโน้ม…"></label><p>เพิ่มเพื่อดูบนกราฟก่อน แล้วเลือกใช้สร้างเงื่อนไขได้</p><div class="studio-indicator-results"></div>',
+      (globalThis.SnaapI18n?.text("<header><h2>เพิ่มอินดิเคเตอร์</h2><button type=\"button\" data-close-dialog aria-label=\"ปิด\">×</button></header><label>ค้นหาอินดิเคเตอร์<input type=\"search\" autofocus placeholder=\"EMA, RSI, แนวโน้ม…\"></label><p>เพิ่มเพื่อดูบนกราฟก่อน แล้วเลือกใช้สร้างเงื่อนไขได้</p><div class=\"studio-indicator-results\"></div>") ?? "<header><h2>เพิ่มอินดิเคเตอร์</h2><button type=\"button\" data-close-dialog aria-label=\"ปิด\">×</button></header><label>ค้นหาอินดิเคเตอร์<input type=\"search\" autofocus placeholder=\"EMA, RSI, แนวโน้ม…\"></label><p>เพิ่มเพื่อดูบนกราฟก่อน แล้วเลือกใช้สร้างเงื่อนไขได้</p><div class=\"studio-indicator-results\"></div>"),
       opener,
     );
     const paint = () => {
@@ -558,7 +558,7 @@
             (d) =>
               `<button type="button" data-pick-indicator="${d.name}"><strong>${esc(d.label ?? d.name)}</strong><small>${esc(d.description ?? d.unit ?? "")}</small></button>`,
           )
-          .join("") || "<p>ไม่พบอินดิเคเตอร์ที่ระบบรองรับ</p>";
+          .join("") || (globalThis.SnaapI18n?.text("<p>ไม่พบอินดิเคเตอร์ที่ระบบรองรับ</p>") ?? "<p>ไม่พบอินดิเคเตอร์ที่ระบบรองรับ</p>");
     };
     el.querySelector("input").oninput = paint;
     paint();
@@ -568,7 +568,7 @@
       const v = session(),
         extras = (v.extras[v.frame] ??= []);
       if (extras.length >= 8) {
-        toast("อินดิเคเตอร์สำหรับดูบนกราฟมีได้ 8 ตัวต่อไทม์เฟรม");
+        toast((globalThis.SnaapI18n?.text("อินดิเคเตอร์สำหรับดูบนกราฟมีได้ 8 ตัวต่อไทม์เฟรม") ?? "อินดิเคเตอร์สำหรับดูบนกราฟมีได้ 8 ตัวต่อไทม์เฟรม"));
         return;
       }
       const o = defaultOperand(b.dataset.pickIndicator);
@@ -596,13 +596,13 @@
     const d = indicatorCatalog.indicatorByName[selectedOperand.name];
     const usesSource = d?.source ?? basicByName[selectedOperand.name]?.source ?? true;
     const params = d?.params ?? [
-      { key: "period", label: "ระยะ (แท่ง)", min: 2, max: 500, integer: true },
+      { key: "period", label: (globalThis.SnaapI18n?.text("ระยะ (แท่ง)") ?? "ระยะ (แท่ง)"), min: 2, max: 500, integer: true },
       ...(selectedOperand.name.startsWith("MACD")
         ? [
-            { key: "slow", label: "ระยะช้า", min: 3, max: 500, integer: true },
+            { key: "slow", label: (globalThis.SnaapI18n?.text("ระยะช้า") ?? "ระยะช้า"), min: 3, max: 500, integer: true },
             {
               key: "signal",
-              label: "ระยะสัญญาณ",
+              label: (globalThis.SnaapI18n?.text("ระยะสัญญาณ") ?? "ระยะสัญญาณ"),
               min: 2,
               max: 100,
               integer: true,
@@ -613,7 +613,7 @@
         ? [
             {
               key: "deviation",
-              label: "ส่วนเบี่ยงเบน",
+              label: (globalThis.SnaapI18n?.text("ส่วนเบี่ยงเบน") ?? "ส่วนเบี่ยงเบน"),
               min: 0.1,
               max: 10,
               integer: false,
@@ -621,7 +621,7 @@
           ]
         : []),
     ];
-    overlayEditor.innerHTML = `<header><h3>${esc(operandText(selectedOperand))}</h3><button type="button" data-close-inspector aria-label="ปิดการตั้งค่า">×</button></header><p class="studio-indicator-badge">${uses ? "ใช้ในเงื่อนไข " + uses.conditions.length + " จุด" : "ใช้ดูบนกราฟ · เก็บใน session"}</p><form data-indicator-form><div class="studio-indicator-fields">${params.map((p) => `<label>${esc(p.label)}<input type="number" name="${p.key}" min="${p.min}" max="${p.max}" step="${p.integer ? "1" : "any"}" value="${selectedOperand[p.key] ?? selectedOperand.params?.[p.key] ?? p.value ?? 14}" required></label>`).join("")}${usesSource ? `<label>แหล่งราคา<select name="source">${options(["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"], selectedOperand.source ?? "close")}</select></label>` : ""}</div><p data-indicator-error role="status"></p><div class="studio-indicator-actions">${params.length || usesSource ? '<button type="submit" class="secondary">ใช้ค่าที่ปรับ</button>' : ""}<button type="button" data-indicator-visibility>${session().hidden.has(indicatorKey(selectedOperand)) ? "แสดงบนกราฟ" : "ซ่อนจากกราฟ"}</button><button type="button" class="primary" data-indicator-condition>ใช้สร้างเงื่อนไข</button>${!uses ? '<button type="button" data-delete-chart-indicator>นำออกจากกราฟ</button>' : ""}</div></form>`;
+    overlayEditor.innerHTML = `<header><h3>${esc(operandText(selectedOperand))}${(globalThis.SnaapI18n?.text("</h3><button type=\"button\" data-close-inspector aria-label=\"ปิดการตั้งค่า\">×</button></header><p class=\"studio-indicator-badge\">") ?? "</h3><button type=\"button\" data-close-inspector aria-label=\"ปิดการตั้งค่า\">×</button></header><p class=\"studio-indicator-badge\">")}${uses ? (globalThis.SnaapI18n?.text("ใช้ในเงื่อนไข ") ?? "ใช้ในเงื่อนไข ") + uses.conditions.length + (globalThis.SnaapI18n?.text(" จุด") ?? " จุด") : (globalThis.SnaapI18n?.text("ใช้ดูบนกราฟ · เก็บใน session") ?? "ใช้ดูบนกราฟ · เก็บใน session")}</p><form data-indicator-form><div class="studio-indicator-fields">${params.map((p) => `<label>${esc(p.label)}<input type="number" name="${p.key}" min="${p.min}" max="${p.max}" step="${p.integer ? "1" : "any"}" value="${selectedOperand[p.key] ?? selectedOperand.params?.[p.key] ?? p.value ?? 14}" required></label>`).join("")}${usesSource ? `${(globalThis.SnaapI18n?.text("<label>แหล่งราคา<select name=\"source\">") ?? "<label>แหล่งราคา<select name=\"source\">")}${options(["close", "open", "high", "low", "hl2", "hlc3", "ohlc4"], selectedOperand.source ?? "close")}</select></label>` : ""}</div><p data-indicator-error role="status"></p><div class="studio-indicator-actions">${params.length || usesSource ? (globalThis.SnaapI18n?.text("<button type=\"submit\" class=\"secondary\">ใช้ค่าที่ปรับ</button>") ?? "<button type=\"submit\" class=\"secondary\">ใช้ค่าที่ปรับ</button>") : ""}<button type="button" data-indicator-visibility>${session().hidden.has(indicatorKey(selectedOperand)) ? (globalThis.SnaapI18n?.text("แสดงบนกราฟ") ?? "แสดงบนกราฟ") : (globalThis.SnaapI18n?.text("ซ่อนจากกราฟ") ?? "ซ่อนจากกราฟ")}${(globalThis.SnaapI18n?.text("</button><button type=\"button\" class=\"primary\" data-indicator-condition>ใช้สร้างเงื่อนไข</button>") ?? "</button><button type=\"button\" class=\"primary\" data-indicator-condition>ใช้สร้างเงื่อนไข</button>")}${!uses ? (globalThis.SnaapI18n?.text("<button type=\"button\" data-delete-chart-indicator>นำออกจากกราฟ</button>") ?? "<button type=\"button\" data-delete-chart-indicator>นำออกจากกราฟ</button>") : ""}</div></form>`;
     overlayEditor.querySelector("form").onsubmit = async (e) => {
       e.preventDefault();
       const form = e.target;
@@ -641,7 +641,7 @@
         if (uses) {
           if (uses.paths.length > 1) {
             const el = dialog(
-              `<header><h2>ปรับอินดิเคเตอร์ที่ใช้ร่วมกัน</h2><button type="button" data-close-dialog aria-label="ปิด">×</button></header><p>การปรับนี้จะเปลี่ยน ${uses.conditions.length} จุด</p><ul>${uses.conditions.map((path) => `<li>${esc(conditionText(at(path)))}</li>`).join("")}</ul><button type="button" class="primary" data-confirm-shared>ปรับทุกจุดที่ใช้ร่วมกัน</button>`,
+              `${(globalThis.SnaapI18n?.text("<header><h2>ปรับอินดิเคเตอร์ที่ใช้ร่วมกัน</h2><button type=\"button\" data-close-dialog aria-label=\"ปิด\">×</button></header><p>การปรับนี้จะเปลี่ยน ") ?? "<header><h2>ปรับอินดิเคเตอร์ที่ใช้ร่วมกัน</h2><button type=\"button\" data-close-dialog aria-label=\"ปิด\">×</button></header><p>การปรับนี้จะเปลี่ยน ")}${uses.conditions.length}${(globalThis.SnaapI18n?.text(" จุด</p><ul>") ?? " จุด</p><ul>")}${uses.conditions.map((path) => `<li>${esc(conditionText(at(path)))}</li>`).join("")}${(globalThis.SnaapI18n?.text("</ul><button type=\"button\" class=\"primary\" data-confirm-shared>ปรับทุกจุดที่ใช้ร่วมกัน</button>") ?? "</ul><button type=\"button\" class=\"primary\" data-confirm-shared>ปรับทุกจุดที่ใช้ร่วมกัน</button>")}`,
               form.querySelector("button"),
             );
             el.querySelector("[data-confirm-shared]").onclick = async () => {
@@ -674,7 +674,7 @@
           const i = extras.findIndex(
             (o) => indicatorKey(o) === indicatorKey(selectedOperand),
           );
-          if (i < 0) throw Error("รายการอินดิเคเตอร์เปลี่ยนแล้ว");
+          if (i < 0) throw Error((globalThis.SnaapI18n?.text("รายการอินดิเคเตอร์เปลี่ยนแล้ว") ?? "รายการอินดิเคเตอร์เปลี่ยนแล้ว"));
           extras[i] = next;
           selectedOperand = next;
           persist();
@@ -692,7 +692,7 @@
       original !== JSON.stringify(state.draft) ||
       conversation !== state.conversation
     )
-      throw Error("ร่างเปลี่ยนแล้ว กรุณาเปิดตั้งค่าอินดิเคเตอร์ใหม่");
+      throw Error((globalThis.SnaapI18n?.text("ร่างเปลี่ยนแล้ว กรุณาเปิดตั้งค่าอินดิเคเตอร์ใหม่") ?? "ร่างเปลี่ยนแล้ว กรุณาเปิดตั้งค่าอินดิเคเตอร์ใหม่"));
     const candidate = structuredClone(state.draft);
     for (const path of uses.paths) {
       const keys = path.split("."),
@@ -720,7 +720,7 @@
         r.path === "short.cancel",
     );
     const el = dialog(
-      `<header><h2>ใช้สร้างเงื่อนไข</h2><button type="button" data-close-dialog aria-label="ปิด">×</button></header><p>${esc(operandText(operand))}</p><form><label>เพิ่มใน<select name="target">${targets.map((r) => `<option value="${r.path}">${esc(r.side + " · " + r.section)}</option>`).join("")}</select></label><label>การเปรียบเทียบ<select name="op">${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], ">")}</select></label><label>เทียบกับ<select name="kind"><option value="CONSTANT">ตัวเลข</option><option value="PRICE">ราคาปิดในไทม์เฟรมเดียวกัน</option></select></label><label data-threshold>ค่าที่เปรียบเทียบ<input name="value" type="number" step="any" required></label><p class="field-note">เพิ่มแบบครบทุกข้อ (AND) โดยคงกลุ่มและลำดับเดิม</p><p data-create-error role="status"></p><button type="submit" class="primary">เพิ่มเงื่อนไข</button></form>`,
+      `${(globalThis.SnaapI18n?.text("<header><h2>ใช้สร้างเงื่อนไข</h2><button type=\"button\" data-close-dialog aria-label=\"ปิด\">×</button></header><p>") ?? "<header><h2>ใช้สร้างเงื่อนไข</h2><button type=\"button\" data-close-dialog aria-label=\"ปิด\">×</button></header><p>")}${esc(operandText(operand))}${(globalThis.SnaapI18n?.text("</p><form><label>เพิ่มใน<select name=\"target\">") ?? "</p><form><label>เพิ่มใน<select name=\"target\">")}${targets.map((r) => `<option value="${r.path}">${esc(r.side + " · " + r.section)}</option>`).join("")}${(globalThis.SnaapI18n?.text("</select></label><label>การเปรียบเทียบ<select name=\"op\">") ?? "</select></label><label>การเปรียบเทียบ<select name=\"op\">")}${options([">", ">=", "<", "<=", "CROSS_ABOVE", "CROSS_BELOW"], ">")}${(globalThis.SnaapI18n?.text("</select></label><label>เทียบกับ<select name=\"kind\"><option value=\"CONSTANT\">ตัวเลข</option><option value=\"PRICE\">ราคาปิดในไทม์เฟรมเดียวกัน</option></select></label><label data-threshold>ค่าที่เปรียบเทียบ<input name=\"value\" type=\"number\" step=\"any\" required></label><p class=\"field-note\">เพิ่มแบบครบทุกข้อ (AND) โดยคงกลุ่มและลำดับเดิม</p><p data-create-error role=\"status\"></p><button type=\"submit\" class=\"primary\">เพิ่มเงื่อนไข</button></form>") ?? "</select></label><label>เทียบกับ<select name=\"kind\"><option value=\"CONSTANT\">ตัวเลข</option><option value=\"PRICE\">ราคาปิดในไทม์เฟรมเดียวกัน</option></select></label><label data-threshold>ค่าที่เปรียบเทียบ<input name=\"value\" type=\"number\" step=\"any\" required></label><p class=\"field-note\">เพิ่มแบบครบทุกข้อ (AND) โดยคงกลุ่มและลำดับเดิม</p><p data-create-error role=\"status\"></p><button type=\"submit\" class=\"primary\">เพิ่มเงื่อนไข</button></form>")}`,
       opener,
     );
     const form = el.querySelector("form");
@@ -736,7 +736,7 @@
           original !== JSON.stringify(state.draft) ||
           conversation !== state.conversation
         )
-          throw Error("ร่างเปลี่ยนแล้ว กรุณาเปิดสร้างเงื่อนไขใหม่");
+          throw Error((globalThis.SnaapI18n?.text("ร่างเปลี่ยนแล้ว กรุณาเปิดสร้างเงื่อนไขใหม่") ?? "ร่างเปลี่ยนแล้ว กรุณาเปิดสร้างเงื่อนไขใหม่"));
         if (!canAddSetupCondition()) return;
         const c = {
           kind: "COMPARE",
@@ -777,17 +777,17 @@
     if (!hasEntryCondition()) return;
     bar = e.detail.bar;
     renderOverview();
-    reasonPane.innerHTML = `<h3>เหตุผลสัญญาณ</h3><p>กราฟ ${esc(view.frame.toUpperCase())} · ตรวจบน ${esc(state.draft.timeframe.toUpperCase())}</p>${bar ? barEvidence(bar) : "<p>ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้</p>"}${bar?.branches?.map((b) => (b.cancel ? "<p>ยกเลิก</p>" + evidenceUI(b.cancel) : "")).join("") ?? ""}<button type="button" data-ask-bar>ถาม Snaap เกี่ยวกับแท่งนี้</button>`;
+    reasonPane.innerHTML = `${(globalThis.SnaapI18n?.text("<h3>เหตุผลสัญญาณ</h3><p>กราฟ ") ?? "<h3>เหตุผลสัญญาณ</h3><p>กราฟ ")}${esc(view.frame.toUpperCase())}${(globalThis.SnaapI18n?.text(" · ตรวจบน ") ?? " · ตรวจบน ")}${esc(state.draft.timeframe.toUpperCase())}</p>${bar ? barEvidence(bar) : (globalThis.SnaapI18n?.text("<p>ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้</p>") ?? "<p>ข้อมูลไม่พอ · ยังไม่มีแท่งตรวจที่ปิดแล้ว ณ จุดนี้</p>")}${bar?.branches?.map((b) => (b.cancel ? (globalThis.SnaapI18n?.text("<p>ยกเลิก</p>") ?? "<p>ยกเลิก</p>") + evidenceUI(b.cancel) : "")).join("") ?? ""}${(globalThis.SnaapI18n?.text("<button type=\"button\" data-ask-bar>ถาม Snaap เกี่ยวกับแท่งนี้</button>") ?? "<button type=\"button\" data-ask-bar>ถาม Snaap เกี่ยวกับแท่งนี้</button>")}`;
     const data = window.SnaapChart.data;
     eventList.hidden =
       !data || data.chartTimeframe === data.evaluationTimeframe;
     if (data)
-      eventList.innerHTML = `<small>สัญญาณประเมินบน ${esc(data.evaluationTimeframe.toUpperCase())} · เปิดกรอบเวลาตรวจเพื่อดูตำแหน่งจริง</small>${data.events
+      eventList.innerHTML = `${(globalThis.SnaapI18n?.text("<small>สัญญาณประเมินบน ") ?? "<small>สัญญาณประเมินบน ")}${esc(data.evaluationTimeframe.toUpperCase())}${(globalThis.SnaapI18n?.text(" · เปิดกรอบเวลาตรวจเพื่อดูตำแหน่งจริง</small>") ?? " · เปิดกรอบเวลาตรวจเพื่อดูตำแหน่งจริง</small>")}${data.events
         .slice(-8)
         .reverse()
         .map(
           (ev) =>
-            `<button type="button" data-open-event="${ev.time}">${esc({ ENTRY: "เข้า", EXIT: "ออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลา" }[ev.kind])} · ${esc(new Date(ev.time).toLocaleString("th-TH"))}</button>`,
+            `<button type="button" data-open-event="${ev.time}">${esc({ ENTRY: (globalThis.SnaapI18n?.text("เข้า") ?? "เข้า"), EXIT: (globalThis.SnaapI18n?.text("ออก") ?? "ออก"), CANCEL: (globalThis.SnaapI18n?.text("ยกเลิก") ?? "ยกเลิก"), EXPIRED: (globalThis.SnaapI18n?.text("หมดเวลา") ?? "หมดเวลา") }[ev.kind])} · ${esc(new Date(ev.time).toLocaleString((globalThis.SnaapI18n?.locale ?? "th-TH")))}</button>`,
         )
         .join("")}`;
   });
@@ -835,7 +835,7 @@
       focusPath = b.dataset.studioAsk;
       selectTab("agent");
       $("#followup-input").value =
-        "ช่วยอธิบายและตรวจเงื่อนไขนี้: " + conditionText(at(focusPath));
+        (globalThis.SnaapI18n?.text("ช่วยอธิบายและตรวจเงื่อนไขนี้: ") ?? "ช่วยอธิบายและตรวจเงื่อนไขนี้: ") + conditionText(at(focusPath));
       resizeChatInputs();
       $("#followup-input").focus();
     }
@@ -870,7 +870,7 @@
     if (b.hasAttribute("data-ask-bar")) {
       selectTab("agent");
       $("#followup-input").value =
-        "ช่วยตรวจเหตุผลของสัญญาณ ณ แท่งที่เลือกบนกราฟ";
+        (globalThis.SnaapI18n?.text("ช่วยตรวจเหตุผลของสัญญาณ ณ แท่งที่เลือกบนกราฟ") ?? "ช่วยตรวจเหตุผลของสัญญาณ ณ แท่งที่เลือกบนกราฟ");
       resizeChatInputs();
       $("#followup-input").focus();
     }

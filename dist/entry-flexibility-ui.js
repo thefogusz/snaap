@@ -1,6 +1,6 @@
 import { flexibilityCounts } from "./entry-flexibility.js";
 export function flexibilitySummary(spec) {
-  return `ต้องผ่านอย่างน้อย ${spec.entryMatchPercent ?? 100}%`;
+  return `${(globalThis.SnaapI18n?.text("ต้องผ่านอย่างน้อย ") ?? "ต้องผ่านอย่างน้อย ")}${spec.entryMatchPercent ?? 100}%`;
 }
 export function mountFlexibility(
   root,
@@ -16,7 +16,7 @@ export function mountFlexibility(
       panel.querySelector("[data-flex-value]").textContent = percent + "%";
       const count = (entry) => {
         const { needed, total } = flexibilityCounts(entry, percent);
-        return `${needed}/${total} ข้อ`;
+        return `${needed}/${total}${(globalThis.SnaapI18n?.text(" ข้อ") ?? " ข้อ")}`;
       };
       panel.querySelector("[data-flex-result]").textContent = rule.spec.short
         ? `Long ${count(rule.spec.entry)} · Short ${count(rule.spec.short.entry)}`
@@ -29,7 +29,7 @@ export function mountFlexibility(
     function close() {
       panel.hidden = true;
       toggle.setAttribute("aria-expanded", "false");
-      toggle.textContent = "ปรับ";
+      toggle.textContent = (globalThis.SnaapI18n?.text("ปรับ") ?? "ปรับ");
     }
     panel.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !busy) {
@@ -44,11 +44,11 @@ export function mountFlexibility(
       }
       if (!canEdit(rule)) return;
       percent = rule.spec.entryMatchPercent ?? 100;
-      panel.innerHTML = `<div class="flex-slider-row"><input type="range" min="1" max="100" step="1" value="${percent}" data-flex-percent aria-label="ต้องผ่านเงื่อนไขอย่างน้อย (%)"><output data-flex-value></output></div><div class="flex-actions"><span class="flex-result" data-flex-result aria-live="polite"></span><button type="button" data-flex-cancel>ยกเลิก</button><button type="button" data-flex-save>บันทึก</button></div><p class="flex-error" role="alert" hidden></p><button type="button" data-flex-reload hidden>โหลดค่าล่าสุด</button>`;
+      panel.innerHTML = `<div class="flex-slider-row"><input type="range" min="1" max="100" step="1" value="${percent}${(globalThis.SnaapI18n?.text("\" data-flex-percent aria-label=\"ต้องผ่านเงื่อนไขอย่างน้อย (%)\"><output data-flex-value></output></div><div class=\"flex-actions\"><span class=\"flex-result\" data-flex-result aria-live=\"polite\"></span><button type=\"button\" data-flex-cancel>ยกเลิก</button><button type=\"button\" data-flex-save>บันทึก</button></div><p class=\"flex-error\" role=\"alert\" hidden></p><button type=\"button\" data-flex-reload hidden>โหลดค่าล่าสุด</button>") ?? "\" data-flex-percent aria-label=\"ต้องผ่านเงื่อนไขอย่างน้อย (%)\"><output data-flex-value></output></div><div class=\"flex-actions\"><span class=\"flex-result\" data-flex-result aria-live=\"polite\"></span><button type=\"button\" data-flex-cancel>ยกเลิก</button><button type=\"button\" data-flex-save>บันทึก</button></div><p class=\"flex-error\" role=\"alert\" hidden></p><button type=\"button\" data-flex-reload hidden>โหลดค่าล่าสุด</button>")}`;
       update();
       panel.hidden = false;
       toggle.setAttribute("aria-expanded", "true");
-      toggle.textContent = "ปิด";
+      toggle.textContent = (globalThis.SnaapI18n?.text("ปิด") ?? "ปิด");
     });
     panel.addEventListener("input", (event) => {
       if (busy || !event.target.hasAttribute("data-flex-percent")) return;

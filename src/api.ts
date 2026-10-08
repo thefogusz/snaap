@@ -7,6 +7,8 @@ import compress from "@fastify/compress";
 import rateLimit from "@fastify/rate-limit";
 import { randomUUID, randomBytes } from "node:crypto";
 import path from "node:path";
+import { readFile, readdir } from 'node:fs/promises';
+import { defaultLanguage, countryLookup, translateText, englishTranslations as english } from './language.js';
 import { isIP } from "node:net";
 import { constants as zlibConstants } from "node:zlib";
 import { z } from "zod";
@@ -53,6 +55,7 @@ export async function buildApp(
     monitoring?: boolean;
     presetInstruments?: typeof instruments;
     harnessDependencies?: HarnessDependencies;
+    countryLookup?: (ip: string) => Promise<string | null>;
     validateMarket?: (
       spec: import("./domain/engine.js").Strategy,
     ) => Promise<void>;
@@ -86,6 +89,36 @@ export async function buildApp(
     ajv: { customOptions: { removeAdditional: false } },
   });
   await app.register(cookie);
+  const country = options.countryLookup ?? countryLookup();
+  const countryHeader = (process.env.COUNTRY_HEADER ?? '').trim().toLowerCase();
+  if (countryHeader && !/^[a-z0-9-]+$/.test(countryHeader)) throw new Error('COUNTRY_HEADER must be a header name');
+  async function pageLanguage(req: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) {
+    let code: string | null = null;
+    const saved = req.cookies.snaap_language;
+    if (saved !== 'th' && saved !== 'en') {
+      const header = countryHeader ? req.headers[countryHeader] : undefined;
+      code = typeof header === 'string' && /^[A-Z]{2}$/.test(header) ? header : await country(clientIp(req));
+    }
+    const language = defaultLanguage(saved, code, req.headers['accept-language']);
+    if (saved !== language) reply.setCookie('snaap_language', language, { path: '/', maxAge: 31536000, sameSite: 'lax', secure: origin.startsWith('https:') });
+    reply.header('Cache-Control', 'no-store').header('Vary', 'Cookie, Accept-Language').header('Content-Language', language);
+    return language;
+  }
+  const pageCache = new Map<string, Promise<string>>();
+  async function sendPage(file: string, req: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) {
+    const language = await pageLanguage(req, reply);
+    if (!pageCache.has(file)) pageCache.set(file, readFile(path.resolve('dist', file), 'utf8'));
+    const html = await pageCache.get(file)!;
+    const localized = language === 'th' ? html : translateText(html, english)
+      .replaceAll('lang="th"', 'lang="en"').replaceAll('th_TH', 'en_US').replaceAll('"inLanguage":"th"', '"inLanguage":"en"')
+      .replace(/(<time datetime="(\d{4}-\d{2}-\d{2})">)[^<]*(<\/time>)/g, (_match, open, date, close) => open + new Date(date).toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' }) + close);
+    return reply.type('text/html; charset=utf-8').send(localized);
+  }
+  app.get('/language.js', async (req, reply) => {
+    const language = await pageLanguage(req, reply);
+    const source = await readFile(new URL('../dist/language.js', import.meta.url), 'utf8');
+    return reply.type('text/javascript; charset=utf-8').send(`window.SnaapLanguage=${JSON.stringify({ language, dictionary: language === 'en' ? english : {} })};\n${source}`);
+  });
   // Text responses compress ~70-75%. Quality 5 keeps brotli cheap enough for per-request use;
   // the streamed chat route hijacks its reply and is unaffected.
   await app.register(compress, {
@@ -106,6 +139,7 @@ export async function buildApp(
   });
   app.decorateRequest("userId", "");
   app.setErrorHandler((err, req, reply) => {
+    const errorText = (text: string) => req.cookies?.snaap_language === 'en' ? translateText(text, english) : text;
     recordSystemLog({
       type: (err as any).code || (err as any).name || "ERROR",
       statusCode:
@@ -121,10 +155,10 @@ export async function buildApp(
       return reply.code(400).send({
         error: {
           code: "VALIDATION",
-          message: "ข้อมูลไม่ถูกต้อง",
+          message: errorText("ข้อมูลไม่ถูกต้อง"),
           details: err.issues.map((x) => ({
             path: x.path,
-            message: x.message,
+            message: errorText(x.message),
           })),
         },
       });
@@ -132,9 +166,9 @@ export async function buildApp(
     return reply.code(error.statusCode ?? 500).send({
       error: {
         code: error.code ?? "INTERNAL",
-        message: error.statusCode
+        message: errorText(error.statusCode
           ? error.message
-          : "ระบบทำงานไม่สำเร็จ กรุณาลองใหม่",
+          : "ระบบทำงานไม่สำเร็จ กรุณาลองใหม่"),
       },
     });
   });
@@ -794,6 +828,10 @@ export async function buildApp(
   registerSetupShares(app, db);
   registerPresets(app, db, { instruments: options.presetInstruments });
   registerRuleRemoval(app, db);
+  app.get('/', async (req, reply) => sendPage('landing.html', req, reply));
+  for (const file of (await readdir(path.resolve('dist'))).filter(file => file.endsWith('.html'))) {
+    app.get('/' + file, async (req, reply) => sendPage(file, req, reply));
+  }
   await app.register(staticFiles, {
     root: path.resolve("dist"),
     index: "landing.html",
@@ -813,14 +851,14 @@ export async function buildApp(
   // Explicit SPA routes keep direct links and refreshes working without hiding
   // missing assets or unknown API endpoints behind the app shell.
   for (const view of ["home", "sentiment", "notifications", "history", "watch", "billing"]) {
-    app.get(`/${view}`, async (_req, reply) => reply.sendFile("index.html"));
+    app.get(`/${view}`, async (req, reply) => sendPage('index.html', req, reply));
     app.get(`/${view}/`, async (req, reply) =>
       reply.redirect(`/${view}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`),
     );
   }
-  app.get("/admin", async (_req, reply) => reply.sendFile("admin.html"));
-  app.get("/admin/login", async (_req, reply) =>
-    reply.sendFile("admin-login.html"),
+  app.get("/admin", async (req, reply) => sendPage('admin.html', req, reply));
+  app.get("/admin/login", async (req, reply) =>
+    sendPage('admin-login.html', req, reply),
   );
   app.get("/admin/", async (_req, reply) => reply.redirect("/admin"));
   return { app, session, origin };

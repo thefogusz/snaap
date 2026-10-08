@@ -10,10 +10,10 @@
   }
   async function unlockAudio() {
     const Context = window.AudioContext || window.webkitAudioContext;
-    if (!Context) throw Error("เบราว์เซอร์นี้ไม่รองรับเสียงแจ้งเตือน");
+    if (!Context) throw Error((globalThis.SnaapI18n?.text("เบราว์เซอร์นี้ไม่รองรับเสียงแจ้งเตือน") ?? "เบราว์เซอร์นี้ไม่รองรับเสียงแจ้งเตือน"));
     audio ??= new Context();
     await audio.resume();
-    if (audio.state !== "running") throw Error("กดลองเสียงอีกครั้งเพื่อเปิดเสียง");
+    if (audio.state !== "running") throw Error((globalThis.SnaapI18n?.text("กดลองเสียงอีกครั้งเพื่อเปิดเสียง") ?? "กดลองเสียงอีกครั้งเพื่อเปิดเสียง"));
   }
   function chime() {
     if (!audio || audio.state !== "running") return false;
@@ -34,11 +34,11 @@
     const permission = supported() ? Notification.permission : "unsupported";
     const desktopOn = preferences.desktop && permission === "granted";
     const hints = [];
-    if (permission === "denied") hints.push("Chrome บล็อกอยู่ · เปลี่ยนสิทธิ์ที่ไอคอนข้าง URL");
-    if (permission === "unsupported") hints.push("เบราว์เซอร์นี้ไม่รองรับแจ้งเตือนบนหน้าจอ");
-    if (preferences.sound && audio?.state !== "running") hints.push("กดลองเสียงเพื่อเปิดเสียงในรอบนี้");
-    if (failed) hints.push("เชื่อมต่อขาด กำลังลองใหม่");
-    return `<section class="browser-alert-settings" aria-label="การแจ้งเตือนในเบราว์เซอร์"><span class="browser-alert-label" title="รับสัญญาณทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วใช้ช่องทางที่เชื่อมไว้">ในเบราว์เซอร์ <small>ขณะเปิดเว็บ</small></span><div class="browser-alert-actions"><button type="button" class="browser-alert-toggle" data-browser-alert="desktop" aria-pressed="${desktopOn}" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}><span aria-hidden="true" class="browser-alert-dot"></span>แจ้งเตือน</button><button type="button" class="browser-alert-toggle" data-browser-alert="sound" aria-pressed="${preferences.sound}"><span aria-hidden="true" class="browser-alert-dot"></span>เสียง</button><button type="button" class="browser-alert-preview" data-browser-alert="preview">${uiIcon("play")}ลองเสียง</button></div>${hints.length ? `<p class="browser-alert-hint" role="status">${hints.join(" · ")}</p>` : ""}</section>`;
+    if (permission === "denied") hints.push((globalThis.SnaapI18n?.text("Chrome บล็อกอยู่ · เปลี่ยนสิทธิ์ที่ไอคอนข้าง URL") ?? "Chrome บล็อกอยู่ · เปลี่ยนสิทธิ์ที่ไอคอนข้าง URL"));
+    if (permission === "unsupported") hints.push((globalThis.SnaapI18n?.text("เบราว์เซอร์นี้ไม่รองรับแจ้งเตือนบนหน้าจอ") ?? "เบราว์เซอร์นี้ไม่รองรับแจ้งเตือนบนหน้าจอ"));
+    if (preferences.sound && audio?.state !== "running") hints.push((globalThis.SnaapI18n?.text("กดลองเสียงเพื่อเปิดเสียงในรอบนี้") ?? "กดลองเสียงเพื่อเปิดเสียงในรอบนี้"));
+    if (failed) hints.push((globalThis.SnaapI18n?.text("เชื่อมต่อขาด กำลังลองใหม่") ?? "เชื่อมต่อขาด กำลังลองใหม่"));
+    return `${(globalThis.SnaapI18n?.text("<section class=\"browser-alert-settings\" aria-label=\"การแจ้งเตือนในเบราว์เซอร์\"><span class=\"browser-alert-label\" title=\"รับสัญญาณทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วใช้ช่องทางที่เชื่อมไว้\">ในเบราว์เซอร์ <small>ขณะเปิดเว็บ</small></span><div class=\"browser-alert-actions\"><button type=\"button\" class=\"browser-alert-toggle\" data-browser-alert=\"desktop\" aria-pressed=\"") ?? "<section class=\"browser-alert-settings\" aria-label=\"การแจ้งเตือนในเบราว์เซอร์\"><span class=\"browser-alert-label\" title=\"รับสัญญาณทุกเวิร์กสเปซขณะเปิดเว็บ · ปิดเว็บแล้วใช้ช่องทางที่เชื่อมไว้\">ในเบราว์เซอร์ <small>ขณะเปิดเว็บ</small></span><div class=\"browser-alert-actions\"><button type=\"button\" class=\"browser-alert-toggle\" data-browser-alert=\"desktop\" aria-pressed=\"")}${desktopOn}" ${["denied", "unsupported"].includes(permission) ? "disabled" : ""}${(globalThis.SnaapI18n?.text("><span aria-hidden=\"true\" class=\"browser-alert-dot\"></span>แจ้งเตือน</button><button type=\"button\" class=\"browser-alert-toggle\" data-browser-alert=\"sound\" aria-pressed=\"") ?? "><span aria-hidden=\"true\" class=\"browser-alert-dot\"></span>แจ้งเตือน</button><button type=\"button\" class=\"browser-alert-toggle\" data-browser-alert=\"sound\" aria-pressed=\"")}${preferences.sound}${(globalThis.SnaapI18n?.text("\"><span aria-hidden=\"true\" class=\"browser-alert-dot\"></span>เสียง</button><button type=\"button\" class=\"browser-alert-preview\" data-browser-alert=\"preview\">") ?? "\"><span aria-hidden=\"true\" class=\"browser-alert-dot\"></span>เสียง</button><button type=\"button\" class=\"browser-alert-preview\" data-browser-alert=\"preview\">")}${uiIcon("play")}${(globalThis.SnaapI18n?.text("ลองเสียง</button></div>") ?? "ลองเสียง</button></div>")}${hints.length ? `<p class="browser-alert-hint" role="status">${hints.join(" · ")}</p>` : ""}</section>`;
   }
   function repaint() {
     const markup = settingsMarkup();
@@ -105,8 +105,8 @@
           changed = true;
           cursor = fresh.at(-1).id;
           const last = fresh.at(-1);
-          const kind = { ENTRY: "สัญญาณเข้า", EXIT: "สัญญาณออก", CANCEL: "ยกเลิก", EXPIRED: "หมดเวลารอ" }[last.event.kind] || "สัญญาณใหม่";
-          const text = fresh.length > 1 ? `มี ${fresh.length} สัญญาณใหม่ · ${last.pair}` : `${kind} · ${last.pair} · ${last.setup_name || "เซ็ตอัพ"}`;
+          const kind = { ENTRY: (globalThis.SnaapI18n?.text("สัญญาณเข้า") ?? "สัญญาณเข้า"), EXIT: (globalThis.SnaapI18n?.text("สัญญาณออก") ?? "สัญญาณออก"), CANCEL: (globalThis.SnaapI18n?.text("ยกเลิก") ?? "ยกเลิก"), EXPIRED: (globalThis.SnaapI18n?.text("หมดเวลารอ") ?? "หมดเวลารอ") }[last.event.kind] || (globalThis.SnaapI18n?.text("สัญญาณใหม่") ?? "สัญญาณใหม่");
+          const text = fresh.length > 1 ? `${(globalThis.SnaapI18n?.text("มี ") ?? "มี ")}${fresh.length}${(globalThis.SnaapI18n?.text(" สัญญาณใหม่ · ") ?? " สัญญาณใหม่ · ")}${last.pair}` : `${kind} · ${last.pair} · ${last.setup_name || (globalThis.SnaapI18n?.text("เซ็ตอัพ") ?? "เซ็ตอัพ")}`;
           // Alerts watch every workspace; suppress only signals in the inbox being viewed.
           const viewingInbox = window.SnaapSignalUnread?.isViewing() &&
             fresh.every(row => state.rules.some(rule => rule.id === row.rule_id));
@@ -114,7 +114,7 @@
           if (!viewingInbox && preferences.sound) chime();
           if (!viewingInbox && preferences.desktop && supported() && Notification.permission === "granted") {
             try {
-              const notice = new Notification("Snaap · สัญญาณใหม่", { body: text, tag: "snaap-signals", silent: true });
+              const notice = new Notification((globalThis.SnaapI18n?.text("Snaap · สัญญาณใหม่") ?? "Snaap · สัญญาณใหม่"), { body: text, tag: "snaap-signals", silent: true });
               notice.onclick = () => { window.focus(); notificationSection = 'inbox'; window.SnaapRouter.go("notifications"); navigate('notifications'); notice.close(); };
               setTimeout(() => notice.close(), 8000);
             } catch { /* Some mobile browsers require a service worker. Inbox still works. */ }
