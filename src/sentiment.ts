@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import iciReports from './data/ici-flows.json' with { type: 'json' };
 
 const listing = 'https://www.ici.org/research/statistics/mutual-funds/quarterly-worldwide-mutual-fund-market';
 const weekly = 'https://www.ici.org/research/stats/combined_flows';
@@ -314,7 +315,7 @@ export function registerSentiment(app: FastifyInstance) {
     }
     await current.pending;
     reply.header('Cache-Control', 'private, no-store');
-    if (!current.data) return reply.code(503).send({ error: 'ยังอ่านข้อมูลต้นทางไม่ได้ กรุณาลองอีกครั้ง' });
-    return { ...current.data, stale: !!current.failed, checkedAt: new Date(current.checked).toISOString() };
+    // Verified published reports survive a cold start when ICI denies cloud-host requests.
+    return { ...(current.data ?? iciReports[universe]), stale: !!current.failed, checkedAt: new Date(current.checked).toISOString() };
   });
 }

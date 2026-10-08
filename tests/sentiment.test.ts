@@ -52,12 +52,27 @@ test('ICI flows: units, chronology, missing values, cache failures and no double
   assert.deepEqual(stale.json().total, first.json().total);
   await app.inject('/api/v1/sentiment?universe=us'); assert.equal(calls, 2);
   const empty = Fastify(); registerSentiment(empty); t.after(() => empty.close());
-  assert.equal((await empty.inject('/api/v1/sentiment?universe=us')).statusCode, 503);
+  const backup = await empty.inject('/api/v1/sentiment?universe=us');
+  assert.equal(backup.statusCode, 200);
+  assert.equal(backup.json().stale, true);
+  assert.equal(backup.json().total.at(-1), -1969e6);
+  assert.equal(backup.json().periods.at(-1), '2026-09-30');
+  assert.ok(Date.parse(backup.json().retrievedAt) < now);
   assert.deepEqual(warnings.mock.calls.at(-1)!.arguments, ['Sentiment source refresh failed', 'us', 'offline']);
   t.mock.method(globalThis, 'fetch', async () => new Response('unavailable', {status: 503}));
   now += 60001;
   await empty.inject('/api/v1/sentiment?universe=us');
   assert.deepEqual(warnings.mock.calls.at(-1)!.arguments, ['Sentiment source refresh failed', 'us', 'Source HTTP 503 (www.ici.org)']);
+  const worldwide = (await empty.inject('/api/v1/sentiment?universe=global')).json();
+  assert.equal(worldwide.stale, true);
+  assert.equal(worldwide.total.at(-1), 1034e9);
+  assert.equal(worldwide.periods.at(-1), '2026 Q2');
+  unavailable = false;
+  t.mock.method(globalThis, 'fetch', async () => new Response(weekly, {headers: {'content-type': 'text/html'}}));
+  now += 60001;
+  const recovered = (await empty.inject('/api/v1/sentiment?universe=us')).json();
+  assert.equal(recovered.stale, false);
+  assert.deepEqual(recovered.total, us.total);
 });
 
 
