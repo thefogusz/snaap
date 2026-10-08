@@ -389,12 +389,10 @@ h1 {
   transform-origin: center;
   pointer-events: none;
 }
-.agent-object > svg {
+.agent-object > img {
+  display: block;
   width: 100%;
   height: 100%;
-  color: var(--text);
-  overflow: visible;
-  shape-rendering: auto;
 }
 .agent-halo {
   position: absolute;
