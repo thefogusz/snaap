@@ -62,7 +62,7 @@ function drawHistory(host,a){
     observer.disconnect();
     if(!chartHost.isConnected || !window.LightweightCharts)return;
     const dark=document.documentElement.dataset.theme==='dark';
-    const chart=window.LightweightCharts.createChart(chartHost,{autoSize:true,height:240,layout:{background:{type:'solid',color:dark?'#191a1c':'#fff'},textColor:dark?'#acb1bc':'#545a66',fontSize:11},grid:{vertLines:{visible:false},horzLines:{color:dark?'#282b30':'#edf0f3'}},timeScale:{timeVisible:true},rightPriceScale:{borderVisible:false},localization:{locale:'en-US'}});
+    const chart=window.LightweightCharts.createChart(chartHost,{autoSize:true,height:240,layout:{background:{type:'solid',color:dark?'#191a1c':'#fff'},textColor:dark?'#acb1bc':'#545a66',fontFamily:getComputedStyle(document.body).fontFamily,fontSize:11},grid:{vertLines:{visible:false},horzLines:{color:dark?'#282b30':'#edf0f3'}},timeScale:{timeVisible:true},rightPriceScale:{borderVisible:false},localization:{locale:'en-US'}});
     const lines=series.map((item,index)=>{const first=item.values[0].value, precision=series.length>1?2:first>=1?2:8;const line=chart.addSeries(window.LightweightCharts.LineSeries,{color:colors[index],lineWidth:2,priceFormat:{type:'price',precision,minMove:10**-precision},title:item.pair,lastValueVisible:true});line.setData(item.values);return line;});
     chart.subscribeCrosshairMove(event=>series.forEach((item,index)=>{const value=event.seriesData?.get(lines[index])?.value;legend.children[index].textContent=`${item.pair} · ${item.exchange}${n(value)?' · '+number(value):''}${item.status==='DELAYED'?(globalThis.SnaapI18n?.text(" · ล่าช้า") ?? " · ล่าช้า"):''}`;}));
     chart.timeScale().fitContent();activeCharts.set(chartHost,chart);

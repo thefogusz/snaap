@@ -6,3 +6,7 @@ html[lang=en] .studio-mobile-menu-items [data-action="new"]::after{content:"Star
 body>.language-toggle{position:fixed;top:14px;right:14px;z-index:50;background:var(--surface,#fff);color:var(--text,#151515)}
 @media(max-width:900px){.language-toggle{width:44px;height:44px;min-height:44px}}
 @media(max-width:600px){.language-navigation-actions{gap:8px}.language-navigation-actions .nav-cta{padding:10px 12px;font-size:11px;gap:10px;white-space:nowrap}}
+@font-face{font-family:InterVariable;src:url('/assets/fonts/InterVariable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:InterVariable;src:url('/assets/fonts/InterVariable-Italic.woff2') format('woff2');font-style:italic;font-weight:100 900;font-display:swap}
+html[lang=en] body,html[lang=en] .hero-description,html[lang=en] .eyebrow{font-family:InterVariable,'Noto Sans Thai',system-ui,sans-serif;font-optical-sizing:auto}
+html[lang=en] .hero h1{letter-spacing:-.045em;line-height:1.05}

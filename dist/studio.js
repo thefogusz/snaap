@@ -184,6 +184,7 @@
       layout: {
         background: { type: "solid", color: bg },
         textColor: ink,
+        fontFamily: getComputedStyle(document.body).fontFamily,
         fontSize: 11,
       },
       grid: {
