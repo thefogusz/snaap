@@ -76,3 +76,23 @@ test('a forwarded header cannot claim loopback for local login',async()=>{
     }finally{await app.close();}
   });
 });
+
+test('on Railway rate limits key on the edge X-Real-IP header and ignore invalid values',async()=>{
+  const saved={project:process.env.RAILWAY_PROJECT_ID,hops:process.env.TRUST_PROXY_HOPS,header:process.env.CLIENT_IP_HEADER};
+  process.env.RAILWAY_PROJECT_ID='test-project';
+  delete process.env.TRUST_PROXY_HOPS;delete process.env.CLIENT_IP_HEADER;
+  try{
+    const {app}=await appWith(undefined);
+    try{
+      const start=(realIp:string)=>app.inject({method:'GET',url:'/api/v1/auth/google',headers:{...headers,'x-real-ip':realIp,'x-forwarded-for':`${realIp}, fd12::${Math.floor(Math.random()*9)}`},remoteAddress:'fd12::1'});
+      for(let i=0;i<20;i++) assert.notEqual((await start('198.51.100.7')).statusCode,429,`request ${i}`);
+      assert.equal((await start('198.51.100.7')).statusCode,429,'varying internal hops do not split one client');
+      assert.notEqual((await start('198.51.100.8')).statusCode,429,'another client has its own bucket');
+      const bogus=await app.inject({method:'GET',url:'/api/v1/auth/google',headers:{...headers,'x-real-ip':'not-an-ip'},remoteAddress:'198.51.100.7'});
+      assert.equal(bogus.statusCode,429,'an invalid header falls back to the socket address');
+    }finally{await app.close();}
+  }finally{
+    for(const [key,value] of [['RAILWAY_PROJECT_ID',saved.project],['TRUST_PROXY_HOPS',saved.hops],['CLIENT_IP_HEADER',saved.header]] as const)
+      if(value===undefined)delete process.env[key];else process.env[key]=value;
+  }
+});
