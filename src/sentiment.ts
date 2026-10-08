@@ -255,7 +255,7 @@ export function registerSentiment(app: FastifyInstance) {
   }
   let cotData: ReturnType<typeof parsePositioning> | undefined, cotChecked = 0, cotFailed = false, cotPending: Promise<void> | undefined;
   async function readPositioning() {
-    if (Date.now() - cotChecked > (cotFailed ? 60000 : 6 * 3600000)) {
+    if (Date.now() - cotChecked > (cotFailed ? 60000 : 3600000)) {
       cotPending ??= (async () => {
         try {
           const since = new Date(Date.now() - 12 * 7 * 86400000).toISOString().slice(0,10);

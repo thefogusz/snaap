@@ -36,7 +36,10 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
   const [first,concurrent,evidence]=await Promise.all([app.inject('/api/v1/sentiment/positioning'),app.inject('/api/v1/sentiment/positioning'),readSentiment({dataset:'positioning'})]);
   assert.equal(first.statusCode,200);assert.equal(concurrent.statusCode,200);assert.equal(calls,1);
   assert.deepEqual(evidence.data,first.json());assert.equal(first.json().stale,false);
-  unavailable=true;now+=7*3600000;
+  now+=3599999;
+  assert.equal((await app.inject('/api/v1/sentiment/positioning')).json().stale,false);
+  assert.equal(calls,1);
+  unavailable=true;now+=2;
   const stale=await app.inject('/api/v1/sentiment/positioning');
   assert.equal(stale.json().stale,true);assert.deepEqual(stale.json().markets,first.json().markets);
   assert.deepEqual(warnings.mock.calls.at(-1)!.arguments,['Sentiment source refresh failed','CFTC','offline']);

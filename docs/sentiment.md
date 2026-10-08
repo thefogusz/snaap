@@ -6,7 +6,7 @@ The default view gives a concise market brief. The seven-day view compares refer
 
 | Source | Measurement | Cadence |
 | --- | --- | --- |
-| [CFTC Legacy Futures Only](https://publicreporting.cftc.gov/d/6dca-aqww) | Non-commercial long and short futures positions in S&P 500, MSCI EAFE, MSCI EM, US 10Y Treasury, gold, WTI, CME Bitcoin and CME Ether contracts | Weekly; six-hour successful cache |
+| [CFTC Legacy Futures Only](https://publicreporting.cftc.gov/d/6dca-aqww) | Non-commercial long and short futures positions in S&P 500, MSCI EAFE, MSCI EM, US 10Y Treasury, gold, WTI, CME Bitcoin and CME Ether contracts | Weekly; one-hour successful cache |
 | Yahoo Finance public chart endpoint | Price of SPY, EFA, EEM, TLT, GLD, USO, VNQ and UUP in USD | Daily bars; five-minute cache |
 | [Coinbase Exchange candles](https://docs.cdp.coinbase.com/api-reference/exchange-api/rest-api/products/get-product-candles) | BTC-USD and ETH-USD prices on Coinbase | Daily UTC bars; five-minute cache |
 | [World Gold Council](https://www.gold.org/goldhub/data/global-gold-backed-etf-holdings-and-flows) | Global physically backed gold ETF net flows, with four region columns summed | Latest weekly or monthly observation; one-hour cache |
@@ -16,7 +16,7 @@ The default view gives a concise market brief. The seven-day view compares refer
 
 The CFTC figures are calculated as `(noncomm_positions_long_all − noncomm_positions_short_all) / open_interest_all × 100`. A change between adjacent available reports is a difference in **percentage points of Open Interest**, not dollars or a count of newly purchased contracts. The eight contracts are proxies, not comprehensive market totals. The report observes Tuesday positions and is normally released Friday ([CFTC schedule](https://www.cftc.gov/MarketReports/CommitmentsofTraders/ReleaseSchedule/index.htm)); source observation dates remain visible. A missed report week does not turn a two-week difference into a one-week claim. The UI never sums contracts with different units. A zero-crossing means net positioning changed sign, not money moved from one market to another.
 
-The CFTC API uses fixed contract codes and a bounded 12-week query. The parser requires valid report dates, safe integer long/short/open-interest values, no duplicate contract/date rows, and at least four markets with the latest two periods. It rejects future dates and malformed data. Successful reads are shared by the dashboard and harness for up to six hours. Failed refreshes keep only a previously successful in-process response with `stale: true`; a cold-start failure returns 503. There is no embedded CFTC or ICI snapshot.
+The CFTC API uses fixed contract codes and a bounded 12-week query. The parser requires valid report dates, safe integer long/short/open-interest values, no duplicate contract/date rows, and at least four markets with the latest two periods. It rejects future dates and malformed data. Successful reads are shared by the dashboard and harness for up to one hour. Failed refreshes keep only a previously successful in-process response with `stale: true`; a cold-start failure returns 503. There is no embedded CFTC or ICI snapshot.
 
 Gold ETF flows are actual reported net flows, but stablecoin circulating-supply changes, market-cap changes, price returns, futures positions and Fear & Greed are different measurements. They are displayed with their own source and observation period. No free source connected here measures all capital moving across all world markets in real time.
 
