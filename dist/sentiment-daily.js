@@ -46,7 +46,7 @@ function miniLine(market){
 }
 function render(){
   const available=payload.markets.filter(m=>!m.error&&m.change7!==null);
-  if(!available.length){host.innerHTML='<div class="sd-empty" role="status"><h2>ต้นทางยังไม่ส่งข้อมูลที่ใช้เปรียบเทียบได้</h2><p>กดตรวจข้อมูลอีกครั้ง หรือดูรายงานกระแสเงินกองทุน</p></div>';return;}
+  if(!available.length){host.innerHTML='<div class="sd-empty" role="status"><h2>ต้นทางยังไม่ส่งข้อมูลที่ใช้เปรียบเทียบได้</h2><p>กดตรวจข้อมูลอีกครั้ง หรือดูสถานะฟิวเจอร์ส</p></div>';return;}
   if(!available.some(m=>m.id===selection))selection=available[0].id;
   const ranked=[...available].sort((a,b)=>b.change7-a.change7),leader=ranked[0],laggard=ranked.at(-1),up=available.filter(m=>m.change7>0).length,down=available.filter(m=>m.change7<0).length;
   const dates=available[0].days.map(d=>d.date);

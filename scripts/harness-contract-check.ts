@@ -645,44 +645,43 @@ try {
   assert.ok((await runTool('read_evm_transfers',{chain:'ethereum',contractAddress:'http://localhost',walletAddress:null,blocks:20,limit:10,minRawAmount:'0'})).output.error);
   console.log('PASS news, BTC, DEX, DeFi and EVM tools preserve bounded evidence and unchanged drafts; invalid arguments fail safely');
   const fetchBeforeSentiment=globalThis.fetch;
-  let iciCalls=0;
+  let cotCalls=0;
   globalThis.fetch=async(input,init)=>{
-    if(String(input).startsWith('https://www.ici.org/')){iciCalls++;return new Response('blocked',{status:403});}
+    if(String(input).startsWith('https://publicreporting.cftc.gov/')){cotCalls++;return new Response('offline',{status:503});}
     if(['query1.finance.yahoo.com','api.exchange.coinbase.com','fsapi.gold.org','stablecoins.llama.fi','api.alternative.me','api.coingecko.com'].includes(new URL(String(input)).hostname))return new Response('offline',{status:503});
     return fetchBeforeSentiment(input,init);
   };
   try{
-    assert.equal((await app.inject({url:'/api/v1/sentiment?universe=us',headers:{host:headers.host}})).statusCode,401);
-    const dashboard=await app.inject({url:'/api/v1/sentiment?universe=us',headers});
-    assert.equal(dashboard.statusCode,200);assert.equal(dashboard.json().stale,true);
-    const sentiment=await runTool('read_sentiment',{dataset:'us-flows'},{draft:studioSpec});
+    assert.equal((await app.inject({url:'/api/v1/sentiment/positioning',headers:{host:headers.host}})).statusCode,401);
+    const dashboard=await app.inject({url:'/api/v1/sentiment/positioning',headers});
+    assert.equal(dashboard.statusCode,503);assert.ok(dashboard.json().error);
+    const sentiment=await runTool('read_sentiment',{dataset:'positioning'},{draft:studioSpec});
     assert.deepEqual(sentiment.output.data,dashboard.json());
     assert.match(sentiment.output.freshness,/stale:false does not mean fetched live/);
     assert.equal(sentiment.result.draft,null);
     assert.equal(sentiment.result.artifacts.length,0,'Sentiment evidence goes to the answer, not an unsupported artifact');
-    assert.equal(iciCalls,1,'dashboard and harness share the same failed-refresh cache');
+    assert.equal(cotCalls,1,'dashboard and harness share the same failed-refresh cache');
     const advertised=requests.at(-1).tools.find((tool:any)=>tool.name==='read_sentiment');
     assert.equal(advertised.strict,true);assert.equal(advertised.parameters.additionalProperties,false);
-    assert.equal(advertised.parameters.properties.dataset.enum.length,5);
+    assert.equal(advertised.parameters.properties.dataset.enum.length,4);
     assert.ok(promptText(requests.at(-1)).includes('checkedAt/retrievedAt are fetch/check times'));
     assert.ok((await runTool('read_sentiment',{dataset:'http://localhost/secret'})).output.error);
-    assert.equal(iciCalls,1,'invalid arguments never reach a source');
+    assert.equal(cotCalls,1,'invalid arguments never reach a source');
     let batchRounds=0;
     reply=async body=>{
       if(batchRounds++===0)return {...response(''),output:[
-        ...['us-flows','global-flows','daily','specialists','crypto-breakdown'].map(dataset=>({type:'function_call',name:'read_sentiment',call_id:dataset,arguments:JSON.stringify({dataset})})),
+        ...['positioning','daily','specialists','crypto-breakdown'].map(dataset=>({type:'function_call',name:'read_sentiment',call_id:dataset,arguments:JSON.stringify({dataset})})),
         {type:'function_call',name:'read_market_news',call_id:'news',arguments:JSON.stringify({topic:'stocks',symbols:['NVDA'],hours:24,limit:10,query:''})},
       ]};
       const outputs=Object.fromEntries(body.input.filter((m:any)=>m.type==='function_call_output').map((m:any)=>[m.call_id,JSON.parse(m.output)]));
-      assert.equal(Object.keys(outputs).length,6);
-      assert.deepEqual(outputs['us-flows'].data,dashboard.json());
-      assert.equal(outputs['global-flows'].data.stale,true);
+      assert.equal(Object.keys(outputs).length,5);
+      assert.deepEqual(outputs.positioning.data,dashboard.json());
       assert.ok(outputs.daily.data.markets.every((m:any)=>m.error&&m.stale));
       assert.ok(Object.values(outputs.specialists.data).every((m:any)=>m.error));
       assert.ok(outputs['crypto-breakdown'].data.error);
       assert.equal(outputs.news.displayed,true);
       assert.ok(Object.values(outputs).filter((m:any)=>m.dataset).every((m:any)=>!m.displayed&&m.interpretation));
-      return response('รายงานกองทุนเป็นข้อมูลที่เก็บไว้ ส่วนข้อมูลรายวันยังอ่านไม่ได้');
+      return response('สถานะฟิวเจอร์สและข้อมูลรายวันยังอ่านไม่ได้');
     };
     const batchStream=await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers:{...headers,accept:'application/x-ndjson'},payload:{text:'สรุป Sentiment ทุกชุดพร้อมข่าว ไม่ต้องแก้ร่าง',mode:'standard',draft:studioSpec}});
     assert.equal(batchStream.statusCode,200,batchStream.body);

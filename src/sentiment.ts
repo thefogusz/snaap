@@ -1,81 +1,42 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import iciReports from './data/ici-flows.json' with { type: 'json' };
+const cotSource = 'https://publicreporting.cftc.gov/d/6dca-aqww';
+const cotApi = 'https://publicreporting.cftc.gov/resource/6dca-aqww.json';
+const cotMarkets = [
+  ['us-stocks', 'S&P 500', '13874A'], ['developed-stocks', 'MSCI EAFE', '244041'],
+  ['emerging-stocks', 'MSCI EM', '244042'], ['bonds', 'UST 10Y', '043602'],
+  ['gold', 'Gold', '088691'], ['oil', 'WTI crude', '067411'],
+  ['bitcoin', 'Bitcoin', '133741'], ['ethereum', 'Ether', '146021'],
+] as const;
+const cotRow = z.object({
+  cftc_contract_market_code: z.string(), market_and_exchange_names: z.string(),
+  report_date_as_yyyy_mm_dd: z.string(), open_interest_all: z.string().regex(/^\d+$/),
+  noncomm_positions_long_all: z.string().regex(/^\d+$/), noncomm_positions_short_all: z.string().regex(/^\d+$/),
+});
 
-const listing = 'https://www.ici.org/research/statistics/mutual-funds/quarterly-worldwide-mutual-fund-market';
-const weekly = 'https://www.ici.org/research/stats/combined_flows';
-type Universe = 'global' | 'us';
-export type FlowDataset = {
-  universe: Universe; source: string; publishedAt: string; retrievedAt: string;
-  quality: 'reported' | 'estimated'; periods: string[]; total: (number | null)[];
-  markets: { id: string; name: string; values: (number | null)[] }[];
-};
-const globalMarkets = [['equity', 'Equity'], ['bond', 'Bond'], ['mixed', 'Balanced/Mixed'], ['cash', 'Money market'], ['property', 'Real Estate'], ['other', 'Other'], ['guaranteed', 'Guaranteed']];
-const usMarkets = [['equity', 'Equity'], ['bond', 'Bond'], ['mixed', 'Hybrid'], ['commodity', 'Commodity']];
-const plain = (s: string) => s.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
-
-// ponytail: deliberately supports ICI's two published table layouts; fail closed if they change.
-export function parseFlows(html: string, universe: Universe, source: string, now = new Date()): FlowDataset {
-  const article = html.slice(html.indexOf('<h1'));
-  const publishedAt = article.match(/<time\b[^>]*datetime="([^"]+)"/)?.[1];
-  if (!publishedAt || !Number.isFinite(Date.parse(publishedAt))) throw new Error('Missing publication date');
-  if (Date.parse(publishedAt) > now.getTime()) throw new Error('Future publication date');
-  const tables = [...article.matchAll(/<table\b[^>]*>[\s\S]*?<\/table>/gi)];
-  const global = universe === 'global';
-  if (tables.length !== (global ? 2 : 1)) throw new Error('ICI table layout changed');
-  const table = tables[global ? 1 : 0];
-  if (global) {
-    const after = plain(article.slice(table.index! + table[0].length, table.index! + table[0].length + 3000));
-    if (!after.includes('Net sales are new sales') || !/Billions of US dollars/.test(article)) throw new Error('Unverified net sales table');
-  } else if (!/Estimated Fund Flows[\s\S]{0,100}Millions of dollars/.test(article)) throw new Error('Unverified weekly units');
-  const rows = [...table[0].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map(r => [...r[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c => plain(c[1])));
-  let periods: string[];
-  if (global) {
-    const years = rows[0].filter(v => /^20\d\d$/.test(v));
-    const quarters = rows[1];
-    if (!years.length || !quarters.every(v => /^Q[1-4]$/.test(v))) throw new Error('Invalid quarters');
-    let yearIndex = 0;
-    periods = quarters.map((q, i) => {
-      if (i && q === 'Q1') yearIndex++;
-      if (!years[yearIndex]) throw new Error('Invalid years');
-      return `${years[yearIndex]} ${q}`;
-    });
-    if (yearIndex !== years.length - 1) throw new Error('Year mismatch');
-    const ref = source.match(/ww_q([1-4])_(\d{2})$/);
-    if (!ref || periods.at(-1) !== `20${ref[2]} Q${ref[1]}`) throw new Error('Report period mismatch');
-  } else {
-    periods = rows[0].slice(1).map(v => {
-      const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(20\d\d)$/);
-      if (!m) throw new Error('Invalid weekly date');
-      const iso = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
-      if (new Date(iso).toISOString().slice(0, 10) !== iso) throw new Error('Invalid date');
-      return iso;
-    }).reverse();
+export function parsePositioning(input: unknown, now = new Date()) {
+  const rows = z.array(cotRow).parse(input);
+  const selected = new Map(cotMarkets.map(([,, code]) => [code, new Map<string, {long:number;short:number;openInterest:number}>()]));
+  for (const row of rows) {
+    const history = selected.get(row.cftc_contract_market_code as typeof cotMarkets[number][2]);
+    if (!history) continue;
+    const date = row.report_date_as_yyyy_mm_dd;
+    if (!/^20\d\d-\d\d-\d\dT00:00:00(?:\.\d{3})?$/.test(date) || !Number.isFinite(Date.parse(date+'Z')) || new Date(date+'Z').toISOString().slice(0,10) !== date.slice(0,10) || Date.parse(date+'Z') > now.getTime()) throw new Error('Invalid CFTC report date');
+    const [openInterest, long, short] = [row.open_interest_all, row.noncomm_positions_long_all, row.noncomm_positions_short_all].map(Number);
+    if (![openInterest,long,short].every(Number.isSafeInteger) || openInterest <= 0 || long > openInterest || short > openInterest || history.has(date.slice(0,10))) throw new Error('Invalid CFTC position');
+    history.set(date.slice(0,10), {long,short,openInterest});
   }
-  if (periods.length < 2 || new Set(periods).size !== periods.length || periods.some((p, i) => i > 0 && p <= periods[i - 1])) throw new Error('Invalid period order');
-  const lastPeriod = periods.at(-1)!;
-  const periodEnd = global ? new Date(Date.UTC(Number(lastPeriod.slice(0,4)),Number(lastPeriod.at(-1))*3,0)).toISOString().slice(0,10) : lastPeriod;
-  if (periodEnd > publishedAt.slice(0,10)) throw new Error('Observation after publication');
-  const values = (label: string) => {
-    const matches = rows.filter(r => r[0] === label);
-    if (matches.length !== 1 || matches[0].length !== periods.length + 1) throw new Error(`Missing/changed row ${label}`);
-    const numbers = matches[0].slice(1).map(v => {
-      if (v === '*' && global) return null; // Rounded small amounts have unknown sign, never treat as zero.
-      if (!/^-?(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(v)) throw new Error('Invalid flow value');
-      const n = Number(v.replaceAll(',', '')) * (global ? 1e9 : 1e6);
-      if (!Number.isSafeInteger(n)) throw new Error('Flow value out of range');
-      return n;
-    });
-    return global ? numbers : numbers.reverse();
-  };
-  const total = values(global ? 'All funds*' : 'Total');
-  const markets = (global ? globalMarkets : usMarkets).map(([id, name]) => ({ id, name, values: values(name) }));
-  // Only mutually exclusive top-level categories; exclude ETF memo rows and subcategories.
-  total.forEach((v, i) => {
-    const sum = markets.reduce((n, m) => n + (m.values[i] ?? 0), 0);
-    if (v === null || Math.abs(sum - v) > markets.length * (global ? 1e9 : 1e6)) throw new Error('Categories do not reconcile');
-  });
-  return { universe, source, publishedAt, retrievedAt: now.toISOString(), quality: global ? 'reported' : 'estimated', periods, total, markets };
+  const periods = [...new Set([...selected.values()].flatMap(history => [...history.keys()]))].sort();
+  if (periods.length < 2 || periods.some((p,i) => i && (Date.parse(p)-Date.parse(periods[i-1])) !== 7*86400000)) throw new Error('Insufficient CFTC weekly history');
+  const markets = cotMarkets.map(([id,name,code]) => {
+    const history = selected.get(code)!;
+    return {id,name,contract:code,positions:periods.map(p => history.get(p) ?? null),values:periods.map(p => {
+      const point = history.get(p);
+      return point ? (point.long-point.short)/point.openInterest*100 : null;
+    })};
+  }).filter(m => m.values.at(-1) !== null && m.values.at(-2) !== null);
+  if (markets.length < 4) throw new Error('Insufficient CFTC market coverage');
+  return {source:cotSource,sourceName:'CFTC',measure:'noncommercial-net-open-interest-percent',periods,markets,retrievedAt:now.toISOString()};
 }
 
 async function getHtml(url: string, contentType = 'text/html') {
@@ -221,10 +182,9 @@ export function parseCryptoBreakdown(input:unknown,stableInput:unknown,now=Date.
   return {...total,groups,count:coins.length,excluded:raw.length-coins.length,observedAt:coins.map(c=>c.updatedAt).sort()[0],source:'https://www.coingecko.com/',sourceName:'CoinGecko',stale:false};
 }
 
-export const sentimentQuerySchema = z.object({dataset:z.enum(['us-flows','global-flows','daily','specialists','crypto-breakdown'])}).strict();
+export const sentimentQuerySchema = z.object({dataset:z.enum(['positioning','daily','specialists','crypto-breakdown'])}).strict();
 const sentimentNotes = {
-  'us-flows':'USD net flows of US long-term mutual funds and ETF net issuance, weekly; excludes money-market funds. Not all US capital flows or daily flows.',
-  'global-flows':'USD net sales of regulated open-end funds, quarterly, including reinvested dividends. Not all global capital or transfers between markets. Do not add to US flows.',
+  positioning:'CFTC weekly non-commercial futures net positions (long minus short) as a percentage of open interest for eight named contracts. Changes are percentage points, not USD fund flows, purchases, or transfers between markets. Tuesday observations are normally released Friday; each contract is a narrow market proxy.',
   daily:'Reference ETF and Coinbase BTC/ETH close-price returns, not fund flows or dividend-adjusted total returns. days covers seven UTC calendar dates; ETF dates use exchange timezone. Missing dates stay null; provisional bars are unfinished. change and change7 are percentages.',
   specialists:'Gold: actual global physically backed ETF net flows in USD at the reported cadence. crypto: change in native USD-pegged stablecoin supply, not BTC/ETH flows or proven new money. fear: daily Bitcoin Fear & Greed index 0–100, not fund flows. Per-feed errors mean unavailable.',
   'crypto-breakdown':'CoinGecko top-100 coverage excluding classified stablecoins; BTC, ETH and remaining altcoins. cap/delta/gain/loss are USD market capitalization, not cash flows; change is percent over rolling 24h. Contribution to rising value uses positive delta/gain; to falling value uses absolute negative delta/loss. Neither is trading volume or proof of money entering/leaving crypto.',
@@ -293,34 +253,27 @@ export function registerSentiment(app: FastifyInstance) {
     }));
     return Object.fromEntries(results);
   }
-  const cache = new Map<Universe, { data?: FlowDataset; checked: number; pending?: Promise<void>; failed?: boolean }>();
-  async function readFlows(universe:Universe){
-    let entry = cache.get(universe);
-    if (!entry) { entry = { checked: 0 }; cache.set(universe, entry); }
-    const current = entry;
-    if (Date.now() - current.checked > (current.failed ? 60000 : 6 * 3600000)) {
-      current.pending ??= (async () => {
+  let cotData: ReturnType<typeof parsePositioning> | undefined, cotChecked = 0, cotFailed = false, cotPending: Promise<void> | undefined;
+  async function readPositioning() {
+    if (Date.now() - cotChecked > (cotFailed ? 60000 : 6 * 3600000)) {
+      cotPending ??= (async () => {
         try {
-          let source = weekly;
-          if (universe === 'global') {
-            const html = await getHtml(listing);
-            const refs = [...new Set(html.match(/\/statistical-report\/ww_q[1-4]_\d{2}\b/g) ?? [])];
-            refs.sort((a, b) => Number(b.slice(-2)) - Number(a.slice(-2)) || b.localeCompare(a));
-            if (!refs.length) throw new Error('No worldwide release');
-            source = `https://www.ici.org${refs[0]}`;
-          }
-          current.data = parseFlows(await getHtml(source), universe, source);
-          current.failed = false;
+          const since = new Date(Date.now() - 12 * 7 * 86400000).toISOString().slice(0,10);
+          const url = new URL(cotApi);
+          url.searchParams.set('$where', `cftc_contract_market_code in (${cotMarkets.map(([, , code]) => `'${code}'`).join(',')}) and report_date_as_yyyy_mm_dd >= '${since}T00:00:00'`);
+          url.searchParams.set('$order', 'report_date_as_yyyy_mm_dd DESC');
+          url.searchParams.set('$limit', '200');
+          cotData = parsePositioning(JSON.parse(await getHtml(url.href, 'application/json')));
+          cotFailed = false;
         } catch (error) {
-          current.failed = true;
-          // Fastify request logging is disabled in production.
-          console.warn('Sentiment source refresh failed', universe, error instanceof Error ? error.message.slice(0, 500) : 'Unknown error');
-        } finally { current.checked = Date.now(); current.pending = undefined; }
+          cotFailed = true;
+          console.warn('Sentiment source refresh failed', 'CFTC', error instanceof Error ? error.message.slice(0, 500) : 'Unknown error');
+        } finally { cotChecked = Date.now(); cotPending = undefined; }
       })();
     }
-    await current.pending;
-    // Verified published reports survive a cold start when ICI denies cloud-host requests.
-    return { ...(current.data ?? iciReports[universe]), stale: !!current.failed, checkedAt: new Date(current.checked).toISOString() };
+    await cotPending;
+    if (!cotData) return { source: cotSource, error: 'ยังอ่านข้อมูล CFTC ไม่ได้' };
+    return { ...cotData, stale: cotFailed, checkedAt: new Date(cotChecked).toISOString() };
   }
   app.get('/api/v1/sentiment/crypto-breakdown',async(_req,reply)=>{
     reply.header('Cache-Control','private, no-store');
@@ -336,15 +289,15 @@ export function registerSentiment(app: FastifyInstance) {
     reply.header('Cache-Control','private, no-store');
     return readSpecialists();
   });
-  app.get<{Querystring:{universe?:string}}>('/api/v1/sentiment',async(req,reply)=>{
-    const universe=req.query.universe??'global';
-    if(universe!=='global'&&universe!=='us')return reply.code(400).send({error:'Invalid universe'});
+  app.get('/api/v1/sentiment/positioning',async(_req,reply)=>{
     reply.header('Cache-Control','private, no-store');
-    return readFlows(universe);
+    const data=await readPositioning();
+    if ('error' in data) reply.code(503);
+    return data;
   });
   return async function readSentiment(input:unknown){
     const {dataset}=sentimentQuerySchema.parse(input);
-    const readers={'us-flows':()=>readFlows('us'),'global-flows':()=>readFlows('global'),daily:readDaily,specialists:readSpecialists,'crypto-breakdown':readCrypto};
+    const readers={positioning:readPositioning,daily:readDaily,specialists:readSpecialists,'crypto-breakdown':readCrypto};
     return {dataset,data:await readers[dataset](),interpretation:sentimentNotes[dataset],freshness:'Shared cached data: stale:false does not mean fetched live for this request; it only means the last refresh did not fail. stale:true means retained data after refresh failure. checkedAt is the last refresh attempt, not the observation date or proof of a successful download. retrievedAt is retrieval time; use source periods/observedAt for observation freshness. Never describe a cached result as just fetched or real-time.'};
   };
 }

@@ -1,85 +1,48 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { parseFlows, parseGold, parseStablecoins, parseFear, parseDailyQuotes, parseCryptoCandles, dailyWindow, parseCryptoBreakdown, registerSentiment } from '../src/sentiment.js';
+import { parsePositioning, parseGold, parseStablecoins, parseFear, parseDailyQuotes, parseCryptoCandles, dailyWindow, parseCryptoBreakdown, registerSentiment } from '../src/sentiment.js';
 
-test('ICI flows: units, chronology, missing values, cache failures and no double counting', async (t) => {
-  const table = (rows: (string | number)[][]) => '<table>' + rows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</table>';
-  const heading = '<h1>Report</h1><time datetime="2026-09-22T17:12:37Z"></time>';
-  const global = heading + 'Billions of US dollars' + table([['Assets', 95000]]) + table([
-    ['', 2025, 2026], ['Q4', 'Q1', 'Q2'], ['All funds*', 25, 25, 25], ['Equity', -10, 10, 10], ['Bond', 20, 10, 10], ['Balanced/Mixed', 5, 1, 1], ['Money market', 10, 1, 1], ['Real Estate', '*', 1, 1], ['Other', 0, 1, 1], ['Guaranteed', 0, 1, 1], ['ETFs', 999, 999, 999],
-  ]) + 'Net sales are new sales plus reinvested dividends less redemptions plus net exchanges.';
-  const parsed = parseFlows(global, 'global', 'https://www.ici.org/statistical-report/ww_q2_26');
-  assert.deepEqual(parsed.periods, ['2025 Q4', '2026 Q1', '2026 Q2']);
-  assert.equal(parsed.markets[0].values[0], -10e9);
-  assert.equal(parsed.markets.find(m => m.id === 'property')!.values[0], null);
-  assert.equal(parsed.total[2], 25e9);
-  assert.throws(() => parseFlows(global.replace('Net sales are new sales', 'Net assets'), 'global', parsed.source));
-  assert.throws(() => parseFlows(global.replace('<td>25</td>', '<td>95000</td>'), 'global', parsed.source));
-  assert.throws(() => parseFlows(global, 'global', parsed.source.replace('q2', 'q3')));
-  assert.throws(() => parseFlows(global.replace('2026-09-22T17:12:37Z','2099-09-22T17:12:37Z'), 'global', parsed.source));
-  assert.throws(() => parseFlows(global, 'global', parsed.source, new Date('2026-03-01')));
-  assert.throws(() => parseFlows(global.replace('2026-09-22T17:12:37Z','2026-03-01T17:12:37Z'), 'global', parsed.source));
-  const weekly = heading.replace('2026-09-22','2026-10-07') + 'Estimated Fund Flows<br>Millions of dollars' + table([
-    ['', '9/30/2026', '9/23/2026'], ['Equity', -4, 10], ['Domestic', 999, 999], ['Bond', 2, 2], ['Hybrid', -1, 1], ['Commodity', -1, 1], ['Total', -4, 14],
-  ]);
-  const us = parseFlows(weekly, 'us', 'https://www.ici.org/research/stats/combined_flows');
-  assert.deepEqual(us.periods, ['2026-09-23', '2026-09-30']);
-  assert.deepEqual(us.markets[0].values, [10e6, -4e6]);
-  assert.equal(us.markets.length, 4);
-  assert.throws(() => parseFlows(weekly.replace('9/30/2026', '2/30/2026'), 'us', us.source));
-  assert.throws(() => parseFlows(weekly.replace('Millions of dollars', 'Billions of dollars'), 'us', us.source));
-  assert.throws(() => parseFlows(weekly.replace('<td>-4</td>', '<td>N/A</td>'), 'us', us.source));
-  assert.throws(() => parseFlows(weekly.replace('<td>-4</td>', '<td>*</td>'), 'us', us.source));
-
-  let calls = 0, unavailable = false, now = Date.now();
-  const warnings = t.mock.method(console, 'warn', () => {});
-  t.mock.method(Date, 'now', () => now);
-  t.mock.method(globalThis, 'fetch', async () => {
+test('CFTC positioning: contract scope, weekly chronology, units, cache and partial failures', async t => {
+  const codes=['13874A','244041','244042','043602','088691','067411','133741','146021'];
+  const rows=codes.flatMap((code,i)=>['2026-09-22','2026-09-29'].map((date,week)=>({
+    cftc_contract_market_code:code,market_and_exchange_names:'Market '+code,
+    report_date_as_yyyy_mm_dd:date+'T00:00:00.000',open_interest_all:'1000',
+    noncomm_positions_long_all:String(300+i*10+week*20),noncomm_positions_short_all:'200',
+  })));
+  const parsed=parsePositioning(rows,new Date('2026-10-08'));
+  assert.deepEqual(parsed.periods,['2026-09-22','2026-09-29']);
+  assert.equal(parsed.markets[0].values[1],12);
+  assert.equal(parsed.markets[0].positions[1]?.long,320);
+  assert.equal(parsed.markets.length,8);
+  assert.throws(()=>parsePositioning(rows.map((r,i)=>i===0?{...r,open_interest_all:'0'}:r),new Date('2026-10-08')));
+  assert.throws(()=>parsePositioning([...rows,rows[0]],new Date('2026-10-08')));
+  assert.throws(()=>parsePositioning(rows.map((r,i)=>i===0?{...r,report_date_as_yyyy_mm_dd:'2099-09-22T00:00:00.000'}:r),new Date('2026-10-08')));
+  assert.throws(()=>parsePositioning(rows.filter(r=>r.report_date_as_yyyy_mm_dd.includes('09-29')),new Date('2026-10-08')));
+  let calls=0,unavailable=false,now=Date.now();
+  const warnings=t.mock.method(console,'warn',()=>{});
+  t.mock.method(Date,'now',()=>now);
+  t.mock.method(globalThis,'fetch',async (url:string|URL|Request)=>{
     calls++;
-    if (unavailable) throw new Error('offline');
-    return new Response(weekly, { headers: { 'content-type': 'text/html' } });
+    assert.match(String(url),/publicreporting\.cftc\.gov\/resource\/6dca-aqww\.json/);
+    if(unavailable)throw new Error('offline');
+    return new Response(JSON.stringify(rows),{headers:{'content-type':'application/json'}});
   });
-  const app = Fastify(); const readSentiment = registerSentiment(app); t.after(() => app.close());
-  await assert.rejects(async () => readSentiment({dataset:'http://localhost/secret'}));
-  await assert.rejects(async () => readSentiment({dataset:'us-flows',url:'https://example.com'}));
-  assert.equal((await app.inject('/api/v1/sentiment?universe=bad')).statusCode, 400);
-  assert.equal(calls, 0);
-  const [first, concurrent, evidence] = await Promise.all([app.inject('/api/v1/sentiment?universe=us'), app.inject('/api/v1/sentiment?universe=us'), readSentiment({dataset:'us-flows'})]);
-  assert.deepEqual(evidence.data, first.json());
-  assert.equal(evidence.dataset, 'us-flows');
-  assert.equal(first.statusCode, 200); assert.equal(concurrent.statusCode, 200); assert.equal(calls, 1);
-  assert.equal(first.json().stale, false);
-  unavailable = true; now += 7 * 3600000;
-  const stale = await app.inject('/api/v1/sentiment?universe=us');
-  assert.deepEqual((await readSentiment({dataset:'us-flows'})).data, stale.json());
-  assert.equal(stale.statusCode, 200); assert.equal(stale.json().stale, true);
-  assert.deepEqual(stale.json().total, first.json().total);
-  await app.inject('/api/v1/sentiment?universe=us'); assert.equal(calls, 2);
-  const empty = Fastify(); registerSentiment(empty); t.after(() => empty.close());
-  const backup = await empty.inject('/api/v1/sentiment?universe=us');
-  assert.equal(backup.statusCode, 200);
-  assert.equal(backup.json().stale, true);
-  assert.equal(backup.json().total.at(-1), -1969e6);
-  assert.equal(backup.json().periods.at(-1), '2026-09-30');
-  assert.ok(Date.parse(backup.json().retrievedAt) < now);
-  assert.deepEqual(warnings.mock.calls.at(-1)!.arguments, ['Sentiment source refresh failed', 'us', 'offline']);
-  t.mock.method(globalThis, 'fetch', async () => new Response('unavailable', {status: 503}));
-  now += 60001;
-  await empty.inject('/api/v1/sentiment?universe=us');
-  assert.deepEqual(warnings.mock.calls.at(-1)!.arguments, ['Sentiment source refresh failed', 'us', 'Source HTTP 503 (www.ici.org)']);
-  const worldwide = (await empty.inject('/api/v1/sentiment?universe=global')).json();
-  assert.equal(worldwide.stale, true);
-  assert.equal(worldwide.total.at(-1), 1034e9);
-  assert.equal(worldwide.periods.at(-1), '2026 Q2');
-  unavailable = false;
-  t.mock.method(globalThis, 'fetch', async () => new Response(weekly, {headers: {'content-type': 'text/html'}}));
-  now += 60001;
-  const recovered = (await empty.inject('/api/v1/sentiment?universe=us')).json();
-  assert.equal(recovered.stale, false);
-  assert.deepEqual(recovered.total, us.total);
+  const app=Fastify(),readSentiment=registerSentiment(app);t.after(()=>app.close());
+  await assert.rejects(()=>readSentiment({dataset:'us-flows'}));
+  await assert.rejects(()=>readSentiment({dataset:'positioning',url:'https://example.com'}));
+  const [first,concurrent,evidence]=await Promise.all([app.inject('/api/v1/sentiment/positioning'),app.inject('/api/v1/sentiment/positioning'),readSentiment({dataset:'positioning'})]);
+  assert.equal(first.statusCode,200);assert.equal(concurrent.statusCode,200);assert.equal(calls,1);
+  assert.deepEqual(evidence.data,first.json());assert.equal(first.json().stale,false);
+  unavailable=true;now+=7*3600000;
+  const stale=await app.inject('/api/v1/sentiment/positioning');
+  assert.equal(stale.json().stale,true);assert.deepEqual(stale.json().markets,first.json().markets);
+  assert.deepEqual(warnings.mock.calls.at(-1)!.arguments,['Sentiment source refresh failed','CFTC','offline']);
+  const empty=Fastify();registerSentiment(empty);t.after(()=>empty.close());
+  assert.equal((await empty.inject('/api/v1/sentiment/positioning')).statusCode,503);
+  unavailable=false;now+=60001;
+  assert.equal((await empty.inject('/api/v1/sentiment/positioning')).json().stale,false);
 });
-
 
 test('Specialists: actual flows vs supply vs index, aligned dates, partial failure and cache', async t => {
   const dates = ['2026-04-30','2026-05-31','2026-06-30','2026-07-31','2026-08-31','2026-09-30'];
@@ -218,26 +181,24 @@ test('Crypto hierarchy: cap-weighted changes, 80% contribution, stablecoin exclu
   const empty=Fastify();registerSentiment(empty);t.after(()=>empty.close());assert.equal((await empty.inject('/api/v1/sentiment/crypto-breakdown')).statusCode,503);
 });
 
-test('Sentiment reader preserves cold-start fallback and per-source errors without invented values',async t=>{
+test('Sentiment reader preserves per-source errors without invented values',async t=>{
   t.mock.method(console,'warn',()=>{});
   let calls=0;
   t.mock.method(globalThis,'fetch',async()=>{calls++;throw Error('offline');});
   const app=Fastify(),readSentiment=registerSentiment(app);t.after(()=>app.close());
-  for(const dataset of ['us-flows','global-flows','daily','specialists','crypto-breakdown']){
+  for(const dataset of ['positioning','daily','specialists','crypto-breakdown']){
     const evidence=await readSentiment({dataset});
     assert.equal(evidence.dataset,dataset);assert.ok(evidence.interpretation.length);
     assert.match(evidence.freshness,/stale:false does not mean fetched live/);
     assert.match(evidence.freshness,/checkedAt/);
     const data=evidence.data as any;
-    if(dataset.endsWith('-flows')){
-      assert.equal(data.stale,true);assert.ok(data.source.startsWith('https://www.ici.org/'));
-      assert.ok(data.publishedAt);assert.ok(data.retrievedAt);assert.ok(data.checkedAt);
-    }else if(dataset==='daily')assert.ok(data.markets.every((m:any)=>m.error&&m.stale&&!m.history));
+    if(dataset==='positioning')assert.ok(data.error&&data.source.includes('cftc.gov'));
+    else if(dataset==='daily')assert.ok(data.markets.every((m:any)=>m.error&&m.stale&&!m.history));
     else if(dataset==='specialists')assert.ok(Object.values(data).every((m:any)=>m.error&&m.source));
     else assert.ok(data.error);
   }
   const before=calls;
-  await assert.rejects(()=>readSentiment({dataset:'us-flows',url:'http://localhost'}));
+  await assert.rejects(()=>readSentiment({dataset:'positioning',url:'http://localhost'}));
   await assert.rejects(()=>readSentiment({dataset:'unknown'}));
   assert.equal(calls,before);
 });

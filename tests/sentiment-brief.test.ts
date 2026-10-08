@@ -1,15 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-const {briefFlowState}=await import(new URL('../dist/sentiment-brief.js',import.meta.url).href);
-test('Morning brief uses the latest flow period and handles all-out, all-in and missing categories',()=>{
-  const dataset={periods:['old','latest'],total:[999,-20],markets:[{id:'equity',values:[900,-50]},{id:'bond',values:[10,30]},{id:'mixed',values:[20,-1]},{id:'unknown',values:[1,null]}]};
-  const result=briefFlowState(dataset);
-  assert.equal(result.into.id,'bond');assert.equal(result.out.id,'equity');assert.equal(result.total,-20);
-  assert.deepEqual(result.rows.map((m:any)=>m.id),['bond','equity','mixed']);assert.equal(result.max,50);
-  const allOut={...dataset,markets:[{id:'equity',values:[2,-50]},{id:'bond',values:[3,-30]}]};
-  assert.equal(briefFlowState(allOut).into,undefined);assert.equal(briefFlowState(allOut).out.id,'equity');
-  const allIn={...dataset,markets:[{id:'equity',values:[2,50]},{id:'bond',values:[3,30]}]};
-  assert.equal(briefFlowState(allIn).out,undefined);assert.equal(briefFlowState(allIn).into.id,'equity');
-  assert.equal(briefFlowState({...dataset,markets:[{id:'equity',values:[2,0]}]}).into,undefined);
-  assert.equal(briefFlowState({...dataset,markets:[]}).out,undefined);
+const {briefPositionState}=await import(new URL('../dist/sentiment-brief.js',import.meta.url).href);
+test('Morning brief ranks the latest CFTC weekly change, not absolute positioning',()=>{
+  const dataset={periods:['old','latest'],markets:[{id:'us-stocks',values:[50,40]},{id:'bonds',values:[-30,-20]},{id:'gold',values:[20,21]},{id:'missing',values:[1,null]}]};
+  const result=briefPositionState(dataset);
+  assert.equal(result.up.id,'bonds');assert.equal(result.down.id,'us-stocks');
+  assert.deepEqual(result.rows.map((m:any)=>m.id),['bonds','gold','us-stocks']);
+  assert.equal(result.max,10);
+  assert.equal(briefPositionState({...dataset,markets:[]}).up,undefined);
 });
