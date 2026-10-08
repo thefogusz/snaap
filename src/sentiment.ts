@@ -222,6 +222,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
   }
   let cryptoData:ReturnType<typeof parseCryptoBreakdown>|undefined,cryptoChecked=0,cryptoFailed=false,cryptoPending:Promise<void>|undefined;
   async function readCrypto(){
+    cryptoData??=await loadSnapshot<ReturnType<typeof parseCryptoBreakdown>>('crypto-breakdown',36*3600000);
     if(Date.now()-cryptoChecked>(cryptoFailed?60000:15*60000)){
       cryptoPending??=(async()=>{
         try{
@@ -247,6 +248,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
       let entry=dailyCache.get(market.id);
       if(!entry){entry={checked:0};dailyCache.set(market.id,entry);}
       const current=entry,crypto=market.category==='crypto';
+      current.data??=await loadSnapshot<DailyData>('daily:'+market.id,(crypto?2:5)*86400000);
       if(Date.now()-current.checked>(current.failed?60000:5*60000)){
         current.pending??=(async()=>{
           try{
@@ -288,6 +290,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
       let entry = specialistCache.get(feed.id);
       if (!entry) { entry = { checked: 0 }; specialistCache.set(feed.id, entry); }
       const current = entry;
+      current.data??=await loadSnapshot<Specialist>('specialist:'+feed.id,feed.id==='gold'?60*86400000:2*86400000);
       if (Date.now() - current.checked > (current.failed ? 60000 : feed.ttl)) {
         current.pending ??= (async () => {
           try { const next=feed.parse(JSON.parse(await getHtml(feed.url, 'application/json')));
@@ -309,6 +312,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool) {
   }
   let cotData: ReturnType<typeof parsePositioning> | undefined, cotChecked = 0, cotFailed = false, cotPending: Promise<void> | undefined;
   async function readPositioning() {
+    cotData??=await loadSnapshot<ReturnType<typeof parsePositioning>>('positioning',21*86400000);
     if (Date.now() - cotChecked > (cotFailed ? 60000 : 3600000)) {
       cotPending ??= (async () => {
         try {

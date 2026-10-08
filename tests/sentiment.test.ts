@@ -21,14 +21,14 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
   assert.throws(()=>parsePositioning([...rows,rows[0]],new Date('2026-10-08')));
   assert.throws(()=>parsePositioning(rows.map((r,i)=>i===0?{...r,report_date_as_yyyy_mm_dd:'2099-09-22T00:00:00.000'}:r),new Date('2026-10-08')));
   assert.throws(()=>parsePositioning(rows.filter(r=>r.report_date_as_yyyy_mm_dd.includes('09-29')),new Date('2026-10-08')));
-  let calls=0,unavailable=false,now=Date.now();
+  let calls=0,unavailable=false,now=Date.now(),rowsForFetch=rows;
   const warnings=t.mock.method(console,'warn',()=>{});
   t.mock.method(Date,'now',()=>now);
   t.mock.method(globalThis,'fetch',async (url:string|URL|Request)=>{
     calls++;
     assert.match(String(url),/publicreporting\.cftc\.gov\/resource\/6dca-aqww\.json/);
     if(unavailable)throw new Error('offline');
-    return new Response(JSON.stringify(rows),{headers:{'content-type':'application/json'}});
+    return new Response(JSON.stringify(rowsForFetch),{headers:{'content-type':'application/json'}});
   });
   const snapshots=new Map<string,{observed_at:Date;payload:unknown}>();
   const db={query:async(sql:string,params:unknown[])=>{
@@ -52,6 +52,13 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
   const restored=await empty.inject('/api/v1/sentiment/positioning');
   assert.equal(restored.statusCode,200);assert.equal(restored.json().stale,true);
   assert.deepEqual(restored.json().markets,first.json().markets);
+  unavailable=false;
+  rowsForFetch=rows.map(row=>({...row,report_date_as_yyyy_mm_dd:row.report_date_as_yyyy_mm_dd.replace('2026-09-22','2026-09-15').replace('2026-09-29','2026-09-22')}));
+  const regressed=Fastify();registerSentiment(regressed,db);t.after(()=>regressed.close());
+  const regression=await regressed.inject('/api/v1/sentiment/positioning');
+  assert.equal(regression.statusCode,200);assert.equal(regression.json().stale,true);
+  assert.deepEqual(regression.json().periods,first.json().periods);
+  rowsForFetch=rows;
   unavailable=false;now+=60001;
   assert.equal((await empty.inject('/api/v1/sentiment/positioning')).json().stale,false);
   unavailable=true;now+=22*86400000;
