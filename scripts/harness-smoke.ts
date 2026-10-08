@@ -1,3 +1,4 @@
+import { suppliedDraft } from "./provider-request.js";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdir, unlink } from "node:fs/promises";
@@ -185,7 +186,11 @@ const provider = http.createServer(async (req, res) => {
         .at(-1)
         ?.content?.find?.((c: any) => c.type === "input_text")
         ?.text?.split("\n")[0] ?? "text-only";
-    if (text === "slow" && body.input.at(-1)?.type !== "function_call_output")
+    // Tool outputs may be followed by trusted developer guidance, so look past it.
+    const afterTools =
+      body.input.findLast((m: any) => m.type === "function_call_output" || m.role === "user")?.type ===
+      "function_call_output";
+    if (text === "slow" && !afterTools)
       await new Promise((resolve) => setTimeout(resolve, 2000));
     if (text === "provider-error") {
       res.writeHead(500);
@@ -193,7 +198,7 @@ const provider = http.createServer(async (req, res) => {
       return;
     }
     let result;
-    if (body.input.at(-1)?.type === "function_call_output")
+    if (afterTools)
       result = prose(
         body.input.some(
           (m: any) =>
@@ -224,11 +229,7 @@ const provider = http.createServer(async (req, res) => {
         ),
       );
     else {
-      const current = JSON.parse(
-        body.instructions
-          .split("Current editable draft (not activated): ")[1]
-          .split("\nEdit the current draft")[0],
-      );
+      const current = suppliedDraft(body) as any;
       const draft = specFor(text, current);
       if (text === "unsupported") draft.pairs = ["NOTREAL/USDT"];
       if (text === "too-many-conditions")
@@ -408,7 +409,7 @@ try {
   assert.deepEqual(detail.draft, accepted);
   const analysis = await turn('text-only', {draft: detail.draft});
   assert.equal(analysis.draft, null);
-  const supplied = JSON.parse(requests.at(-1).instructions.split('Current editable draft (not activated): ')[1].split('\nEdit the current draft')[0]);
+  const supplied = suppliedDraft(requests.at(-1));
   assert.deepEqual(supplied, strategySchema.parse(detail.draft));
   assert.equal((await call(`/conversations/${conv.id}`)).draft_revision, detail.draft_revision, 'analysis cannot mutate the saved draft');
   const revised = await turn('short', {draft: detail.draft});

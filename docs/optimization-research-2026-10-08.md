@@ -19,6 +19,17 @@ Snapshot: `2f54db3` (`main`) · งานนี้เป็นการวิจ
 
 หมายเหตุที่ต่างจากข้อเสนอเดิม: ไม่หยุด poll ใน tab ที่ซ่อนแบบเด็ดขาด เพราะผู้ใช้ที่เปิดเสียงหรือ desktop notification ต้องการแจ้งเตือนขณะ tab อยู่เบื้องหลัง และยังไม่ได้ใส่ `immutable`/versioned URL ให้ JS/CSS เพราะ dynamic import ภายใน JS ยังไม่มี versioning (เสี่ยงโหลดไฟล์ต่างรุ่นกัน) ยังไม่ได้แปลง `snaap-social-product.png` (og:image) ผลทดสอบทั้งหมด: `npm test` 608/608, typecheck ผ่าน
 
+## รอบที่สอง: AI prompt caching
+
+| ข้อ | สิ่งที่เปลี่ยน | ตรวจแล้ว |
+|---|---|---|
+| 4.1 | `instructions` คงที่ทุก request: evidence, draft, editor focus และ `image-v1` ย้ายไปเป็น `developer` message เดียวที่วางไว้ก่อนข้อความผู้ใช้ล่าสุด | `test:harness` ยืนยันว่า instructions ของทุก request ในชุดทดสอบเหมือนกันทุก byte |
+| 4.2 | `read_skill` และ repair note ไม่แก้ `instructions` อีก แต่ต่อเป็น developer message หลัง tool output ของรอบนั้น | `test:harness-smoke` (skill/tool limits) ผ่าน |
+| 4.4 | อ่าน `usage.input_tokens_details.cached_tokens` เก็บใน trace (`cachedInputTokens`) และคิดเงินด้วย `AI_*_CACHED_INPUT_USD_PER_MILLION` (ถ้าไม่ตั้งค่า จะคิดเต็มราคา) | `tests/ai-image-budget.test.ts` |
+| 4.9 | อ่าน skill files ครั้งเดียวต่อ process | — |
+
+ยังไม่ได้ทดสอบกับ provider จริง (ต้องใช้ API ที่เสียเงิน) ก่อน deploy ให้รัน `npm run test:harness:provider` หนึ่งครั้ง เพื่อยืนยันว่า OpenRouter/GLM รับ `role: "developer"` ใน Responses input และดู `cachedInputTokens` ใน `agent_runs.trace` ว่ามีค่ามากกว่า 0 ตั้งแต่รอบที่สองเป็นต้นไป ส่วน `prompt_cache_key` และ `include: reasoning.encrypted_content` ยังไม่ได้เปิด เพราะยังไม่ได้ทดสอบกับ provider
+
 ## สรุปลำดับความสำคัญ
 
 | # | เรื่อง | ด้าน | ผลที่คาดไว้ | แรง | เสี่ยง |

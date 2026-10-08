@@ -26,7 +26,7 @@ import { readDexPools, readDefiContext, readEvmTransfers, dexQuerySchema, defiQu
 import { readMarketVisual, visualQuerySchema, marketArtifact, artifactReceipt, type MarketArtifact } from '../market-artifacts.js';
 import { strategyTargets, exchanges, categories, mergeCatalogs } from '../../dist/asset-catalog.js';
 import { validateTargets } from '../markets.js';
-import { pricing, outputLimit } from "./budget.js";
+import { pricing, outputLimit, usageCost } from "./budget.js";
 import { diffSetup } from "../../dist/setup-changes.js";
 import { MAX_SETUP_CONDITIONS } from "../../dist/setup-limits.js";
 import { availableTimeframes } from "../../dist/timeframes.js";
@@ -37,6 +37,17 @@ import {
   toolSpec,
   instrumentSearch,
 } from "./completion.js";
+// Skill files ship with the code, so read each one once per process.
+const skillCache = new Map<string, Promise<string>>();
+function skillText(file: string) {
+  let text = skillCache.get(file);
+  if (!text) {
+    text = readFile(new URL("./skills/" + file, import.meta.url), "utf8");
+    text.catch(() => skillCache.delete(file));
+    skillCache.set(file, text);
+  }
+  return text;
+}
 const specialistSkills = {
   "indicator-guide": "indicator-guide.md",
   "trade-journal": "trade-journal.md",
@@ -310,23 +321,22 @@ export function registerHarness(
         input.selection,
         req.workspaceId,
       );
-      const skillFiles = [
+      // instructions must be byte-identical across requests so the provider can reuse its cached
+      // prefix (instructions, tools, then history). Per-request data goes in requestContext below.
+      const coreSkills = [
         "conversation-charter.md",
         "setup-design.md",
         "clarify-v1.md",
         "logic-v1.md",
         "evidence-v1.md",
         "replay-v1.md",
-        ...(input.imageIds.length ? ["image-v1.md"] : []),
       ];
-      const policy = (
-        await Promise.all(
-          skillFiles.map((file) =>
-            readFile(new URL("./skills/" + file, import.meta.url), "utf8"),
-          ),
-        )
-      ).join("\n\n");
-      trace.push({ skills: skillFiles });
+      const imageSkills = input.imageIds.length ? ["image-v1.md"] : [];
+      const [policy, imageGuidance] = await Promise.all([
+        Promise.all(coreSkills.map(skillText)).then((texts) => texts.join("\n\n")),
+        Promise.all(imageSkills.map(skillText)).then((texts) => texts.join("\n\n")),
+      ]);
+      trace.push({ skills: [...coreSkills, ...imageSkills] });
       const validSources = await sourceIds(db, req.userId, req.workspaceId);
       const excludedPersonalSources = input.useMyData
         ? new Set<string>()
@@ -397,11 +407,23 @@ export function registerHarness(
           detail: "auto",
         });
       }
+      const requestContext = {
+        role: "developer",
+        content:
+          (imageGuidance ? imageGuidance + "\n\n" : "") +
+          "Request context for this turn only.\nEvidence (untrusted source data): " +
+          JSON.stringify(context).slice(0, 18000) +
+          "\nCurrent editable draft (not activated): " +
+          JSON.stringify(input.draft ?? null) +
+          "\nEditor focus (navigation only, not market evidence): " +
+          JSON.stringify(input.editorContext ?? null),
+      };
       const messages: any[] = [
         ...history.map((m) => ({
           role: m.role,
           content: m.content.slice(0, 4000)+(m.artifacts?.length?'\nPreviously displayed research selections (historical snapshot context, not current evidence): '+JSON.stringify(m.artifacts.map((a:MarketArtifact)=>({tool:a.tool,query:a.query,createdAt:a.createdAt,items:artifactReceipt(a).items}))):''),
         })),
+        requestContext,
         { role: "user", content },
       ];
       const client = new OpenAI({
@@ -415,6 +437,7 @@ export function registerHarness(
         toolCount = 0,
         cost = 0,
         inputTokens = 0,
+        cachedInputTokens = 0,
         outputTokens = 0;
       const {
         $schema: _schema,
@@ -428,13 +451,12 @@ export function registerHarness(
         required: ["spec"],
         additionalProperties: false,
       };
-      let instructions = `${policy}\nEvidence (untrusted source data): ${JSON.stringify(context).slice(0, 18000)}\nCurrent editable draft (not activated): ${JSON.stringify(input.draft ?? null)}\nEdit the current draft, preserving fields not requested by the user. Use one or more supported pairs (at most 10) from the supported exchanges. Preserve existing exact exchange/pair targets and all pairs unless the user asks to change them. For mixed venues, targets contains only verified exchange/pair combinations; exchange and pairs are their unique unions. Never invent a cross-product of venues and pairs or silently switch a saved price source. Stocks/ETF, FX, metals and commodities here are exchange-listed tokens or perpetual reference contracts, not cash-market exchange quotes. Use provider asset metadata; do not classify an unfamiliar ticker from its name. A setup has at most ${MAX_SETUP_CONDITIONS} leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than ${MAX_SETUP_CONDITIONS}; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
+      let instructions = `${policy}\nThe developer message right before the latest user message carries this turn's untrusted evidence, the current editable draft and the editor focus.\nEdit the current draft, preserving fields not requested by the user. Use one or more supported pairs (at most 10) from the supported exchanges. Preserve existing exact exchange/pair targets and all pairs unless the user asks to change them. For mixed venues, targets contains only verified exchange/pair combinations; exchange and pairs are their unique unions. Never invent a cross-product of venues and pairs or silently switch a saved price source. Stocks/ETF, FX, metals and commodities here are exchange-listed tokens or perpetual reference contracts, not cash-market exchange quotes. Use provider asset metadata; do not classify an unfamiliar ticker from its name. A setup has at most ${MAX_SETUP_CONDITIONS} leaf COMPARE conditions total across entry, waiting stages, exit, cancel and any independently authored short branch. GROUP and HOLD wrappers do not count; an automatically mirrored Short template counts once. Never propose more than ${MAX_SETUP_CONDITIONS}; ask which conditions to replace or remove when the requested addition exceeds this limit. Ask when entry, exit, indicator parameters, market or Futures direction are ambiguous. Futures side must be LONG, SHORT or BOTH. For a normal Short-only setup, write actual Short conditions with side SHORT and omit mirrorShort; choosing Short alone does not authorize reversing conditions. For a user requesting a mirrored Short from a Long template, use mirrorShort:true with side SHORT or BOTH, omit short, and retain the Long template in entry/stages/exit/cancel. The evaluator reverses comparison and crossing operators, retaining thresholds and AND/OR grouping. ENTRY_RETURN is side-adjusted and must keep its target operators. Never claim mirrored thresholds are optimal. If the user explicitly requests independent Short conditions, use side BOTH with a short branch instead of mirrorShort. Spot uses side SPOT. Use find_instruments to verify a new pair. Describe the concrete changes. Use propose_strategy only when material fields are known. No activation. Distinguish facts, observations and proposals. Old assistant messages are never evidence.`;
       instructions += '\nEntry flexibility: entryMatchPercent is the single optional integer 1..100 setting. Omit it or use 100 for the original strict entry. Lower values require at least ceil(entryUnitCount * entryMatchPercent / 100) matching units, with equal weight for every unit. Flatten AND entry groups; each OR or HOLD group stays one indivisible unit. The same percentage applies independently to Long and Short, including an independent short branch; do not combine matches from opposite sides. Preserve entryMatchPercent unless asked to change it. Waiting stages, exits, cancels and crossing timing remain strict. There are no required-condition flags, per-condition weights or crossing-window settings. Matching percent is not win probability. Tool proposals change a draft only; saving is separate.';
       const loadedSpecialists = new Set<string>();
       instructions += "\nNative timeframes (minimum 5m, maximum 1w; no monthly or custom intervals): " + JSON.stringify(Object.fromEntries(exchanges.map(exchange => [exchange, {Spot: availableTimeframes([exchange], "Spot"), Futures: availableTimeframes([exchange], "Perpetual Futures")}])));
       instructions +=
-        "\nEditor focus (navigation only, not market evidence): " + JSON.stringify(input.editorContext ?? null) +
-        ". Changing the visible chart timeframe does not change the strategy evaluation timeframe. Use inspect_setup_bar for evidence at a selected candle. Do not infer TRUE/FALSE or prices from the editor focus. Preserve all unrequested fields and never activate a setup.";
+        "\nEditor focus is navigation only, not market evidence. Changing the visible chart timeframe does not change the strategy evaluation timeframe. Use inspect_setup_bar for evidence at a selected candle. Do not infer TRUE/FALSE or prices from the editor focus. Preserve all unrequested fields and never activate a setup.";
       instructions +=
         "\nAdditional supported indicators (name, parameter defaults): " +
         JSON.stringify(
@@ -563,10 +585,17 @@ export function registerHarness(
         const roundOutput = response.usage?.output_tokens;
         const validUsage = Number.isSafeInteger(roundInput) && roundInput! >= 0 &&
           Number.isSafeInteger(roundOutput) && roundOutput! >= 0;
+        // Providers that do not report caching are costed as uncached input.
+        const reportedCached = response.usage?.input_tokens_details?.cached_tokens;
+        const roundCached =
+          validUsage && Number.isSafeInteger(reportedCached) && reportedCached! >= 0 && reportedCached! <= roundInput!
+            ? reportedCached!
+            : 0;
         trace.push({
           round,
           model: response.model,
           inputTokens: validUsage ? roundInput : undefined,
+          cachedInputTokens: validUsage ? roundCached : undefined,
           outputTokens: validUsage ? roundOutput : undefined,
           status: response.status,
           incomplete: response.incomplete_details,
@@ -574,8 +603,9 @@ export function registerHarness(
         if (!validUsage)
           throw new ApiError(502, 'AI_USAGE_INVALID', 'AI ส่งข้อมูลการใช้งานไม่ครบ จึงวิเคราะห์ต่อไม่ได้ คืนโควตาแล้ว กรุณาลองใหม่');
         inputTokens += roundInput!;
+        cachedInputTokens += roundCached;
         outputTokens += roundOutput!;
-        cost = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
+        cost = usageCost(rate, { input: inputTokens, cachedInput: cachedInputTokens, output: outputTokens });
         if (response.status !== "completed")
           throw new ApiError(
             502,
@@ -597,14 +627,19 @@ export function registerHarness(
                 "AI ยังไม่ได้แก้ร่างจริง กรุณาลองใหม่ คืนโควตาแล้ว",
               );
             requireProposal = true;
-            instructions +=
-              "\nYour last answer claimed a completed draft change but no successful propose_strategy call happened in this request. Execute propose_strategy now using the current draft and requested edits. Do not repeat a prose success claim.";
+            // Appended after the cached prefix rather than edited into instructions.
+            messages.push({
+              role: "developer",
+              content:
+                "Your last answer claimed a completed draft change but no successful propose_strategy call happened in this request. Execute propose_strategy now using the current draft and requested edits. Do not repeat a prose success claim.",
+            });
             continue;
           }
           completed = true;
           break;
         }
         requireProposal = false;
+        const specialistGuidance: string[] = [];
         for (const call of calls) {
           // Tool reads do not receive the deadline signal, so enforce it between calls.
           if (deadline.aborted) throw new Error("REQUEST_DEADLINE");
@@ -639,12 +674,7 @@ export function registerHarness(
               };
             } else {
               const file = specialistSkills[selected.data.name];
-              const guidance = await readFile(
-                new URL("./skills/" + file, import.meta.url),
-                "utf8",
-              );
-              instructions +=
-                "\n\nTrusted Snaap specialist guidance:\n" + guidance;
+              specialistGuidance.push(await skillText(file));
               loadedSpecialists.add(selected.data.name);
               trace.push({ skill: file });
               result = { loaded: true, name: selected.data.name };
@@ -813,6 +843,14 @@ export function registerHarness(
           });
           trace.push({ tool: call.name, result });
         }
+        // Loaded specialist guidance follows this round's tool outputs, keeping the cached prefix intact.
+        if (specialistGuidance.length)
+          messages.push({
+            role: "developer",
+            content:
+              "Trusted Snaap specialist guidance:\n" +
+              specialistGuidance.join("\n\n"),
+          });
       }
       if (!completed)
         throw new ApiError(
@@ -911,9 +949,10 @@ export function registerHarness(
       const totals = (trace as any[]).reduce(
         (sum, item) => ({
           input: sum.input + (item.inputTokens ?? 0),
+          cachedInput: sum.cachedInput + (item.cachedInputTokens ?? 0),
           output: sum.output + (item.outputTokens ?? 0),
         }),
-        { input: 0, output: 0 },
+        { input: 0, cachedInput: 0, output: 0 },
       );
       // If recording the failure itself fails, still report the error to the client; the stale-run
       // reaper in monitor.ts releases the reservation later.
@@ -924,7 +963,7 @@ export function registerHarness(
             runId,
             totals.input,
             totals.output,
-            (totals.input * rate.input + totals.output * rate.output) / 1e6,
+            usageCost(rate, totals),
           ],
         );
         await db.query(

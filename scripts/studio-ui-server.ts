@@ -1,3 +1,4 @@
+import { promptText } from "./provider-request.js";
 import { lastClosedBoundary } from "../dist/timeframes.js";
 // Local, isolated interaction fixture. No exchange calls, real AI or monitoring.
 import http from "node:http";
@@ -67,7 +68,7 @@ const provider = http.createServer(async (req, res) => {
     ];
   } else {
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    const raw = body.instructions
+    const raw = promptText(body)
       .split("Current editable draft (not activated): ")[1]
       ?.split("\n")[0];
     const spec = JSON.parse(raw ?? "null");

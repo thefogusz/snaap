@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { promptText } from "./provider-request.js";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
@@ -345,7 +346,7 @@ try {
     });
   assert.equal((await privacyTurn({ useMyData: false })).statusCode, 200);
   assert.ok(
-    !requests.at(-1).instructions.includes("PRIVATE_HISTORY_SENTINEL"),
+    !promptText(requests.at(-1)).includes("PRIVATE_HISTORY_SENTINEL"),
     "private import must not enter provider context when data toggle is off",
   );
   assert.equal(
@@ -358,13 +359,13 @@ try {
     200,
   );
   assert.ok(
-    !requests.at(-1).instructions.includes("PRIVATE_HISTORY_SENTINEL"),
+    !promptText(requests.at(-1)).includes("PRIVATE_HISTORY_SENTINEL"),
     "stale explicit import IDs must not bypass data toggle",
   );
   reply = async () => response("PRIVATE_ASSISTANT_HISTORY");
   assert.equal((await privacyTurn({ useMyData: true })).statusCode, 200);
   assert.ok(
-    requests.at(-1).instructions.includes("PRIVATE_HISTORY_SENTINEL"),
+    promptText(requests.at(-1)).includes("PRIVATE_HISTORY_SENTINEL"),
     "enabled personal data includes owner history",
   );
   reply = async () => response("safe");
@@ -408,10 +409,10 @@ try {
     200,
   );
   assert.ok(
-    requests.at(-1).instructions.includes("EXPLICIT_SETUP_SENTINEL"),
+    promptText(requests.at(-1)).includes("EXPLICIT_SETUP_SENTINEL"),
     "explicit setup analysis remains available with personal history off",
   );
-  assert.ok(!requests.at(-1).instructions.includes("PRIVATE_HISTORY_SENTINEL"));
+  assert.ok(!promptText(requests.at(-1)).includes("PRIVATE_HISTORY_SENTINEL"));
   console.log(
     "PASS private history requires useMyData even with omitted or stale selection",
   );
@@ -496,8 +497,13 @@ try {
   assert.ok(inspectOutput.bar.time<=selectedTime);
   assert.equal(inspectOutput.evaluationTimeframe,'5m');
   assert.equal(inspectOutput.source.pair,'BTC/USDT');
-  assert.ok(requests.at(-1).instructions.includes('at most 24 leaf COMPARE'));
-  assert.ok(requests.at(-1).instructions.includes('navigation only, not market evidence'));
+  assert.ok(promptText(requests.at(-1)).includes('at most 24 leaf COMPARE'));
+  assert.ok(promptText(requests.at(-1)).includes('navigation only, not market evidence'));
+  // Prompt caching: drafts, evidence, images, editor focus and tool rounds differ across these
+  // requests, yet the instructions prefix must stay byte-identical.
+  assert.equal(new Set(requests.map(r=>r.instructions)).size,1,'per-request data must not change instructions');
+  assert.equal(requests.at(-1).input.filter((m:any)=>m.role==='developer').length,1);
+  assert.equal(requests.at(-1).input.findIndex((m:any)=>m.role==='developer'),requests.at(-1).input.findIndex((m:any)=>m.role==='user'&&typeof m.content!=='string')-1,'turn context sits right before the new user message');
   console.log('PASS studio context rejects wrong pair/path before provider; inspect tool returns real closed-bar evidence on evaluation timeframe');
 
   await db.query("INSERT INTO entitlements(owner_id,pro_until) VALUES($1,now()+interval '1 day') ON CONFLICT(owner_id) DO UPDATE SET pro_until=excluded.pro_until",[owner]);
@@ -516,7 +522,7 @@ try {
   const runTool = async (name:string, args:unknown, extra:any={}) => {
     let output:any;
     reply=async body=>{
-      assert.ok(!body.instructions.includes('Use one exchange and one or more supported pairs (maximum 5000)'));
+      assert.ok(!promptText(body).includes('Use one exchange and one or more supported pairs (maximum 5000)'));
       const message=body.input.findLast((m:any)=>m.type==='function_call_output');
       if (!message) return toolResponse(name,args);
       output=JSON.parse(message.output);return response('ตรวจสอบข้อมูลแล้ว');
@@ -807,7 +813,7 @@ try {
     const created = await turn('สร้างร่าง 20 เงื่อนไข แยก 4h 1h 15m 5m');
     assert.equal(created.statusCode,200,created.body);
     assert.deepEqual(created.json().draft,mtf);
-    assert.match(requests.at(-1).instructions,/is a view-only preview request field/);
+    assert.match(promptText(requests.at(-1)),/is a view-only preview request field/);
     const saved = await app.inject({method:'PUT',url:`/api/v1/conversations/${id}/draft`,headers,payload:{spec:created.json().draft,expectedRevision:0}});
     assert.equal(saved.statusCode,200,saved.body);
     const revision = saved.json().draft_revision;
@@ -835,7 +841,7 @@ try {
     // A chart-view question must not force the provider to author a new strategy.
     reply = async body => {
       assert.ok(body.tool_choice === undefined || body.tool_choice === 'auto');
-      assert.ok(body.instructions.includes(JSON.stringify(mtf)));
+      assert.ok(promptText(body).includes(JSON.stringify(mtf)));
       return response('กดปุ่ม 4h เหนือกราฟเพื่อดูเงื่อนไขไทม์เฟรมนี้');
     };
     const viewQuestion = await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'ดูกราฟ 4h ได้ตรงไหน',mode:'standard',draft:mtf}});
@@ -864,7 +870,7 @@ try {
     last.right.value=65;
     round=0;
     reply = async body => {
-      assert.ok(body.instructions.includes(JSON.stringify(mtf)));
+      assert.ok(promptText(body).includes(JSON.stringify(mtf)));
       return ++round === 1
         ? {...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'mtf-edit',arguments:JSON.stringify({spec:edited})}]}
         : response('แก้เฉพาะ RSI 5m เป็น 65 แล้ว');
@@ -896,7 +902,7 @@ try {
     const flexible = strategySchema.parse({...mtf,entryMatchPercent:80});
     round=0;
     reply=async body=>{
-      assert.match(body.instructions,/Entry flexibility:/);
+      assert.match(promptText(body),/Entry flexibility:/);
       const tool=body.tools.find((tool:any)=>tool.name==='propose_strategy');
       assert.ok(JSON.stringify(tool.parameters).includes('entryMatchPercent'));
       return ++round===1 ? {...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'flex-create',arguments:JSON.stringify({spec:flexible})}]} : response('ส่งร่างความยืดหยุ่นเข้า editor แล้ว ยังไม่ได้เปิดใช้งาน');
@@ -918,7 +924,7 @@ try {
     assert.equal(flexReplay.statusCode,200,flexReplay.body);
     const renamed={...flexible,name:'Preserved flexibility'};round=0;
     reply=async body=>{
-      assert.ok(body.instructions.includes(JSON.stringify(strategySchema.parse(flexible))));
+      assert.ok(promptText(body).includes(JSON.stringify(strategySchema.parse(flexible))));
       return ++round===1?{...response(''),output:[{type:'function_call',name:'propose_strategy',call_id:'flex-rename',arguments:JSON.stringify({spec:renamed})}]}:response('ปรับชื่อร่างแล้ว');
     };
     const renamedTurn=await app.inject({method:'POST',url:`/api/v1/conversations/${id}/turns`,headers,payload:{text:'เปลี่ยนชื่อเท่านั้น',mode:'standard',draft:flexible}});
