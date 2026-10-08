@@ -19,14 +19,13 @@
 APP_ORIGIN=https://snaap.me
 BIND_HOST=0.0.0.0
 PORT=8080
-TRUST_PROXY_HOPS=1
 NODE_ENV=production
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 ASSET_STORAGE_PATH=/data/assets
 BILLING_LIVE_ENABLED=false
 ```
 
-`TRUST_PROXY_HOPS=1` makes `req.ip` the client address appended by Railway's edge, so unauthenticated rate limits apply per client instead of to everyone at once. It defaults to 1 when `RAILWAY_PROJECT_ID` is present. Only trust hops that every request passes through; do not expose a raw TCP port that bypasses the edge. Verify after deploy that two clients get separate limits.
+Rate limits for unauthenticated requests key on `X-Real-IP`, which Railway's edge sets to the connecting client on every request. This is the default when `RAILWAY_PROJECT_ID` is present; override with `CLIENT_IP_HEADER`. Measured on 2026-10-08: `X-Forwarded-For` hop counting (`TRUST_PROXY_HOPS=1`) produced varying internal proxy addresses with one replica, so do not set `TRUST_PROXY_HOPS` on Railway. Do not expose a raw TCP port that bypasses the edge, since a direct client could then choose its own header value.
 
 Set AI provider variables in Railway Variables, never in Git. `tsx` is a production dependency because the start command imports it.
 

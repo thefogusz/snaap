@@ -6,6 +6,7 @@ import staticFiles from "@fastify/static";
 import rateLimit from "@fastify/rate-limit";
 import { randomUUID, randomBytes } from "node:crypto";
 import path from "node:path";
+import { isIP } from "node:net";
 import { z } from "zod";
 import type pg from "pg";
 import { transaction } from "./data/db.js";
@@ -56,15 +57,25 @@ export async function buildApp(
 ) {
   const origin = options.origin ?? "http://127.0.0.1:4173";
   const allowedHost = new URL(origin).host;
-  // Without this every client behind Railway's edge shares one req.ip, and so one
-  // rate-limit bucket for all unauthenticated requests. Trust only the configured nearest
-  // hops; Fastify ignores numeric hop counts, and this is only sound when the app is
-  // reachable solely through those proxies (a Railway public domain, not a raw port).
-  const proxyHops = Number(
-    process.env.TRUST_PROXY_HOPS || (process.env.RAILWAY_PROJECT_ID ? 1 : 0),
-  );
+  // Behind a proxy the socket address is the proxy's, so every unauthenticated client would
+  // share rate-limit buckets. Railway's edge sets X-Real-IP to the connecting client on every
+  // request (its X-Forwarded-For chain ends in varying internal hops), so that header is the
+  // default there. Only name a header the edge always overwrites; a client-supplied one
+  // would let callers pick their own bucket. TRUST_PROXY_HOPS remains for other hosts.
+  const clientIpHeader = (
+    process.env.CLIENT_IP_HEADER ||
+    (process.env.RAILWAY_PROJECT_ID && !process.env.TRUST_PROXY_HOPS ? "x-real-ip" : "")
+  ).trim().toLowerCase();
+  if (clientIpHeader && !/^[a-z0-9-]+$/.test(clientIpHeader))
+    throw new Error("CLIENT_IP_HEADER must be a header name");
+  const proxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
   if (!Number.isInteger(proxyHops) || proxyHops < 0 || proxyHops > 5)
     throw new Error("TRUST_PROXY_HOPS must be an integer from 0 to 5");
+  const clientIp = (req: import("fastify").FastifyRequest) => {
+    const value = clientIpHeader ? req.headers[clientIpHeader] : undefined;
+    const candidate = (Array.isArray(value) ? value[0] : value)?.trim();
+    return candidate && isIP(candidate) ? candidate : req.ip;
+  };
   const app = Fastify({
     logger: false,
     trustProxy: proxyHops ? (_address: string, hop: number) => hop < proxyHops : false,
@@ -76,7 +87,7 @@ export async function buildApp(
     max: async () => (await usagePolicy(db)).requestsPerMinute,
     timeWindow: "1 minute",
     hook: "preHandler",
-    keyGenerator: (req) => req.userId || req.ip,
+    keyGenerator: (req) => req.userId || clientIp(req),
     // Provider webhooks are signature-verified and arrive from a few shared provider IPs.
     allowList: (req) => !!req.routeOptions.url?.startsWith("/api/v1/hooks/"),
     errorResponseBuilder: (_req, context) =>
