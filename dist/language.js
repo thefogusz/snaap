@@ -14,6 +14,7 @@
   window.SnaapI18n = { language, locale: language === 'th' ? 'th-TH' : 'en-US', text };
   document.documentElement.lang = language;
   document.addEventListener('DOMContentLoaded', () => {
+    if (document.querySelector('.login-card')) return;
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'language-toggle';
@@ -36,7 +37,7 @@
       navigation.append(actions);
       return;
     }
-    const container = document.querySelector('.topbar-actions') ?? document.querySelector('.legal-header, .admin-topbar, .login-card, .login-panel, header');
+    const container = document.querySelector('.topbar-actions') ?? document.querySelector('.legal-header, .admin-topbar, header');
     (container ?? document.body).append(toggle);
   });
 })();

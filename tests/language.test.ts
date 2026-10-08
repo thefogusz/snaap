@@ -82,6 +82,27 @@ test('public pages, bootstrap and API errors use the chosen language without sha
   } finally { await app.close(); }
 });
 
+test('login pages inherit the selected language without adding a language switch', async () => {
+  const runtime = await readFile(new URL('../dist/language.js', import.meta.url), 'utf8');
+  for (const file of ['login.html', 'admin-login.html']) {
+    assert.match(await readFile(new URL('../dist/' + file, import.meta.url), 'utf8'), /class="login-card"/);
+    for (const language of ['th', 'en']) {
+      const context = vm.createContext({
+        window: { SnaapLanguage: { language, dictionary: { 'บันทึก': 'Save' } } },
+        document: {
+          documentElement: {},
+          querySelector: (selector: string) => selector === '.login-card' ? {} : null,
+          addEventListener: (_event: string, callback: () => void) => callback(),
+          createElement: () => assert.fail('login must not create a language switch'),
+        },
+      });
+      vm.runInContext(runtime, context);
+      assert.equal(context.document.documentElement.lang, language);
+      assert.equal(context.window.SnaapI18n.text('บันทึก'), language === 'en' ? 'Save' : 'บันทึก');
+    }
+  }
+});
+
 test('English rendering keeps user names and interpolated values in their original language', async () => {
   const dictionary = JSON.parse(await readFile(new URL('../dist/translations/en.json', import.meta.url), 'utf8'));
   const runtime = await readFile(new URL('../dist/language.js', import.meta.url), 'utf8');
