@@ -426,11 +426,16 @@ export function registerHarness(
         requestContext,
         { role: "user", content },
       ];
+      const openRouter =
+        !!process.env.AI_BASE_URL && new URL(process.env.AI_BASE_URL).hostname === "openrouter.ai";
       const client = new OpenAI({
         apiKey: process.env.AI_API_KEY,
         baseURL: process.env.AI_BASE_URL || undefined,
         maxRetries: 0,
         timeout: 45000,
+        // OpenRouter keeps one session on the same upstream provider, so later rounds and turns of
+        // this conversation reuse its prompt cache. A header avoids require_parameters filtering.
+        ...(openRouter ? { defaultHeaders: { "x-session-id": id } } : {}),
       });
       let draft: z.infer<typeof strategySchema> | null = null,
         text = "",
@@ -489,8 +494,7 @@ export function registerHarness(
         if (streaming) emit({ type: 'reset' });
         const response = await createProviderResponse(client,
           {
-            ...(process.env.AI_BASE_URL && new URL(process.env.AI_BASE_URL).hostname === 'openrouter.ai'
-              ? { provider: { require_parameters: true } } : {}),
+            ...(openRouter ? { provider: { require_parameters: true } } : {}),
             model:
               input.mode === "deep"
                 ? (process.env.AI_DEEP_MODEL ?? "gpt-5.4")

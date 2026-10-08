@@ -28,7 +28,16 @@ Snapshot: `2f54db3` (`main`) · งานนี้เป็นการวิจ
 | 4.4 | อ่าน `usage.input_tokens_details.cached_tokens` เก็บใน trace (`cachedInputTokens`) และคิดเงินด้วย `AI_*_CACHED_INPUT_USD_PER_MILLION` (ถ้าไม่ตั้งค่า จะคิดเต็มราคา) | `tests/ai-image-budget.test.ts` |
 | 4.9 | อ่าน skill files ครั้งเดียวต่อ process | — |
 
-ยังไม่ได้ทดสอบกับ provider จริง (ต้องใช้ API ที่เสียเงิน) ก่อน deploy ให้รัน `npm run test:harness:provider` หนึ่งครั้ง เพื่อยืนยันว่า OpenRouter/GLM รับ `role: "developer"` ใน Responses input และดู `cachedInputTokens` ใน `agent_runs.trace` ว่ามีค่ามากกว่า 0 ตั้งแต่รอบที่สองเป็นต้นไป ส่วน `prompt_cache_key` และ `include: reasoning.encrypted_content` ยังไม่ได้เปิด เพราะยังไม่ได้ทดสอบกับ provider
+**ทดสอบกับ provider จริงแล้ว** (`npm run test:harness:provider` แบบ fixture, OpenRouter `deepseek/deepseek-v4.1-flash`, 4 turns ต่อรอบ ผ่านทุก turn และ `role: "developer"` ใช้งานได้):
+
+| รอบที่รัน | input tokens | cached | สัดส่วน |
+|---|---:|---:|---:|
+| prefix คงที่อย่างเดียว | 139,018 | 45,696 | 32.9% |
+| + header `x-session-id` (conversation id) | 138,975 | 114,048 | **82.1%** |
+
+รอบแรกบางครั้งพลาด cache เพราะ OpenRouter ส่ง request ไปคนละ upstream provider [OpenRouter](https://openrouter.ai/docs/features/prompt-caching) ใช้ `session_id` หรือ `x-session-id` เป็น routing key และเริ่ม sticky ตั้งแต่ request แรกที่สำเร็จ ถ้าไม่ส่ง จะเริ่ม sticky หลังเกิด cache hit แล้วเท่านั้น จึงส่งเป็น header เพื่อไม่ให้ `require_parameters` ตัด provider ทิ้ง ไม่มีตัวเลข baseline ของโค้ดก่อนแก้ เพราะไม่ได้รันซ้ำ (ต้องเสียเงินเพิ่ม)
+
+DeepSeek คิดราคา cache read ที่ 0.1 เท่าของ input ที่ $0.45/M ต่อ input token และ cache 82% ค่า input จะลดราว 74% (0.18×0.45 + 0.82×0.045 = $0.118/M) ledger ยังคิดเต็มราคาจนกว่าจะตั้ง `AI_STANDARD_CACHED_INPUT_USD_PER_MILLION=0.045` สำหรับรุ่นนี้ ส่วน `include: reasoning.encrypted_content` ยังไม่ได้เปิด
 
 ## สรุปลำดับความสำคัญ
 
