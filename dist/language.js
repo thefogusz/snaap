@@ -39,6 +39,6 @@
       return;
     }
     const container = document.querySelector('.topbar-actions') ?? document.querySelector('.legal-header, .admin-topbar, header');
-    (container ?? document.body).append(toggle);
+    (container ?? document.body).insertBefore(toggle, container?.querySelector('.prototype-badge') ?? null);
   });
 })();

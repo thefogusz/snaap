@@ -109,17 +109,20 @@ test('app language control shows the current language with an accessible switch 
     const attributes: Record<string, string> = {};
     const toggle = { textContent: '', title: '', setAttribute: (key: string, value: string) => { attributes[key] = value; }, getAttribute: (key: string) => attributes[key], addEventListener() {} };
     let appended: unknown;
+    const packageButton = {};
+    let before: unknown;
     const context = vm.createContext({
       window: { SnaapLanguage: { language, dictionary: {} } },
       document: {
         documentElement: {},
-        querySelector: (selector: string) => selector === '.topbar-actions' ? { append: (element: unknown) => { appended = element; } } : null,
+        querySelector: (selector: string) => selector === '.topbar-actions' ? { querySelector: () => packageButton, insertBefore: (element: unknown, reference: unknown) => { appended = element; before = reference; } } : null,
         createElement: () => toggle,
         addEventListener: (_event: string, callback: () => void) => callback(),
       },
     });
     vm.runInContext(runtime, context);
     assert.equal(appended, toggle);
+    assert.equal(before, packageButton);
     assert.equal(toggle.textContent, language === 'th' ? 'ไทย' : 'EN');
     assert.equal(toggle.title, language === 'th' ? 'เปลี่ยนภาษาเป็นอังกฤษ' : 'Switch language to Thai');
     assert.equal(attributes['aria-label'], toggle.title);
