@@ -8,4 +8,6 @@ test('Morning brief ranks the latest CFTC weekly change, not absolute positionin
   assert.deepEqual(result.rows.map((m:any)=>m.id),['bonds','gold','us-stocks']);
   assert.equal(result.max,10);
   assert.equal(briefPositionState({...dataset,markets:[]}).up,undefined);
+  assert.equal(briefPositionState({...dataset,markets:[{id:'gold',values:[1,2]}]}).down,undefined);
+  assert.equal(briefPositionState({...dataset,markets:[{id:'gold',values:[2,1]}]}).up,undefined);
 });

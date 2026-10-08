@@ -15,6 +15,8 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
   assert.equal(parsed.markets[0].values[1],12);
   assert.equal(parsed.markets[0].positions[1]?.long,320);
   assert.equal(parsed.markets.length,8);
+  const gap=parsePositioning(rows.map(row=>({...row,report_date_as_yyyy_mm_dd:row.report_date_as_yyyy_mm_dd.replace('2026-09-22','2026-09-15')})),new Date('2026-10-08'));
+  assert.deepEqual(gap.periods,['2026-09-15','2026-09-29']);
   assert.throws(()=>parsePositioning(rows.map((r,i)=>i===0?{...r,open_interest_all:'0'}:r),new Date('2026-10-08')));
   assert.throws(()=>parsePositioning([...rows,rows[0]],new Date('2026-10-08')));
   assert.throws(()=>parsePositioning(rows.map((r,i)=>i===0?{...r,report_date_as_yyyy_mm_dd:'2099-09-22T00:00:00.000'}:r),new Date('2026-10-08')));

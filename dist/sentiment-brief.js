@@ -42,7 +42,7 @@ function positionSummary(){
   const {i,rows,up,down,max}=briefPositionState(positioning);
   const aged=Date.now()-Date.parse(positioning.periods[i])>12*86400000;
   return `<div class="sb-report"><span>สถานะฟิวเจอร์ส</span><span>CFTC · ข้อมูล ณ ${date(positioning.periods[i])}</span>${positioning.stale?'<b>ข้อมูลที่เก็บไว้ · ตรวจต้นทางไม่สำเร็จ</b>':aged?'<b>รอรายงานรอบใหม่</b>':''}</div>
-  <section class="sb-flow-stage" aria-label="การเปลี่ยนสถานะฟิวเจอร์สของผู้เก็งกำไร"><div class="sb-takeaway"><p class="sb-eyebrow">สถานะเพิ่มมากสุด</p><h2 class="sb-positive">${up?labels[up.id]:'—'}<span aria-hidden="true">↗</span></h2><p class="sb-exit">สถานะลดมากสุด <strong>${down?labels[down.id]:'—'}</strong></p><div class="sb-net"><span>เทียบสัปดาห์ก่อน</span><b>${up?point(up.delta):'—'}</b></div><a href="${esc(positioning.source)}" target="_blank" rel="noopener noreferrer">CFTC · ฟิวเจอร์ส ไม่ใช่เงินไหล ↗</a></div>
+  <section class="sb-flow-stage" aria-label="การเปลี่ยนสถานะฟิวเจอร์สของผู้เก็งกำไร"><div class="sb-takeaway"><p class="sb-eyebrow">สถานะเพิ่มมากสุด</p><h2 class="sb-positive">${up?labels[up.id]:'—'}<span aria-hidden="true">↗</span></h2><p class="sb-exit">สถานะลดมากสุด <strong>${down?labels[down.id]:'—'}</strong></p><div class="sb-net"><span>เทียบรายงานก่อนหน้า</span><b>${up?point(up.delta):'—'}</b></div><a href="${esc(positioning.source)}" target="_blank" rel="noopener noreferrer">CFTC · ฟิวเจอร์ส ไม่ใช่เงินไหล ↗</a></div>
   <div class="sb-lanes">${rows.map((m,index)=>`<button class="sb-lane ${m.delta<0?'sb-negative':'sb-positive'}" data-brief-position="${m.id}" style="--delay:${index*45}ms;--extent:${Math.abs(m.delta)/max*100}%" aria-label="${labels[m.id]} สถานะเปลี่ยน ${point(m.delta)} ดูรายละเอียด"><span class="sb-lane-heading"><strong>${labels[m.id]}</strong><span><b>${point(m.delta)}</b><i aria-hidden="true">${m.delta<0?'↙':'↗'}</i></span></span><span class="sb-track" aria-hidden="true"><span class="sb-stream"></span></span></button>`).join('')}<div class="sb-flow-caption"><span>สถานะสุทธิเปลี่ยน · จุดเปอร์เซ็นต์ของ Open Interest</span></div></div></section>`;
 }
 function render(){
@@ -61,7 +61,7 @@ function render(){
 export function briefPositionState(dataset){
   const i=dataset.periods.length-1;
   const rows=dataset.markets.map(m=>({...m,delta:m.values[i]!=null&&m.values[i-1]!=null?m.values[i]-m.values[i-1]:null})).filter(m=>m.delta!==null).sort((a,b)=>b.delta-a.delta);
-  return {i,rows,up:rows[0],down:rows.at(-1),max:Math.max(1,...rows.map(m=>Math.abs(m.delta)))};
+  return {i,rows,up:rows.find(m=>m.delta>0),down:rows.findLast(m=>m.delta<0),max:Math.max(1,...rows.map(m=>Math.abs(m.delta)))};
 }
 
 const amount=value=>new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2,style:'currency',currency:'USD'}).format(value);

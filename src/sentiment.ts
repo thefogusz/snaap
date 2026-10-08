@@ -27,7 +27,7 @@ export function parsePositioning(input: unknown, now = new Date()) {
     history.set(date.slice(0,10), {long,short,openInterest});
   }
   const periods = [...new Set([...selected.values()].flatMap(history => [...history.keys()]))].sort();
-  if (periods.length < 2 || periods.some((p,i) => i && (Date.parse(p)-Date.parse(periods[i-1])) !== 7*86400000)) throw new Error('Insufficient CFTC weekly history');
+  if (periods.length < 2 || periods.some((p,i) => i && (Date.parse(p)-Date.parse(periods[i-1])) % (7*86400000) !== 0)) throw new Error('Insufficient CFTC weekly history');
   const markets = cotMarkets.map(([id,name,code]) => {
     const history = selected.get(code)!;
     return {id,name,contract:code,positions:periods.map(p => history.get(p) ?? null),values:periods.map(p => {
