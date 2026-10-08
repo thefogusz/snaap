@@ -661,17 +661,52 @@ export function value(
       frames[o.timeframe],
     );
   }
-  const required =
-    o.kind === "INDICATOR"
-      ? Math.max(
-          ...(o.formula?.terms.map((t) => t.period + 1) ?? [0]),
-          o.period + 1,
-          o.name.startsWith("MACD") ? (o.slow ?? 26) + (o.signal ?? 9) : 0,
-        )
-      : 1;
+  if (o.kind === "PRICE") {
+    for (let i = Math.max(1, c.length - 1); i < c.length; i++)
+      if (c[i].time - c[i - 1].time !== frames[o.timeframe]) return;
+    return c.at(-1)![o.field];
+  }
+  // Rules sharing a pair and timeframe share one candle array, so they also share indicator
+  // results. Results depend only on the closed prefix and the operand's own parameters.
+  let memo = builtinResults.get(series[o.timeframe]!);
+  if (!memo) {
+    memo = new Map();
+    builtinResults.set(series[o.timeframe]!, memo);
+  }
+  const key = [
+    c.length,
+    c.at(-1)!.time,
+    o.name,
+    o.period,
+    o.source,
+    o.slow,
+    o.signal,
+    o.deviation,
+    o.formula ? JSON.stringify(o.formula) : "",
+  ].join("|");
+  if (memo.has(key)) return memo.get(key);
+  const result = builtinIndicatorValue(o, c);
+  if (memo.size >= 4096) memo.clear();
+  memo.set(key, result);
+  return result;
+}
+// Weak by candle array: a refreshed history replaces the array, so stale results are dropped
+// with it. Arrays are never mutated in place after they are fetched.
+const builtinResults = new WeakMap<
+  Candle[],
+  Map<string, number | undefined>
+>();
+function builtinIndicatorValue(
+  o: Extract<Operand, { kind: "INDICATOR" }>,
+  c: Candle[],
+): number | undefined {
+  const required = Math.max(
+    ...(o.formula?.terms.map((t) => t.period + 1) ?? [0]),
+    o.period + 1,
+    o.name.startsWith("MACD") ? (o.slow ?? 26) + (o.signal ?? 9) : 0,
+  );
   for (let i = Math.max(1, c.length - required); i < c.length; i++)
     if (c[i].time - c[i - 1].time !== frames[o.timeframe]) return;
-  if (o.kind === "PRICE") return c.at(-1)![o.field];
   const source = o.source ?? "close";
   const sourced =
     source === "close" ||
