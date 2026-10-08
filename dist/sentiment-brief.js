@@ -1,72 +1,66 @@
 const esc = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const date = value => new Date(value).toLocaleDateString('th-TH',{day:'numeric',month:'short',timeZone:'UTC'});
 const pct = value => value==null?'—':`${value>0?'+':value<0?'−':''}${Math.abs(value).toFixed(2)}%`;
-const point = value => value==null?'—':`${value>0?'+':value<0?'−':''}${Math.abs(value).toFixed(2)} จุด`;
-const labels={'us-stocks':'หุ้นสหรัฐ','developed-stocks':'หุ้นพัฒนาแล้วนอกสหรัฐ','emerging-stocks':'หุ้นเกิดใหม่',bonds:'พันธบัตรสหรัฐ 10 ปี',gold:'ทองคำ',oil:'น้ำมัน WTI',bitcoin:'Bitcoin',ethereum:'Ether'};
 const assets=[['spy','หุ้นสหรัฐ','↗'],['gld','ทองคำ','Au'],['tlt','พันธบัตร','≋'],['uso','น้ำมัน','◈'],['uup','ดอลลาร์','$']];
-let host, openDetail, positioning, daily, crypto, drill=null, group=null, coin=null, busy=false, timer;
+const marketNames=Object.fromEntries(assets.map(([id,name])=>[id,name]));
+let host, openDetail, daily, crypto, drill=null, group=null, coin=null, drillTrigger, busy=false, timer;
 export function initBrief(element,onOpen){
   host=element;openDetail=onOpen;
   host.innerHTML='<p class="sb-loading" role="status">กำลังสรุปภาพตลาดล่าสุด…</p>';
   host.addEventListener('click',event=>{
     const asset=event.target.closest('[data-brief-asset]');
-    if(asset){if(asset.dataset.briefAsset==='crypto'){drill='crypto';group=null;coin=null;renderDrill();}else if(asset.dataset.briefAsset==='spy'){drill='stocks';renderDrill();}else openDetail('daily',asset.dataset.briefAsset);}
+    if(asset){if(asset.dataset.briefAsset==='crypto'){drillTrigger=asset;drill='crypto';group=null;coin=null;renderDrill();}else if(asset.dataset.briefAsset==='spy'){drillTrigger=asset;drill='stocks';renderDrill();}else openDetail('daily',asset.dataset.briefAsset);}
     const subgroup=event.target.closest('[data-crypto-group]');if(subgroup){group=subgroup.dataset.cryptoGroup;coin=null;renderDrill();}
     const item=event.target.closest('[data-crypto-coin]');if(item){coin=item.dataset.cryptoCoin;renderDrill();}
-    if(event.target.closest('[data-drill-close]')){const previous=drill;drill=null;renderDrill();host.querySelector(`[data-brief-asset=${previous==='crypto'?'crypto':'spy'}]`)?.focus({preventScroll:true});}
+    if(event.target.closest('[data-drill-close]')){const previous=drill;drill=null;renderDrill();(drillTrigger?.isConnected?drillTrigger:host.querySelector(`.sb-price[data-brief-asset=${previous==='crypto'?'crypto':'spy'}]`))?.focus({preventScroll:true});}
     if(event.target.closest('[data-drill-back]')){if(coin)coin=null;else group=null;renderDrill();}
     const stock=event.target.closest('[data-stock-detail]');if(stock)openDetail('daily',stock.dataset.stockDetail);
-    const position=event.target.closest('[data-brief-position]');if(position)openDetail('positioning',position.dataset.briefPosition);
-    if(event.target.closest('[data-brief-daily]'))openDetail('daily');
   });
   refreshBrief();
 }
 export function setBriefActive(active){
-  if(!host)return;clearInterval(timer);host.classList.toggle('sb-inactive',!active);
+  if(!host)return;clearInterval(timer);
   if(active)timer=setInterval(refreshBrief,60000);
 }
 async function read(url){const response=await fetch(url,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('source');return response.json();}
 export async function refreshBrief(){
   if(!host||busy)return;busy=true;
-  const results=await Promise.allSettled([read('/api/v1/sentiment/positioning'),read('/api/v1/sentiment/daily'),read('/api/v1/sentiment/crypto-breakdown')]);
-  const snapshot=()=>JSON.stringify([positioning,daily?.markets.map(({checkedAt,...m})=>m),crypto]);
+  const results=await Promise.allSettled([read('/api/v1/sentiment/daily'),read('/api/v1/sentiment/crypto-breakdown')]);
+  const snapshot=()=>JSON.stringify([daily?.markets.map(({checkedAt,...m})=>m),crypto]);
   const previous=snapshot();
-  if(results[0].status==='fulfilled')positioning=results[0].value;else if(positioning)positioning={...positioning,stale:true};
-  if(results[1].status==='fulfilled')daily=results[1].value;else if(daily)daily={...daily,markets:daily.markets.map(m=>({...m,stale:true}))};
-  if(results[2].status==='fulfilled')crypto=results[2].value;else if(crypto)crypto={...crypto,stale:true};
+  if(results[0].status==='fulfilled')daily=results[0].value;else if(daily)daily={...daily,markets:daily.markets.map(m=>({...m,stale:true}))};
+  if(results[1].status==='fulfilled')crypto=results[1].value;else if(crypto)crypto={...crypto,stale:true};
   if(previous!==snapshot()||!host.querySelector('.sb-morning'))render();
   busy=false;
 }
-function positionSummary(){
-  if(!positioning)return '<div class="sb-unavailable"><h2>ยังอ่านสถานะฟิวเจอร์สไม่ได้</h2><p>ข้อมูลราคาตลาดยังอยู่ด้านล่าง</p></div>';
-  const {i,rows,up,down,max}=briefPositionState(positioning);
-  const aged=Date.now()-Date.parse(positioning.periods[i])>12*86400000;
-  return `<div class="sb-report"><span>สถานะฟิวเจอร์ส</span><span>CFTC · ข้อมูล ณ ${date(positioning.periods[i])}</span>${positioning.stale?'<b>ข้อมูลที่เก็บไว้ · ตรวจต้นทางไม่สำเร็จ</b>':aged?'<b>รอรายงานรอบใหม่</b>':''}</div>
-  <section class="sb-flow-stage" aria-label="การเปลี่ยนสถานะฟิวเจอร์สของผู้เก็งกำไร"><div class="sb-takeaway"><p class="sb-eyebrow">สถานะเพิ่มมากสุด</p><h2 class="sb-positive">${up?labels[up.id]:'—'}<span aria-hidden="true">↗</span></h2><p class="sb-exit">สถานะลดมากสุด <strong>${down?labels[down.id]:'—'}</strong></p><div class="sb-net"><span>เทียบรายงานก่อนหน้า</span><b>${up?point(up.delta):'—'}</b></div><a href="${esc(positioning.source)}" target="_blank" rel="noopener noreferrer">CFTC · ฟิวเจอร์ส ไม่ใช่เงินไหล ↗</a></div>
-  <div class="sb-lanes">${rows.map((m,index)=>`<button class="sb-lane ${m.delta<0?'sb-negative':'sb-positive'}" data-brief-position="${m.id}" style="--delay:${index*45}ms;--extent:${Math.abs(m.delta)/max*100}%" aria-label="${labels[m.id]} สถานะเปลี่ยน ${point(m.delta)} ดูรายละเอียด"><span class="sb-lane-heading"><strong>${labels[m.id]}</strong><span><b>${point(m.delta)}</b><i aria-hidden="true">${m.delta<0?'↙':'↗'}</i></span></span><span class="sb-track" aria-hidden="true"><span class="sb-stream"></span></span></button>`).join('')}<div class="sb-flow-caption"><span>สถานะสุทธิเปลี่ยน · จุดเปอร์เซ็นต์ของ Open Interest</span></div></div></section>`;
-}
 function render(){
-  const focus=host.contains(document.activeElement)?document.activeElement:null,asset=focus?.dataset.briefAsset;
-  host.innerHTML=`<div class="sb-morning"><div class="sb-title"><div><h2>ภาพรวมตลาด</h2></div><span>${new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',timeZone:'Asia/Bangkok'})}</span></div>${positionSummary()}
-  <section class="sb-prices" aria-label="ราคาล่าสุดของตลาดหลัก"><div class="sb-prices-heading"><h3>ตลาดหลัก</h3></div><div class="sb-price-grid">${assets.map(([id,name,mark])=>{
+  const focus=host.contains(document.activeElement)?document.activeElement:null,asset=focus?.dataset.briefAsset,focusedLane=focus?.classList.contains('sb-lane');
+  const {rows,up,down,positive,negative,max}=briefMarketState(daily);
+  const marketSummary=rows.length?`<div class="sb-report"><span>ทิศทางตลาด</span><span>ราคา ETF · เทียบวันซื้อขายก่อน</span></div>
+  <section class="sb-flow-stage" aria-label="เปรียบเทียบราคาตลาดหลัก"><div class="sb-takeaway"><p class="sb-eyebrow">ราคาขึ้นเด่น</p><h2 class="sb-positive">${up?marketNames[up.id]:'—'}<span aria-hidden="true">↗</span></h2><p class="sb-exit">ราคาลงแรง <strong>${down?marketNames[down.id]:'—'}</strong></p><div class="sb-net"><span>${positive} ตลาดบวก · ${negative} ตลาดลบ</span></div></div>
+  <div class="sb-lanes">${rows.map((m,index)=>`<button class="sb-lane ${m.change<0?'sb-negative':'sb-positive'}" data-brief-asset="${m.id}" ${m.id==='spy'?`aria-expanded="${drill==='stocks'}"`:''} style="--delay:${index*45}ms;--extent:${Math.abs(m.change)/max*100}%" aria-label="${marketNames[m.id]} ราคา ${pct(m.change)} เปิดรายละเอียด"><span class="sb-lane-heading"><strong>${marketNames[m.id]}</strong><span><b>${pct(m.change)}</b><i aria-hidden="true">${m.change<0?'↙':'↗'}</i></span></span><span class="sb-track" aria-hidden="true"><span class="sb-stream"></span></span></button>`).join('')}<div class="sb-flow-caption"><span>ราคาล่าสุด · Yahoo Finance · ไม่ใช่เงินไหล</span></div></div></section>`:'<p class="sb-unavailable" role="status">ยังอ่านราคาตลาดหลักไม่ได้</p>';
+  host.innerHTML=`<div class="sb-morning"><div class="sb-title"><div><h2>ภาพรวมตลาด</h2></div><span>${new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',timeZone:'Asia/Bangkok'})}</span></div>${marketSummary}
+  <section class="sb-prices" aria-label="ราคาล่าสุดของตลาดหลัก"><div class="sb-price-grid">${assets.map(([id,name,mark])=>{
     const m=daily?.markets.find(m=>m.id===id),day=m?.days?.findLast(d=>d.close!==null),value=day?.change,unavailable=!m||m.error||value==null;
     const aged=day&&Date.now()-Date.parse(day.date)>(m.category==='crypto'?2:5)*86400000;
     return `<button data-brief-asset="${id}" ${id==='spy'?`aria-expanded="${drill==='stocks'}"`:''} class="sb-price ${unavailable||m.stale||aged?'sb-quiet':value<0?'sb-negative':'sb-positive'}" aria-label="${name} ${unavailable?'ยังไม่มีราคา':pct(value)} เปิดกราฟย้อนหลัง"><span><i class="sb-asset-mark" aria-hidden="true">${mark}</i>${name}${id==='spy'?'<i class="sb-expand">＋</i>':''}</span><strong>${pct(unavailable?null:value)}</strong><small>${unavailable?'ยังอ่านไม่ได้':m.stale?'ข้อมูลที่เก็บไว้':aged?'รอข้อมูลใหม่':value<0?'ราคาลง':value>0?'ราคาขึ้น':'ราคาเท่าเดิม'}</small><time>${day?date(day.date)+(day.provisional?' · ระหว่างวัน':' · ปิดวัน'):'—'}</time><span class="sb-price-arrow" aria-hidden="true">↗</span></button>`;
   }).join('')}<button data-brief-asset="crypto" class="sb-price ${!crypto||crypto.stale?'sb-quiet':crypto.change<0?'sb-negative':'sb-positive'}" aria-expanded="${drill==='crypto'}"><span><i class="sb-asset-mark" aria-hidden="true">₿</i>คริปโต <i class="sb-expand">＋</i></span><strong>${pct(crypto?.change)}</strong><small>${!crypto?'ยังอ่านไม่ได้':crypto.stale?'ข้อมูลที่เก็บไว้':crypto.change<0?'มูลค่าตลาดลด':'มูลค่าตลาดเพิ่ม'}</small><time>24 ชม. · ${crypto?crypto.count+' เหรียญ':'กำลังรอข้อมูล'}</time></button></div><div class="sb-drill" ${drill?'':'hidden'}></div><p class="sb-price-note">ETF: ราคาเทียบวันก่อน · คริปโต: มูลค่าตลาดเทียบ 24 ชม.</p></section>
-  <div class="sb-more"><button data-brief-daily>ผลตอบแทน 7 วัน <span>↗</span></button><button data-brief-position>สถานะฟิวเจอร์สย้อนหลัง <span>↗</span></button></div></div>`;
+  </div>`;
   renderDrill(false);
-  if(asset)host.querySelector(`[data-brief-asset="${asset}"]`)?.focus({preventScroll:true});
+  if(asset)host.querySelector(`${focusedLane?'.sb-lane':'.sb-price'}[data-brief-asset="${asset}"]`)?.focus({preventScroll:true});
 }
 
-export function briefPositionState(dataset){
-  const i=dataset.periods.length-1;
-  const rows=dataset.markets.map(m=>({...m,delta:m.values[i]!=null&&m.values[i-1]!=null?m.values[i]-m.values[i-1]:null})).filter(m=>m.delta!==null).sort((a,b)=>b.delta-a.delta);
-  return {i,rows,up:rows.find(m=>m.delta>0),down:rows.findLast(m=>m.delta<0),max:Math.max(1,...rows.map(m=>Math.abs(m.delta)))};
+export function briefMarketState(dataset,now=Date.now()){
+  const rows=assets.flatMap(([id])=>{
+    const market=dataset?.markets.find(m=>m.id===id),day=market?.days?.findLast(d=>d.close!==null);
+    return market&&!market.stale&&!market.error&&day&&Number.isFinite(day.change)&&now-Date.parse(day.date)<=5*86400000?[{id,change:day.change}]:[];
+  }).sort((a,b)=>b.change-a.change);
+  return {rows,up:rows.find(m=>m.change>0),down:rows.findLast(m=>m.change<0),positive:rows.filter(m=>m.change>0).length,negative:rows.filter(m=>m.change<0).length,max:Math.max(1,...rows.map(m=>Math.abs(m.change)))};
 }
 
 const amount=value=>new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2,style:'currency',currency:'USD'}).format(value);
 function renderDrill(focus=true){
-  const panel=host.querySelector('.sb-drill');if(!panel)return;host.querySelector('[data-brief-asset=crypto]')?.setAttribute('aria-expanded',String(drill==='crypto'));host.querySelector('[data-brief-asset=spy]')?.setAttribute('aria-expanded',String(drill==='stocks'));panel.hidden=!drill;if(!drill)return;
+  const panel=host.querySelector('.sb-drill');if(!panel)return;host.querySelector('[data-brief-asset=crypto]')?.setAttribute('aria-expanded',String(drill==='crypto'));host.querySelectorAll('[data-brief-asset=spy]').forEach(button=>button.setAttribute('aria-expanded',String(drill==='stocks')));panel.hidden=!drill;if(!drill)return;
   const close='<button data-drill-close aria-label="ปิดรายละเอียดตลาด">×</button>';
   if(drill==='stocks'){
     panel.innerHTML=`<div class="sb-drill-head"><h3>หุ้น · แยกตามตลาด</h3>${close}</div><div class="sb-crypto-groups">${['spy','efa','eem'].map(id=>{const m=daily?.markets.find(m=>m.id===id),d=m?.days?.findLast(d=>d.close!==null);return `<button data-stock-detail="${id}"><strong>${esc(m?.name??id)}</strong><b class="${d?.change<0?'sb-negative':'sb-positive'}">${pct(d?.change)}</b><small>${d?date(d.date)+' · เทียบวันซื้อขายก่อน':'ยังไม่มีข้อมูล'}</small><span>ผลตอบแทน 7 วัน ↗</span></button>`;}).join('')}</div><p class="sb-drill-note">ราคา ETF อ้างอิงแต่ละตลาด</p>`;

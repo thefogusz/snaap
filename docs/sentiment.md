@@ -24,7 +24,7 @@ The former ICI weekly/quarterly panels and embedded report snapshot were removed
 
 ## Product and integration
 
-The morning brief ranks the latest weekly change in non-commercial net positioning, shows separate daily price tiles, and keeps the gold ETF flow and stablecoin panels visible below. Selecting a positioning row opens its contract detail and history. Selecting an asset opens its seven-day price view. Crypto expands from BTC/ETH/altcoins to tracked coins. The positioning tab uses diverging bars; it does not animate fictitious money transfers. Motion remains brief and respects reduced-motion preferences.
+The morning brief restores the large left-hand takeaway and animated comparison lanes, now ranking recent ETF price changes rather than implying cross-market fund flows. Detailed daily price tiles, gold ETF flow and stablecoin panels remain below. CFTC positioning appears only in its dedicated tab, where selecting a row opens contract detail and history. Selecting a brief asset opens its seven-day price view. Crypto expands from BTC/ETH/altcoins to tracked coins. Motion remains brief and respects reduced-motion preferences.
 
 Authenticated endpoints: `/api/v1/sentiment/positioning`, `/api/v1/sentiment/daily`, `/api/v1/sentiment/specialists` and `/api/v1/sentiment/crypto-breakdown`. Harness `read_sentiment` accepts `positioning`, `daily`, `specialists` or `crypto-breakdown` and uses the same caches. Invalid datasets and arbitrary source URLs are rejected. The model instructions preserve source periods, stale/errors and the distinction between actual gold ETF flows and positioning/price/supply changes.
 
