@@ -46,11 +46,12 @@ export function pickAssets({ spec, api, maxPairs = 10, current = () => true }) {
       dialog.querySelectorAll('[data-total]').forEach(total => { total.textContent = catalog ? String(catalog.items.filter(row => row.category === total.dataset.total).length) : ''; });
       const unavailable = catalog?.sources.filter(s => s.status !== 'READY').map(s => s.exchange) ?? [];
       status.textContent = loading ? 'กำลังซิงก์รายชื่อ…' : `${matches.length.toLocaleString('th-TH')} คู่${unavailable.length ? ` · เชื่อม ${unavailable.join(', ')} ไม่สำเร็จ` : ''}`;
+      const perpetualHint = market === 'Spot' && !selectedOnly && ['forex', 'indices'].includes(category) && catalog && !catalog.items.some(row => row.category === category);
       list.innerHTML = matches.slice(0, limit).map(row => {
         let targets, error;
         try { targets = targetsFor(row); } catch (e) { error = e.message; }
         return `<button type="button" class="asset-row" data-asset="${escape(row.id)}" aria-pressed="${selected.has(row.id)}" ${error && !selected.has(row.id) ? 'disabled' : ''} ${error ? `title="${escape(error)}"` : ''}><span class="asset-check" aria-hidden="true">${selected.has(row.id) ? '✓' : '+'}</span><span class="asset-row-name"><strong>${escape(row.symbol)}</strong><small>${escape(productLabel(row))}${row.name && row.name !== row.base ? ` · ${escape(row.name)}` : ''}</small></span><span class="asset-row-source">${escape(error ? source !== 'keep' && !row.sources.includes(source) ? `ไม่มีบน ${source}` : 'ไม่รองรับรอบตรวจนี้' : (selected.get(row.id)?.targets ?? targets).map(t => t.exchange).join(', '))}<small>${row.sources.length} แหล่งราคา</small></span></button>`;
-      }).join('') + (matches.length > limit ? '<button type="button" class="asset-more" data-more>แสดงเพิ่มอีก 50 คู่</button>' : matches.length ? '' : '<p class="asset-empty">ไม่พบสินทรัพย์ในหมวดนี้ ลองเปลี่ยนคำค้นหรือประเภทสัญญา</p>');
+      }).join('') + (matches.length > limit ? '<button type="button" class="asset-more" data-more>แสดงเพิ่มอีก 50 คู่</button>' : matches.length ? '' : perpetualHint ? `<p class="asset-empty">${category === 'forex' ? 'Forex' : 'ดัชนี'} ที่รองรับอยู่ในตลาด Perpetual ลองเปลี่ยนประเภทสัญญาเพื่อดูรายการ<br>การเปลี่ยนตลาดจะล้างคู่ที่เลือกไว้ในหน้าต่างนี้</p><button type="button" class="asset-more" data-market="Perpetual Futures">ดู ${category === 'forex' ? 'Forex' : 'ดัชนี'} ใน Perpetual</button>` : '<p class="asset-empty">ไม่พบสินทรัพย์ในหมวดนี้ ลองเปลี่ยนคำค้นหรือประเภทสัญญา</p>');
       selectionState();
     }
     async function load(refresh = false) {
