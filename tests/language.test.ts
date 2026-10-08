@@ -103,6 +103,29 @@ test('login pages inherit the selected language without adding a language switch
   }
 });
 
+test('app language control shows the current language with an accessible switch label', async () => {
+  const runtime = await readFile(new URL('../dist/language.js', import.meta.url), 'utf8');
+  for (const language of ['th', 'en']) {
+    const attributes: Record<string, string> = {};
+    const toggle = { textContent: '', title: '', setAttribute: (key: string, value: string) => { attributes[key] = value; }, getAttribute: (key: string) => attributes[key], addEventListener() {} };
+    let appended: unknown;
+    const context = vm.createContext({
+      window: { SnaapLanguage: { language, dictionary: {} } },
+      document: {
+        documentElement: {},
+        querySelector: (selector: string) => selector === '.topbar-actions' ? { append: (element: unknown) => { appended = element; } } : null,
+        createElement: () => toggle,
+        addEventListener: (_event: string, callback: () => void) => callback(),
+      },
+    });
+    vm.runInContext(runtime, context);
+    assert.equal(appended, toggle);
+    assert.equal(toggle.textContent, language === 'th' ? 'ไทย' : 'EN');
+    assert.equal(toggle.title, language === 'th' ? 'เปลี่ยนภาษาเป็นอังกฤษ' : 'Switch language to Thai');
+    assert.equal(attributes['aria-label'], toggle.title);
+  }
+});
+
 test('English rendering keeps user names and interpolated values in their original language', async () => {
   const dictionary = JSON.parse(await readFile(new URL('../dist/translations/en.json', import.meta.url), 'utf8'));
   const runtime = await readFile(new URL('../dist/language.js', import.meta.url), 'utf8');

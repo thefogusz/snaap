@@ -660,7 +660,9 @@ function chatEmpty() {
       (globalThis.SnaapI18n?.text("<div class=\"chat-empty\"><strong>คุยกับ <span class=\"snaap-name\">Snaap</span></strong><p><span>พิมพ์ไอเดียหรือแนบกราฟ</span> <span>แล้วออกแบบเทรดเซ็ตอัพไปด้วยกัน</span></p></div>") ?? "<div class=\"chat-empty\"><strong>คุยกับ <span class=\"snaap-name\">Snaap</span></strong><p><span>พิมพ์ไอเดียหรือแนบกราฟ</span> <span>แล้วออกแบบเทรดเซ็ตอัพไปด้วยกัน</span></p></div>");
 }
 const badge = $(".prototype-badge");
-badge.textContent = (globalThis.SnaapI18n?.text("บัญชี / แพ็กเกจ") ?? "บัญชี / แพ็กเกจ");
+badge.title = (globalThis.SnaapI18n?.text("บัญชี / แพ็กเกจ") ?? "บัญชี / แพ็กเกจ");
+badge.setAttribute('aria-label', badge.title);
+badge.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h3"/></svg>';
 badge.dataset.action = "billing";
 const accountButton = $(".profile");
 accountButton.dataset.action = "account-menu";

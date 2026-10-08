@@ -19,8 +19,9 @@
     toggle.type = 'button';
     toggle.className = 'language-toggle';
     toggle.id = 'language-toggle';
-    toggle.textContent = 'ไทย / ENG';
+    toggle.textContent = document.querySelector('.topbar-actions') ? (language === 'th' ? 'ไทย' : 'EN') : 'ไทย / ENG';
     toggle.setAttribute('aria-label', language === 'th' ? 'เปลี่ยนภาษาเป็นอังกฤษ' : 'Switch language to Thai');
+    toggle.title = toggle.getAttribute('aria-label');
     toggle.setAttribute('aria-pressed', String(language === 'en'));
     toggle.addEventListener('click', () => {
       const next = language === 'th' ? 'en' : 'th';

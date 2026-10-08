@@ -12,6 +12,7 @@
     if (toggle) {
       toggle.setAttribute('aria-pressed', String(dark));
       toggle.title = dark ? (globalThis.SnaapI18n?.text("กลับเป็นโหมดสว่าง") ?? "กลับเป็นโหมดสว่าง") : (globalThis.SnaapI18n?.text("เปิดโหมดมืด") ?? "เปิดโหมดมืด");
+      toggle.setAttribute('aria-label', toggle.title);
     }
   }
   applyTheme(preference || (system.matches ? 'dark' : 'light'));
