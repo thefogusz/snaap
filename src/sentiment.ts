@@ -229,7 +229,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool, background = 
   let cryptoData:ReturnType<typeof parseCryptoBreakdown>|undefined,cryptoChecked=0,cryptoFailed=false,cryptoPending:Promise<void>|undefined;
   async function readCrypto(){
     cryptoData??=await loadSnapshot<ReturnType<typeof parseCryptoBreakdown>>('crypto-breakdown',36*3600000);
-    if(Date.now()-cryptoChecked>=(cryptoFailed?60000:3600000)){
+    if(Date.now()-cryptoChecked>=3600000){
       cryptoPending??=(async()=>{
         try{
           const base='https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&page=1&sparkline=false';
@@ -255,7 +255,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool, background = 
       if(!entry){entry={checked:0};dailyCache.set(market.id,entry);}
       const current=entry,crypto=market.category==='crypto';
       current.data??=await loadSnapshot<DailyData>('daily:'+market.id,(crypto?2:5)*86400000);
-      if(Date.now()-current.checked>=(current.failed?60000:3600000)){
+      if(Date.now()-current.checked>=3600000){
         current.pending??=(async()=>{
           try{
             const url=crypto?`https://api.exchange.coinbase.com/products/${market.symbol}/candles?granularity=86400`:`https://query1.finance.yahoo.com/v8/finance/chart/${market.symbol}?range=1mo&interval=1d`;
@@ -297,7 +297,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool, background = 
       if (!entry) { entry = { checked: 0 }; specialistCache.set(feed.id, entry); }
       const current = entry;
       current.data??=await loadSnapshot<Specialist>('specialist:'+feed.id,feed.id==='gold'?60*86400000:2*86400000);
-      if (Date.now() - current.checked >= (current.failed ? 60000 : feed.ttl)) {
+      if (Date.now() - current.checked >= (current.failed ? 3600000 : feed.ttl)) {
         current.pending ??= (async () => {
           try { const next=feed.parse(JSON.parse(await getHtml(feed.url, 'application/json')));
             if(current.data && specialistDate(next)<specialistDate(current.data))throw Error('Specialist observation regressed');
@@ -319,7 +319,7 @@ export function registerSentiment(app: FastifyInstance, db?: Pool, background = 
   let cotData: ReturnType<typeof parsePositioning> | undefined, cotChecked = 0, cotFailed = false, cotPending: Promise<void> | undefined;
   async function readPositioning() {
     cotData??=await loadSnapshot<ReturnType<typeof parsePositioning>>('positioning',21*86400000);
-    if (Date.now() - cotChecked >= (cotFailed ? 60000 : positioningRefreshMs())) {
+    if (Date.now() - cotChecked >= (cotFailed ? 3600000 : positioningRefreshMs())) {
       cotPending ??= (async () => {
         try {
           const since = new Date(Date.now() - 12 * 7 * 86400000).toISOString().slice(0,10);

@@ -59,7 +59,7 @@ test('CFTC positioning: contract scope, weekly chronology, units, cache and part
   assert.equal(regression.statusCode,200);assert.equal(regression.json().stale,true);
   assert.deepEqual(regression.json().periods,first.json().periods);
   rowsForFetch=rows;
-  unavailable=false;now+=60001;
+  unavailable=false;now+=3600000;
   assert.equal((await empty.inject('/api/v1/sentiment/positioning')).json().stale,false);
   unavailable=true;now+=22*86400000;
   assert.equal((await empty.inject('/api/v1/sentiment/positioning')).statusCode,503);
@@ -254,7 +254,13 @@ test('Background refresh runs without a page, shares cache with AI and stops on 
   await read({dataset:'positioning'});
   await read({dataset:'crypto-breakdown'});
   assert.equal(calls,18,'startup checks every source, including two crypto fallbacks');
-  now+=3600000;tick();
+  now+=60000;tick();
+  await read({dataset:'daily'});
+  await read({dataset:'specialists'});
+  await read({dataset:'positioning'});
+  await read({dataset:'crypto-breakdown'});
+  assert.equal(calls,18,'failed providers are not retried every minute');
+  now+=3540000;tick();
   await read({dataset:'daily'});
   await read({dataset:'specialists'});
   await read({dataset:'positioning'});
