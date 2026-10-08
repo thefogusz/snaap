@@ -841,7 +841,7 @@ function navigate(view, load = true) {
     view = "home";
     window.SnaapRouter.replace("home");
   }
-  if (!["home", "watch", "history", "notifications"].includes(view))
+  if (!["home", "watch", "history", "notifications", "sentiment"].includes(view))
     view = "home";
   $$(".view").forEach((el) => (el.hidden = el.id !== "view-" + view));
   $$(".nav-item").forEach((el) => {
@@ -851,6 +851,7 @@ function navigate(view, load = true) {
   });
   $("#page-name").textContent = {
     home: "แชท",
+    sentiment: "Sentiment",
     watch: "รายการแจ้งเตือน",
     history: "ข้อมูลของฉัน",
     notifications: "การแจ้งเตือน",

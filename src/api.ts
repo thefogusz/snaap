@@ -17,6 +17,7 @@ import { signalValidUntil } from "./signal-validity.js";
 import { registerGoogle } from "./auth.js";
 import { registerFiles, cleanupChatImages } from "./files.js";
 import { registerHarness, type HarnessDependencies } from "./ai/harness.js";
+import { registerSentiment } from "./sentiment.js";
 import { registerMarkets, instruments, validateTargets } from "./markets.js";
 import { registerBilling } from "./billing.js";
 import { registerDestinations } from "./destinations.js";
@@ -191,7 +192,7 @@ export async function buildApp(
     // cannot reach an admin route while skipping its gate.
     const routePath = req.routeOptions.url ?? pagePath;
     if (
-      ["/home", "/notifications", "/history", "/watch", "/billing", "/index.html", "/login.html"].includes(pagePath) ||
+      ["/home", "/sentiment", "/notifications", "/history", "/watch", "/billing", "/index.html", "/login.html"].includes(pagePath) ||
       pagePath === "/admin" || pagePath.startsWith("/admin/") ||
       ["/admin.html", "/admin-login.html"].includes(pagePath) || pagePath.startsWith("/api/")
     ) reply.header("X-Robots-Tag", "noindex, nofollow");
@@ -308,6 +309,7 @@ export async function buildApp(
   await registerFiles(app, db);
   registerHarness(app, db, options.harnessDependencies);
   registerMarkets(app, db, !!options.monitoring);
+  registerSentiment(app);
   await registerBilling(app, db, origin);
   await registerDestinations(app, db, { local: options.local, origin });
   registerHistory(app, db);
@@ -805,9 +807,12 @@ export async function buildApp(
       );
     },
   });
+  for (const file of ["three.module.min.js", "three.core.min.js"]) {
+    app.get(`/vendor/three/${file}`, (_req, reply) => reply.sendFile(file, path.resolve("node_modules/three/build")));
+  }
   // Explicit SPA routes keep direct links and refreshes working without hiding
   // missing assets or unknown API endpoints behind the app shell.
-  for (const view of ["home", "notifications", "history", "watch", "billing"]) {
+  for (const view of ["home", "sentiment", "notifications", "history", "watch", "billing"]) {
     app.get(`/${view}`, async (_req, reply) => reply.sendFile("index.html"));
     app.get(`/${view}/`, async (req, reply) =>
       reply.redirect(`/${view}${req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""}`),

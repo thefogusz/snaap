@@ -1,7 +1,7 @@
 "use strict";
 // Shared by navigation links and companion scripts; only app pages are routed.
 (() => {
-  const views = new Set(["home", "notifications", "history", "watch", "billing"]);
+  const views = new Set(["home", "sentiment", "notifications", "history", "watch", "billing"]);
   function current() {
     const legacy = location.hash.slice(1);
     if (views.has(legacy)) return legacy;
